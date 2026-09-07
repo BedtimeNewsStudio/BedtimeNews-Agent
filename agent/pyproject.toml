@@ -16,7 +16,7 @@ dependencies = [
     # Retry logic (imported directly by retriever.py)
     "tenacity>=9.1.4",
     # Validation & Config
-    "pydantic>=2.13.4",
+    "pydantic>=2.13.5",
     "pydantic-settings>=2.10.1",
 ]
 
