@@ -26,7 +26,7 @@ dependencies = [
 # Dev/CI tooling shared across all components. Deliberately NOT installed in
 # any Docker image — linting/formatting/testing are not runtime dependencies.
 dev = [
-    "ruff>=0.16.5",
+    "ruff>=0.16.6",
     "pytest>=8.0",
     "pytest-cov>=7.1.0",
     "httpx2>=2.12.0",
