@@ -74,8 +74,8 @@ terminación TLS se gestionan fuera de este repositorio.
 1. **Clonar el repositorio**
 
    ```bash
-   git clone https://github.com/zydo/bedtimenews-agent.git
-   cd bedtimenews-agent
+   git clone https://github.com/BedtimeNewsStudio/BedtimeNews-Agent.git
+   cd BedtimeNews-Agent
    ```
 
 2. **Configurar el entorno**
@@ -137,9 +137,9 @@ uv run pytest --cov
 
 Las versiones etiquetadas publican imágenes multi-arquitectura preconstruidas (amd64 + arm64) en GHCR mediante [release.yml](.github/workflows/release.yml):
 
-- `ghcr.io/zydo/bedtimenews-agent-agent`
-- `ghcr.io/zydo/bedtimenews-agent-indexer`
-- `ghcr.io/zydo/bedtimenews-agent-frontend`
+- `ghcr.io/bedtimenewsstudio/bedtimenews-agent-agent`
+- `ghcr.io/bedtimenewsstudio/bedtimenews-agent-indexer`
+- `ghcr.io/bedtimenewsstudio/bedtimenews-agent-frontend`
 
 Para desplegar una versión publicada, fija una versión con `IMAGE_TAG` en `.env` (por defecto `latest`) y descarga:
 
@@ -191,7 +191,7 @@ Los datos se persisten entre reinicios:
 ## Estructura del Proyecto
 
 ```plaintext
-bedtimenews-agent/
+BedtimeNews-Agent/
 ├── agent/              # Servicio RAG agente LangGraph
 │   ├── src/
 │   ├── Dockerfile

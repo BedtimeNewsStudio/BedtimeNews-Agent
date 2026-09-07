@@ -77,8 +77,8 @@ termination are handled outside this repo.
 1. **Clone the repository**
 
    ```bash
-   git clone https://github.com/zydo/bedtimenews-agent.git
-   cd bedtimenews-agent
+   git clone https://github.com/BedtimeNewsStudio/BedtimeNews-Agent.git
+   cd BedtimeNews-Agent
    ```
 
 2. **Configure environment**
@@ -145,9 +145,9 @@ uv run pytest --cov
 Tagged releases publish prebuilt multi-arch (amd64 + arm64) images to GHCR via
 [`release.yml`](.github/workflows/release.yml):
 
-- `ghcr.io/zydo/bedtimenews-agent-agent`
-- `ghcr.io/zydo/bedtimenews-agent-indexer`
-- `ghcr.io/zydo/bedtimenews-agent-frontend`
+- `ghcr.io/bedtimenewsstudio/bedtimenews-agent-agent`
+- `ghcr.io/bedtimenewsstudio/bedtimenews-agent-indexer`
+- `ghcr.io/bedtimenewsstudio/bedtimenews-agent-frontend`
 
 To deploy a published release, pin a version with `IMAGE_TAG` in `.env` (default
 `latest`) and pull:
@@ -207,7 +207,7 @@ Data is persisted across restarts:
 ## Project Structure
 
 ```plaintext
-bedtimenews-agent/
+BedtimeNews-Agent/
 ├── agent/              # LangGraph agentic RAG service
 │   ├── src/
 │   ├── Dockerfile

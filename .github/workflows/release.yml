@@ -6,10 +6,10 @@ name: Release
 #
 #   git tag v2026.07 && git push origin v2026.07
 #
-# Images (multi-arch: amd64 + arm64):
-#   ghcr.io/<owner>/bedtimenews-agent-agent
-#   ghcr.io/<owner>/bedtimenews-agent-indexer
-#   ghcr.io/<owner>/bedtimenews-agent-frontend
+# Images (multi-arch: amd64 + arm64), owner/repo lowercased for GHCR:
+#   ghcr.io/bedtimenewsstudio/bedtimenews-agent-agent
+#   ghcr.io/bedtimenewsstudio/bedtimenews-agent-indexer
+#   ghcr.io/bedtimenewsstudio/bedtimenews-agent-frontend
 on:
   push:
     tags: ["v*"]
@@ -73,13 +73,18 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # GHCR requires a lowercase repository path, but the repo is
+      # BedtimeNewsStudio/BedtimeNews-Agent, so fold owner/repo to lowercase here.
+      - name: Lowercase image base
+        id: img
+        run: echo "base=ghcr.io/${GITHUB_REPOSITORY,,}-${{ matrix.component }}" >> "$GITHUB_OUTPUT"
+
       # Image tags: the git tag minus the leading "v", plus "latest".
-      # (GHCR requires a lowercase repository path.)
       - name: Compute image metadata
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ghcr.io/${{ github.repository }}-${{ matrix.component }}
+          images: ${{ steps.img.outputs.base }}
           tags: |
             type=match,pattern=v(.*),group=1
             type=raw,value=latest

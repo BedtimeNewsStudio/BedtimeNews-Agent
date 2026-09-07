@@ -74,8 +74,8 @@
 1. **克隆仓库**
 
    ```bash
-   git clone https://github.com/zydo/bedtimenews-agent.git
-   cd bedtimenews-agent
+   git clone https://github.com/BedtimeNewsStudio/BedtimeNews-Agent.git
+   cd BedtimeNews-Agent
    ```
 
 2. **配置环境变量**
@@ -139,9 +139,9 @@ uv run pytest --cov
 推送版本标签后，[`release.yml`](.github/workflows/release.yml) 会构建多架构
 （amd64 + arm64）镜像并发布到 GHCR：
 
-- `ghcr.io/zydo/bedtimenews-agent-agent`
-- `ghcr.io/zydo/bedtimenews-agent-indexer`
-- `ghcr.io/zydo/bedtimenews-agent-frontend`
+- `ghcr.io/bedtimenewsstudio/bedtimenews-agent-agent`
+- `ghcr.io/bedtimenewsstudio/bedtimenews-agent-indexer`
+- `ghcr.io/bedtimenewsstudio/bedtimenews-agent-frontend`
 
 要部署已发布的版本，先在 `.env` 中用 `IMAGE_TAG` 固定版本（默认 `latest`），
 再拉取镜像：
@@ -199,7 +199,7 @@ git tag v0.1.0 && git push origin v0.1.0
 ## 项目结构
 
 ```plaintext
-bedtimenews-agent/
+BedtimeNews-Agent/
 ├── agent/              # LangGraph 智能RAG服务
 │   ├── src/
 │   ├── Dockerfile

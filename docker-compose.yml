@@ -30,7 +30,7 @@ services:
   # `docker compose up --build` (or `docker compose build`) to run your own code.
   # Pin a published version with IMAGE_TAG in .env (default: latest).
   indexer:
-    image: ghcr.io/zydo/bedtimenews-agent-indexer:${IMAGE_TAG:-latest}
+    image: ghcr.io/bedtimenewsstudio/bedtimenews-agent-indexer:${IMAGE_TAG:-latest}
     build:
       context: ./indexer
       dockerfile: Dockerfile
@@ -50,7 +50,7 @@ services:
       - bedtimenews_net
 
   agent:
-    image: ghcr.io/zydo/bedtimenews-agent-agent:${IMAGE_TAG:-latest}
+    image: ghcr.io/bedtimenewsstudio/bedtimenews-agent-agent:${IMAGE_TAG:-latest}
     build:
       context: ./agent
       dockerfile: Dockerfile
@@ -72,7 +72,7 @@ services:
   # The stack serves plain HTTP on FRONTEND_PORT (default 8080) — no TLS.
   # Public exposure and TLS termination are handled outside this repo.
   web:
-    image: ghcr.io/zydo/bedtimenews-agent-frontend:${IMAGE_TAG:-latest}
+    image: ghcr.io/bedtimenewsstudio/bedtimenews-agent-frontend:${IMAGE_TAG:-latest}
     build:
       context: ./frontend
       dockerfile: Dockerfile
