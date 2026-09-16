@@ -1159,7 +1159,7 @@ TRANSCRIPTS_BASE_URL = (
     "https://bedtimenewsstudio.github.io/BedtimeNews-Transcripts/contents/"
 )
 
-_ARCHIVE_LINK = f"]({TRANSCRIPTS_BASE_URL}"
+_TRANSCRIPT_LINK = f"]({TRANSCRIPTS_BASE_URL}"
 
 
 def _has_citation(answer: str) -> bool:
@@ -1169,7 +1169,7 @@ def _has_citation(answer: str) -> bool:
     has been normalised to a full markdown link, so the link syntax is the whole
     test.
     """
-    return _ARCHIVE_LINK in answer
+    return _TRANSCRIPT_LINK in answer
 
 
 def _citation_url(doc_id: str) -> str:
