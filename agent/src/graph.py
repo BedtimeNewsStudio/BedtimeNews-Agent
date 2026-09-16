@@ -75,6 +75,7 @@ from .models import RetrieveRequest
 from .providers import get_provider
 from .retriever import retriever
 from .settings import settings
+from .uri_mapping import derive_title
 from .vector_db import fetch_chunk_texts
 
 logger = logging.getLogger(__name__)
@@ -555,6 +556,7 @@ def _retrieve_node(state: AgentState) -> AgentState:
                 metadata={
                     "chunk_id": result.chunk_id,
                     "doc_id": result.doc_id,
+                    "title": result.title,
                     "chunk_index": result.chunk_index,
                     "heading": result.heading,
                     "word_count": result.word_count,
@@ -790,22 +792,26 @@ def _answer_generate_node(state: AgentState) -> AgentState:
             if cid and cid in text_map:
                 doc.page_content = text_map[cid]
 
-    # Format documents for context
+    # Format documents for context.
+    #
+    # The model is shown each document's URI and asked to cite that, not a
+    # display name and not a URL. A URI is a short, exact, copyable token that
+    # already exists in the data, so the model has nothing to invent: no
+    # hallucinated episode numbers, and no fabricated links. Turning URIs into
+    # titled links is done here afterwards, where it is a lookup rather than a
+    # generation problem.
     context_parts = []
-    # Map episode name -> canonical citation, used to repair the model's citations.
-    citation_map: dict[str, str] = {}
+    # Map accepted citation spelling -> canonical citation, used to repair the
+    # model's citations after generation.
+    citation_map = build_citation_map(documents)
     for chunk in documents:
         metadata = chunk.metadata
         doc_id = metadata.get("doc_id", "unknown")
         heading = metadata.get("heading", "")
         similarity = metadata.get("similarity", 0.0)
 
-        episode_name = _get_episode_name(doc_id)
-        citation = f"[[{episode_name}]]({_citation_url(doc_id)})"
-        citation_map[episode_name] = citation
-
         context_parts.append(
-            f"Citation: {citation}\n"
+            f"URI: {doc_id}\n"
             f"Similarity: {similarity:.2f}\n"
             f"Heading: {heading}\n"
             f"Content: {chunk.page_content}\n"
@@ -828,7 +834,7 @@ CRITICAL REQUIREMENTS:
 
 Guidelines:
 1. **Ground your response in the documents**: Only make claims supported by the retrieved content
-2. **Cite with the full markdown link**: Each retrieved document begins with a `Citation:` field that contains a complete markdown link (e.g. `[[产经破壁机70]](https://archive.bedtime.news/business/70.md)`). When you reference a document, copy its `Citation:` value **verbatim, including the entire `(https://...)` URL**. Never write the bare `[[名称]]` form, and never replace the URL with `(...)` or leave it out.
+2. **Cite by URI**: Each retrieved document begins with a `URI:` field (e.g. `ShuiQianXiaoXi/0501-0600/0588.md`). When you reference a document, write its URI verbatim inside double brackets: `[[ShuiQianXiaoXi/0501-0600/0588.md]]`. Copy the URI character for character, including the `.md` suffix. Do not write a URL, do not write the episode's Chinese name, and do not invent a URI that was not given to you.
 3. **Be specific**: Reference episode numbers, examples, and arguments from the show
 4. **Synthesize**: Combine information from ALL documents - don't just summarize individual documents
 5. **Be honest**: If the documents don't contain enough information, say so clearly
@@ -842,14 +848,18 @@ Guidelines:
 
 **MANDATORY**: You MUST use ALL provided documents in your response. If 10 documents are provided, reference all 10. If 20 documents are provided, reference all 20. No document should be left unused.
 
-**CITATION FORMAT (MANDATORY)**: Every citation MUST be a complete markdown link, copied verbatim from a document's `Citation:` field — `[[名称]](https://archive.bedtime.news/...)`. The `[[名称]]` text and its `(https://...)` URL must always appear together.
-- ✅ Correct: `[[睡前消息426]](https://archive.bedtime.news/main/401-500/426.md)`
-- ❌ Wrong: `[[睡前消息426]]` (URL missing) or `[[睡前消息426]](...)` (placeholder URL)
-- ❌ Wrong: `《睡前消息426》` — never use 书名号 for an episode reference, not even
-  when the name appears mid-sentence as the subject of a clause. Write
-  `[[睡前消息426]](https://archive.bedtime.news/main/401-500/426.md) 详细披露了…`,
-  not `《睡前消息426》 详细披露了…`.
-A `[[名称]]` written without its `(https://...)` URL is invalid — do not produce it.
+**CITATION FORMAT (MANDATORY)**: Every citation is the document's URI in double
+brackets, copied verbatim from that document's `URI:` field — `[[<URI>]]`. Write
+nothing else: no URL, no parentheses, no Chinese episode name. The URI is turned
+into a properly titled link for the reader automatically after you answer, so a
+bare `[[<URI>]]` is the complete and correct citation.
+- ✅ Correct: `[[CanKaoXinXi/0401-0500/0426.md]]`
+- ❌ Wrong: `[[参考信息426]]` — do not translate the URI into the episode name
+- ❌ Wrong: `[[CanKaoXinXi/0401-0500/0426.md]](https://…)` — do not append a URL
+- ❌ Wrong: `《参考信息426》` — never use 书名号 for an episode reference, not even
+  when it appears mid-sentence as the subject of a clause. Write
+  `[[CanKaoXinXi/0401-0500/0426.md]] 详细披露了…`, not `《参考信息426》 详细披露了…`.
+- ❌ Wrong: citing a URI that appears in no `URI:` field above.
 
 If no relevant documents: Explain that the knowledge base doesn't contain information about this topic.
 
@@ -1063,31 +1073,35 @@ def _parallel_llm_calls(
         return [f.result() for f in futures]
 
 
-# Matches an episode citation plus an optional immediately-following (...) group,
-# so we can normalize bare and placeholder-URL citations alike.
+# Matches a citation token plus an optional immediately-following (...) group,
+# so a stray URL the model appended is swallowed by the rewrite rather than left
+# dangling next to the repaired link.
 #
-# Two spellings are accepted. `[[名称]]` is the format the prompt asks for. 《名称》
-# is what the model falls back to on its own: it is the ordinary Chinese way to
-# write a title, so it reaches for it even when told not to. Both are rewritten
-# to the canonical markdown link. 《》 is only ever touched when the enclosed text
-# is an exact episode name from this query's retrieved documents, so a genuine
-# book or film title in the prose is left alone.
+# Two bracket spellings are accepted. `[[…]]` is the format the prompt asks for,
+# holding a URI. 《…》 is what the model falls back to on its own: it is the
+# ordinary Chinese way to write a title, so it reaches for it even when told not
+# to. Whichever it writes, the enclosed text is looked up in citation_map, which
+# is keyed by both URI and 标准化标题 — the model can read the title off the URI,
+# so it sometimes writes the title even though it was shown only the URI.
+# Anything not in that map is left untouched, which is what keeps a genuine
+# 《书名》 in the prose from being turned into a link.
 _CITATION_RE = re.compile(r"(?:\[\[([^\[\]]+?)\]\]|《([^《》]+?)》)(\([^)]*\))?")
 
 
 def _repair_citations(answer: str, citation_map: dict[str, str]) -> tuple[str, int]:
     """
-    Rewrite citations to their canonical full markdown link.
+    Rewrite citations into the canonical titled markdown link.
 
-    The model is asked to emit `[[名称]](https://...)` but sometimes drops the URL
-    (`[[名称]]`), writes a placeholder (`[[名称]](...)`), or abandons the bracket
-    form entirely for Chinese title marks (`《名称》`) — all of which render as
-    plain text instead of a link. For every citation whose name matches a
-    retrieved document, replace the whole token (including any following
-    parenthetical) with the canonical citation we built from that document's
-    doc_id. Names not among the retrieved docs are left untouched: we have no URL
-    for them, and this is what keeps a real 《书名》 in the prose from being
-    rewritten into a link.
+    This is the step that turns what the model wrote — `[[<URI>]]`, or one of the
+    spellings it drifts into — into what the reader should see:
+    `[[标准化标题]](https://…/<URI>.html)`. The model never writes the URL or the
+    title itself; both are looked up here from the retrieved documents, so a
+    citation is either correct or absent, never plausibly wrong.
+
+    For every citation whose enclosed text matches a retrieved document (by URI
+    or by title), the whole token — including any parenthetical the model
+    appended — is replaced with that document's canonical citation. Text not
+    among the retrieved documents is left exactly as written.
 
     Returns the repaired answer and the number of citations that were changed.
     """
@@ -1139,7 +1153,13 @@ def _split_followups(answer: str) -> tuple[str, list[str]]:
     return head.strip(), followups
 
 
-_ARCHIVE_LINK = "](https://archive.bedtime.news/"
+# The transcripts are published as a static site built from the upstream repo:
+# contents/<URI>.md becomes contents/<URI>.html under this prefix.
+TRANSCRIPTS_BASE_URL = (
+    "https://bedtimenewsstudio.github.io/BedtimeNews-Transcripts/contents/"
+)
+
+_ARCHIVE_LINK = f"]({TRANSCRIPTS_BASE_URL}"
 
 
 def _has_citation(answer: str) -> bool:
@@ -1153,76 +1173,64 @@ def _has_citation(answer: str) -> bool:
 
 
 def _citation_url(doc_id: str) -> str:
-    """Public transcript URL for a document."""
-    return f"https://archive.bedtime.news/{doc_id}.md"
+    """Public transcript page for a document URI."""
+    return f"{TRANSCRIPTS_BASE_URL}{doc_id.removesuffix('.md')}.html"
 
 
-def build_citation_urls(documents: list[Document]) -> dict[str, str]:
+def _display_title(doc_id: str, title: str | None = None) -> str:
+    """Reader-facing label for a document.
+
+    Prefers the 标准化标题 carried from rag.documents, falls back to deriving it
+    from the URI, and finally shows the URI itself — an ugly label on a working
+    link beats dropping the reference.
     """
-    Map episode display name -> transcript URL for the given documents.
+    return title or derive_title(doc_id) or doc_id
+
+
+def _canonical_citation(doc_id: str, title: str | None = None) -> tuple[str, str]:
+    """(display title, full markdown link) for a document."""
+    display = _display_title(doc_id, title)
+    return display, f"[[{display}]]({_citation_url(doc_id)})"
+
+
+def build_citation_map(documents: list[Document]) -> dict[str, str]:
+    """
+    Map every accepted citation spelling -> the canonical markdown link.
+
+    Keyed by URI, which is what the prompt tells the model to write, and also by
+    标准化标题, which it reaches for on its own because the URI spells the title
+    out (`ShuiQianXiaoXi/.../0588.md` is visibly 睡前消息588). Both resolve to the
+    same link, so either spelling is repaired rather than left as dead text.
+    """
+    citations: dict[str, str] = {}
+    for chunk in documents:
+        doc_id = chunk.metadata.get("doc_id", "unknown")
+        display, citation = _canonical_citation(doc_id, chunk.metadata.get("title"))
+        citations[doc_id] = citation
+        citations[display] = citation
+    return citations
+
+
+def build_citation_urls(documents: list[Document]) -> dict[str, dict[str, str]]:
+    """
+    Map citation name -> {"title", "url"} for the given documents.
 
     Sent to the streaming client so it can turn citations into links while the
     answer is still arriving. Server-side repair only runs once generation has
     finished, which is too late to help a reader watching the text appear.
+
+    The model writes URIs, but the reader must see 标准化标题, so the client needs
+    both values rather than a bare URL. Keyed like build_citation_map — by URI
+    and by title — so client and server repair the same set of spellings.
     """
-    urls: dict[str, str] = {}
+    urls: dict[str, dict[str, str]] = {}
     for chunk in documents:
         doc_id = chunk.metadata.get("doc_id", "unknown")
-        urls[_get_episode_name(doc_id)] = _citation_url(doc_id)
+        display = _display_title(doc_id, chunk.metadata.get("title"))
+        entry = {"title": display, "url": _citation_url(doc_id)}
+        urls[doc_id] = entry
+        urls[display] = entry
     return urls
-
-
-def _get_episode_name(doc_id: str) -> str:
-    """
-    Extract episode display name from doc_id.
-
-    Args:
-        doc_id: Document ID like 'main/501-600/588' or 'reference/1-100/42'
-
-    Returns:
-        Formatted episode name like '睡前消息588', '参考信息42', etc.
-
-    Examples:
-        'main/501-600/588' → '睡前消息588'
-        'reference/1-100/42' → '参考信息42'
-        'opinion/123' → '高见123'
-        'daily/2023/11/15' → '每日新闻15'
-        'commercial/5' → '讲点黑话5'
-        'business/10' → '产经破壁机10'
-        'livestream/2023/05/20' → '直播问答记录2023/05/20' (special handling!)
-    """
-    if doc_id.startswith("livestream/"):
-        return f"直播问答记录{doc_id[len('livestream/') :]}"
-
-    # Extract episode number (last numeric part in path)
-    parts = doc_id.split("/")
-    episode_num = parts[-1] if parts else doc_id
-
-    # Remove .md extension if present
-    episode_num = episode_num.replace(".md", "")
-
-    # Determine episode type based on path pattern
-    if doc_id.startswith("main/"):
-        # main/*/[0-9]*.md
-        return f"睡前消息{episode_num}"
-    elif doc_id.startswith("reference/"):
-        # reference/*/[0-9]*.md
-        return f"参考信息{episode_num}"
-    elif doc_id.startswith("opinion/"):
-        # opinion/[0-9]*.md
-        return f"高见{episode_num}"
-    elif doc_id.startswith("daily/"):
-        # daily/*/*/[0-9]*.md
-        return f"每日新闻{episode_num}"
-    elif doc_id.startswith("commercial/"):
-        # commercial/[0-9]*.md
-        return f"讲点黑话{episode_num}"
-    elif doc_id.startswith("business/"):
-        # business/[0-9]*.md or business/-[0-9]*.md
-        return f"产经破壁机{episode_num}"
-    else:
-        # Fallback for unknown types
-        return f"文档{episode_num}"
 
 
 # ============================================================================

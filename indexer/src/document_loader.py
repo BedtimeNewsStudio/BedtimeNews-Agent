@@ -1,39 +1,86 @@
 """Document loading and text cleaning."""
 
+import logging
 import re
 
 from .models import Document
-from .paths import BEDTIMENEWS_ARCHIVE_CONTENTS_DIR
+from .paths import CONTENTS_DIR
+
+logger = logging.getLogger(__name__)
+
+# Every transcript is laid out as a `# 标题` line, a `**发布日期**` line, then
+# exactly one `## 正文` section followed by exactly one `## 附录` section (verified
+# across all 1812 upstream transcripts). Only 正文 is indexed: 附录 holds fact
+# corrections and verification notes about the transcript rather than anything
+# the show said, and retrieving it produces citations that answer with the
+# editors' footnotes instead of the episode.
+BODY_HEADING = "## 正文"
+APPENDIX_HEADING = "## 附录"
 
 
-def load_document(doc_id: str) -> Document:
-    """Load a single markdown document by its doc_id.
+def uri_to_slug(uri: str) -> str:
+    """Filesystem- and identifier-safe form of a URI, used to build chunk ids."""
+    return uri.removesuffix(".md").replace("/", "_")
+
+
+def load_document(uri: str) -> Document:
+    """Load a single transcript by its URI.
 
     Args:
-        doc_id: Document ID (e.g., "960" or "main/901-1000/960")
+        uri: Document URI — path relative to CONTENTS_DIR including the .md
+            suffix (e.g. "ShuiQianXiaoXi/0501-0600/0588.md"). This is also the
+            doc_id used throughout the system.
 
     Returns:
-        Document object
+        Document object whose text is the transcript's 正文 only.
     """
-    # Construct file path from doc_id
-    file_path = BEDTIMENEWS_ARCHIVE_CONTENTS_DIR / f"{doc_id}.md"
+    file_path = CONTENTS_DIR / uri
 
-    # Read file content
     with open(file_path, encoding="utf-8") as f:
         content = f.read()
 
-    # Clean text (includes removing YAML front matter)
-    text = clean_text(content)
-
-    # Generate unique ID
-    doc_unique_id = f"doc_{doc_id.replace('/', '_')}"
+    text = clean_text(extract_body(content, uri))
 
     return Document(
-        id=doc_unique_id,
+        id=f"doc_{uri_to_slug(uri)}",
         file_path=str(file_path),
-        doc_id=doc_id,
+        doc_id=uri,
+        slug=uri_to_slug(uri),
         text=text,
     )
+
+
+def extract_body(content: str, uri: str = "") -> str:
+    """Return the `## 正文` section, excluding the `## 附录` section that follows.
+
+    The body's own sub-headings are `##` too, so the section cannot be delimited
+    by "the next heading of the same level" — it runs from the `## 正文` line to
+    the `## 附录` line. Everything before 正文 (the `# 标题` line and the
+    `**发布日期**` metadata line) is dropped along with everything from 附录 on.
+
+    A transcript with no `## 正文` yields an empty string rather than raising:
+    the file is then indexed as zero chunks and logged, which is preferable to
+    failing a whole scheduled run over one malformed document upstream.
+    """
+    lines = content.splitlines()
+
+    start = None
+    for i, line in enumerate(lines):
+        if line.strip() == BODY_HEADING:
+            start = i + 1
+            break
+
+    if start is None:
+        logger.warning(f"{uri or 'document'} has no {BODY_HEADING} section; skipping")
+        return ""
+
+    end = len(lines)
+    for j in range(start, len(lines)):
+        if lines[j].strip() == APPENDIX_HEADING:
+            end = j
+            break
+
+    return "\n".join(lines[start:end])
 
 
 def clean_text(text: str) -> str:

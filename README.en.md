@@ -10,7 +10,7 @@ search, retrieved-transcript context, and episode citations.
 
 ## Overview
 
-This system indexes video transcripts from the [BedtimeNews archive](https://archive.bedtime.news/) and enables semantic search with LLM-powered Q&A. Built with LangGraph, pluggable LLM/embedding providers (DeepSeek for chat and SiliconFlow's Qwen3 embeddings by default), and PostgreSQL + pgvector.
+This system indexes video transcripts from the [BedtimeNews transcript library](https://bedtimenewsstudio.github.io/BedtimeNews-Transcripts/) and enables semantic search with LLM-powered Q&A. Built with LangGraph, pluggable LLM/embedding providers (DeepSeek for chat and SiliconFlow's Qwen3 embeddings by default), and PostgreSQL + pgvector.
 
 **Key Features:**
 
@@ -24,19 +24,22 @@ This system indexes video transcripts from the [BedtimeNews archive](https://arc
 
 ## Content Coverage
 
-The system indexes video transcripts from [bedtimenews-archive-contents](https://github.com/bedtimenews/bedtimenews-archive-contents) covering diverse topics across multiple programs:
+The system indexes video transcripts from [BedtimeNews-Transcripts](https://github.com/BedtimeNewsStudio/BedtimeNews-Transcripts) —
+1812 transcripts across five programs:
 
 **Program Catalog:**
 
-| Catalog       | Name       | Description                                     |
-| ------------- | ---------- | ----------------------------------------------- |
-| `main/`       | 睡前消息   | Comprehensive coverage across all topics        |
-| `reference/`  | 参考信息   | Daily news aggregation                          |
-| `business/`   | 产经破壁机 | Economy, industry, business, technology         |
-| `commercial/` | 讲点黑话   | International relations, geopolitics            |
-| `opinion/`    | 高见       | Technical analysis, infrastructure, engineering |
-| `daily/`      | 每日新闻   | Daily news updates                              |
-| `others/`     | 其它文稿   | Live Q&A and other related content              |
+| Directory           | Name       | Host           | Content              | Count |
+| ------------------- | ---------- | -------------- | -------------------- | ----- |
+| `ShuiQianXiaoXi/`   | 睡前消息   | 马前卒（督工） | Main program         |   889 |
+| `CanKaoXinXi/`      | 参考信息   | 小黛           | Daily news briefing  |   649 |
+| `ChanJingPoBiJi/`   | 产经破壁机 | 产经组         | Industry and business|   136 |
+| `JiangDianHeiHua/`  | 讲点黑话   | 黑岛（老会计） | History and people   |    72 |
+| `GaoJian/`          | 高见       | 高流           | Long-form features   |    66 |
+
+Only each transcript's `## 正文` (body) section is indexed; the `## 附录`
+(appendix — fact corrections and verification notes) and the `**发布日期**`
+metadata line are excluded from retrieval.
 
 **Topic Categories:**
 

@@ -275,6 +275,53 @@ def insert_chunks(
 
 
 @retry_on_transient_error()
+def upsert_document_titles(titles: dict[str, str], batch_size: int = 500) -> int:
+    """Upsert URI -> 标准化标题 rows into rag.documents.
+
+    The agent joins this table onto retrieved chunks to label citations, so the
+    titles are written for the whole corpus rather than only for changed files:
+    the table is small, and a title corrected upstream must reach the agent even
+    though the transcript itself did not change.
+    """
+    if not titles:
+        return 0
+
+    rows = list(titles.items())
+    query = """
+        INSERT INTO rag.documents (doc_id, title)
+        VALUES (%s, %s)
+        ON CONFLICT (doc_id) DO UPDATE
+        SET title = EXCLUDED.title,
+            updated_at = CURRENT_TIMESTAMP;
+    """
+
+    with _Connection() as conn:
+        cursor = conn.cursor()
+        for i in range(0, len(rows), batch_size):
+            execute_batch(cursor, query, rows[i : i + batch_size])
+
+    logger.info(f"Upserted {len(rows)} document titles")
+    return len(rows)
+
+
+@retry_on_transient_error()
+def delete_document(doc_id: str) -> int:
+    """Delete a document's title row."""
+    with _Connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM rag.documents WHERE doc_id = %s;", (doc_id,))
+        return cursor.rowcount
+
+
+@retry_on_transient_error()
+def clear_document_titles() -> None:
+    """Delete all document title rows."""
+    with _Connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM rag.documents;")
+
+
+@retry_on_transient_error()
 def update_indexing_history(file_path: str, content_hash: str) -> None:
     """Update or insert indexing history for a file."""
     with _Connection() as conn:

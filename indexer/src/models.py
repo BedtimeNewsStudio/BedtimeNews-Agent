@@ -10,13 +10,16 @@ class Document:
     Attributes:
         id: Unique identifier for the document
         file_path: Path to the source file
-        doc_id: Document ID (typically derived from filename, e.g., "960")
-        text: Full cleaned text content of the document
+        doc_id: Document URI, e.g. "ShuiQianXiaoXi/0501-0600/0588.md"
+        slug: doc_id without its .md suffix and with "/" replaced by "_",
+            used to build chunk ids
+        text: Cleaned 正文 text of the document
     """
 
     id: str
     file_path: str
     doc_id: str
+    slug: str
     text: str
 
 

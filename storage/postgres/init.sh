@@ -42,9 +42,13 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
 	    CREATE TABLE IF NOT EXISTS rag.document_chunks (
 	        id SERIAL PRIMARY KEY,
 	        chunk_id VARCHAR(255) UNIQUE NOT NULL,
-	        -- e.g., "main_901-1000_960_chunk_000" (full path with underscores)
+	        -- e.g., "ShuiQianXiaoXi_0501-0600_0588_chunk_000" (the doc_id URI
+	        -- without .md, "/" replaced by "_", plus the chunk index)
 	        doc_id VARCHAR(255) NOT NULL,
-	        -- e.g., "main/901-1000/960" (full relative path without .md extension)
+	        -- The transcript's URI: its path relative to contents/ in
+	        -- BedtimeNews-Transcripts, INCLUDING the .md suffix, e.g.
+	        -- "ShuiQianXiaoXi/0501-0600/0588.md". Byte-for-byte the key used by
+	        -- the upstream URI映射.md, and the join key to rag.documents.
 	        chunk_index INTEGER NOT NULL,
 	        -- 0-based index within document
 	        heading TEXT,
@@ -65,6 +69,19 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
 	    GRANT USAGE ON SCHEMA rag TO "$POSTGRES_USER";
 	    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA rag TO "$POSTGRES_USER";
 	    GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA rag TO "$POSTGRES_USER";
+
+	    -- Document titles: URI -> 标准化标题, mirrored from the upstream
+	    -- URI映射.md by the indexer. The agent LEFT JOINs this onto retrieved
+	    -- chunks so a citation can be labelled "睡前消息588" rather than with its
+	    -- raw URI. Kept separate from document_chunks so a title correction is a
+	    -- single-row update instead of a rewrite of every chunk.
+	    CREATE TABLE IF NOT EXISTS rag.documents (
+	        doc_id VARCHAR(255) PRIMARY KEY,
+	        -- Transcript URI, including .md (matches document_chunks.doc_id)
+	        title VARCHAR(255) NOT NULL,
+	        -- 标准化标题, e.g. "睡前消息588"
+	        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+	    );
 
 	    -- Indexing history: file-level status via content hashing (incremental loads)
 	    CREATE TABLE IF NOT EXISTS rag.indexing_history (

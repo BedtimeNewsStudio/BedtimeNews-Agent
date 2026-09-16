@@ -51,7 +51,8 @@ def chunk_document(
             word_count = count_words(chunk_data["text"])
             if word_count >= min_chunk_size:
                 chunk = Chunk(
-                    id=f"{document.doc_id.replace('/', '_')}_chunk_{chunk_index:03d}",
+                    # doc_id is a URI ending in .md; the slug is its id-safe form.
+                    id=f"{document.slug}_chunk_{chunk_index:03d}",
                     doc_id=document.doc_id,
                     chunk_index=chunk_index,
                     heading=chunk_data["heading"],

@@ -18,7 +18,6 @@ chunk-text fetch are all replaced.
 """
 
 import asyncio
-import re
 
 import pytest
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
@@ -26,7 +25,14 @@ from src import agent as agent_mod
 from src import graph as graph_mod
 from src.models import ChunkResult, RetrieveResponse
 
-ANSWER = "鹤岗是资源枯竭型城市的代表 [[参考信息490]](https://archive.bedtime.news/reference/401-500/490.md)。"
+# What the model is instructed to write: the document's URI, nothing else. The
+# titled link the reader sees is produced by the repair pass, not by the model.
+CITED_URI = "CanKaoXinXi/0401-0500/0490.md"
+ANSWER = f"鹤岗是资源枯竭型城市的代表 [[{CITED_URI}]]。"
+CITED_URL = (
+    "https://bedtimenewsstudio.github.io/BedtimeNews-Transcripts"
+    "/contents/CanKaoXinXi/0401-0500/0490.html"
+)
 FOLLOWUPS = ["鹤岗的房价现在怎么样？", "还有哪些收缩型城市？"]
 
 # What the generation model returns: the answer, the delimiter, then suggestions.
@@ -42,7 +48,8 @@ class _ScriptedFastModel(GenericFakeChatModel):
 def _fake_chunk(i: int) -> ChunkResult:
     return ChunkResult(
         chunk_id=f"chunk-{i}",
-        doc_id=f"reference/401-500/{490 + i}",
+        doc_id=f"CanKaoXinXi/0401-0500/{490 + i:04d}.md",
+        title=f"参考信息{490 + i}",
         chunk_index=i,
         heading="大家好，欢迎收看睡前消息",  # deliberately uninformative, as in the corpus
         text=None,
@@ -225,7 +232,7 @@ def test_uncited_answer_gets_a_source_list(monkeypatch):
         "sources were appended but answer_final was not sent, so the client "
         "would still be showing the uncited answer"
     )
-    assert "](https://archive.bedtime.news/" in terminal["content"]
+    assert f"]({graph_mod.TRANSCRIPTS_BASE_URL}" in terminal["content"]
     assert "参考来源" in terminal["content"]
     assert uncited in terminal["content"], "the model's answer must be preserved"
 
@@ -239,14 +246,31 @@ def test_source_list_is_not_appended_when_the_model_cited(stub_pipeline):
     assert "参考来源" not in text
 
 
-def test_citation_repair_covers_both_spellings():
+def test_citation_repair_covers_every_spelling():
+    url = (
+        "https://bedtimenewsstudio.github.io/BedtimeNews-Transcripts"
+        "/contents/ChanJingPoBiJi/0001-0100/0067.html"
+    )
+    canonical = f"[[产经破壁机67]]({url})"
     citation_map = {
-        "产经破壁机67": "[[产经破壁机67]](https://archive.bedtime.news/business/67.md)"
+        # Keyed by both spellings, exactly as build_citation_map does.
+        "ChanJingPoBiJi/0001-0100/0067.md": canonical,
+        "产经破壁机67": canonical,
     }
-    for raw in ("见 [[产经破壁机67]] 的分析", "见 《产经破壁机67》 的分析"):
+    raws = (
+        # The instructed form.
+        "见 [[ChanJingPoBiJi/0001-0100/0067.md]] 的分析",
+        # The model appended a URL it was told not to write.
+        "见 [[ChanJingPoBiJi/0001-0100/0067.md]](...) 的分析",
+        # The model resolved the URI to the title on its own.
+        "见 [[产经破壁机67]] 的分析",
+        # The model fell back to 书名号.
+        "见 《产经破壁机67》 的分析",
+    )
+    for raw in raws:
         repaired, count = graph_mod._repair_citations(raw, citation_map)
-        assert count == 1
-        assert "https://archive.bedtime.news/business/67.md" in repaired
+        assert count == 1, raw
+        assert repaired == f"见 {canonical} 的分析", raw
 
     # A real book title shares the 《》 spelling but is not a known episode.
     untouched, count = graph_mod._repair_citations("他读了《三体》", citation_map)
@@ -254,14 +278,58 @@ def test_citation_repair_covers_both_spellings():
     assert untouched == "他读了《三体》"
 
 
-def test_streamed_text_matches_final_when_no_repair_needed(stub_pipeline):
-    """answer_meta is only safe if the client can reproduce the answer itself."""
+def test_citation_map_is_keyed_by_uri_and_title():
+    from langchain_core.documents import Document
+
+    doc = Document(
+        page_content="",
+        metadata={"doc_id": "CanKaoXinXi/0401-0500/0490.md", "title": "参考信息490"},
+    )
+    citations = graph_mod.build_citation_map([doc])
+    assert set(citations) == {"CanKaoXinXi/0401-0500/0490.md", "参考信息490"}
+    assert all(c == f"[[参考信息490]]({CITED_URL})" for c in citations.values())
+
+
+def test_title_falls_back_to_the_general_rule_when_the_db_row_is_missing():
+    from langchain_core.documents import Document
+
+    # A chunk indexed before the title sync ran: LEFT JOIN yields title=None.
+    doc = Document(
+        page_content="",
+        metadata={"doc_id": "CanKaoXinXi/0401-0500/0490.md", "title": None},
+    )
+    assert graph_mod.build_citation_map([doc])["CanKaoXinXi/0401-0500/0490.md"] == (
+        f"[[参考信息490]]({CITED_URL})"
+    )
+
+
+def test_uri_citations_are_rewritten_into_titled_links(stub_pipeline):
+    """The raw stream carries URIs; what the reader ends up with carries titles.
+
+    Because the model now writes URIs, every cited answer is necessarily
+    repaired, so the server must always re-send it — the streamed text is never
+    the text to display. The client applies the same substitution per render
+    tick from the citations event, and this pins the server half of that.
+    """
     events = _collect("鹤岗为什么成了收缩型城市的代表？")
-    terminal = next(e for e in events if e["type"] in ("answer_final", "answer_meta"))
-    if terminal["type"] != "answer_meta":
-        pytest.skip("a repair occurred, so the server had to re-send the answer")
 
     streamed = "".join(e["content"] for e in events if e["type"] == "answer_chunk")
-    # What the client does: strip from the delimiter onward.
-    client_view = streamed.split(graph_mod.FOLLOWUPS_DELIMITER)[0].strip()
-    assert re.sub(r"\s+", "", client_view) == re.sub(r"\s+", "", ANSWER)
+    assert f"[[{CITED_URI}]]" in streamed, "the model should have written the URI"
+
+    terminal = next(e for e in events if e["type"] in ("answer_final", "answer_meta"))
+    assert terminal["type"] == "answer_final", (
+        "a URI citation was repaired, so the canonical answer has to be re-sent "
+        "or the reader keeps seeing raw URIs"
+    )
+    assert f"[[参考信息490]]({CITED_URL})" in terminal["content"]
+    assert f"[[{CITED_URI}]]" not in terminal["content"]
+
+
+def test_citations_event_carries_titles_and_urls(stub_pipeline):
+    """The client needs both values to linkify while streaming."""
+    events = _collect("鹤岗为什么成了收缩型城市的代表？")
+    urls = next(e for e in events if e["type"] == "citations")["urls"]
+
+    assert urls[CITED_URI] == {"title": "参考信息490", "url": CITED_URL}
+    # Keyed by title too, so the client repairs the same spellings the server does.
+    assert urls["参考信息490"] == urls[CITED_URI]

@@ -110,7 +110,12 @@ class ChunkResult(BaseModel):
     """Individual chunk result from retrieval."""
 
     chunk_id: str = Field(..., description="Unique chunk identifier")
-    doc_id: str = Field(..., description="Document identifier")
+    doc_id: str = Field(
+        ..., description="Document URI, e.g. ShuiQianXiaoXi/0501-0600/0588.md"
+    )
+    title: str | None = Field(
+        None, description="标准化标题 for the document, e.g. 睡前消息588"
+    )
     chunk_index: int | None = Field(None, description="Chunk index within document")
     heading: str | None = Field(None, description="Section heading")
     text: str | None = Field(None, description="Chunk content")

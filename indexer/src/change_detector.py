@@ -1,9 +1,8 @@
 """Change detection for content files."""
 
 import hashlib
-from pathlib import Path
 
-from .paths import BEDTIMENEWS_ARCHIVE_CONTENTS_DIR
+from .paths import CONTENTS_DIR
 from .vector_db import get_indexed_files, get_indexing_history
 
 
@@ -35,10 +34,15 @@ def detect_changes(current_files: set[str]) -> tuple[set[str], set[str], set[str
 
 def calculate_file_hash(md_file: str) -> str:
     """Calculate SHA256 hash of file content."""
-    with open(BEDTIMENEWS_ARCHIVE_CONTENTS_DIR / md_file, "rb") as f:
+    with open(CONTENTS_DIR / md_file, "rb") as f:
         return hashlib.sha256(f.read()).hexdigest()
 
 
 def get_doc_id(md_file: str) -> str:
-    """Convert markdown file path to document ID."""
-    return Path(md_file).with_suffix("").as_posix()
+    """Document ID for a scanned file.
+
+    The scanner already yields URIs — paths relative to CONTENTS_DIR with the
+    .md suffix — and the URI *is* the doc_id, kept byte-for-byte identical to
+    the keys of the upstream URI映射.md so the two can be joined directly.
+    """
+    return md_file

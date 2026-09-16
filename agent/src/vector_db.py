@@ -187,18 +187,23 @@ def search_similar_chunks(
     Returns:
         List of matching chunks with similarity scores
     """
+    # LEFT JOIN, not INNER: a chunk whose title row is missing (a transcript
+    # indexed before the title sync caught up) must still be retrievable, with
+    # the caller falling back to a rule-derived label.
     query = f"""
         WITH similarities AS (
-            SELECT DISTINCT ON (chunk_id)
-                chunk_id,
-                doc_id,
-                chunk_index,
-                heading,
-                {"text," if include_text else ""}
-                word_count,
-                1 - (embedding <=> %s::halfvec) as similarity
-            FROM rag.document_chunks
-            WHERE embedding IS NOT NULL
+            SELECT DISTINCT ON (c.chunk_id)
+                c.chunk_id,
+                c.doc_id,
+                d.title,
+                c.chunk_index,
+                c.heading,
+                {"c.text," if include_text else ""}
+                c.word_count,
+                1 - (c.embedding <=> %s::halfvec) as similarity
+            FROM rag.document_chunks c
+            LEFT JOIN rag.documents d ON d.doc_id = c.doc_id
+            WHERE c.embedding IS NOT NULL
         )
         SELECT * FROM similarities
         WHERE similarity >= %s

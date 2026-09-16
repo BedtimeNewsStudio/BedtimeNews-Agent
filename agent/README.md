@@ -87,7 +87,7 @@
 
 ```json
 {
-  "answer": "根据[[睡前消息588]](https://archive.bedtime.news/main/501-600/588.md)...",
+  "answer": "根据[[睡前消息588]](https://bedtimenewsstudio.github.io/BedtimeNews-Transcripts/contents/ShuiQianXiaoXi/0501-0600/0588.html)...",
   "followups": ["独山县后来如何化解债务？"],
   "grounded": true
 }
@@ -97,7 +97,7 @@
 
 ```plaintext
 data: {"type": "step", "step": "route", "content": "..."}
-data: {"type": "citations", "urls": {"睡前消息588": "https://archive.bedtime.news/main/501-600/588.md"}}
+data: {"type": "citations", "urls": {"ShuiQianXiaoXi/0501-0600/0588.md": {"title": "睡前消息588", "url": "https://bedtimenewsstudio.github.io/BedtimeNews-Transcripts/contents/ShuiQianXiaoXi/0501-0600/0588.html"}}}
 data: {"type": "answer_chunk", "content": "根据"}
 data: {"type": "answer_chunk", "content": "睡前"}
 data: {"type": "answer_meta", "grounded": true}
@@ -260,12 +260,26 @@ docker compose exec indexer python -m src.debugger test
 docker compose exec agent python -m src.eval_agent --limit 1
 ```
 
-## 节目类型映射（依据 doc_id 路径）
+## 引用标题的来源
 
-- `main/*` → “睡前消息”
-- `reference/*` → “参考信息”
-- `opinion/*` → “高见”
-- `daily/*/*` → “每日新闻”
-- `commercial/*` → “讲点黑话”
-- `business/*` → “产经破壁机”
-- `livestream/*/*` → “直播问答记录”
+模型在原始输出里写的是文稿 **URI**（如
+`[[ShuiQianXiaoXi/0501-0600/0588.md]]`），不写链接也不写中文台名——URI 是
+上下文里已有的字符串，模型无需臆造期号或 URL。生成结束后由
+`_repair_citations` 统一改写成 `[[标准化标题]](链接)`。
+
+标题优先取自检索时 LEFT JOIN 出来的 `rag.documents.title`（由 indexer 从上游
+`URI映射.md` 写入）。该行缺失时退回通则推导：
+
+| 栏目目录           | 标准化标题前缀 |
+| ------------------ | -------------- |
+| `ShuiQianXiaoXi/`  | 睡前消息       |
+| `CanKaoXinXi/`     | 参考信息       |
+| `GaoJian/`         | 高见           |
+| `JiangDianHeiHua/` | 讲点黑话       |
+| `ChanJingPoBiJi/`  | 产经破壁机     |
+
+通则推不出来的（`misc/` 特辑等 29 篇例外）最终退回显示 URI 本身——标签不好看，
+但链接依然正确可点。
+
+引用链接指向文稿站：
+`https://bedtimenewsstudio.github.io/BedtimeNews-Transcripts/contents/<URI 去掉 .md>.html`

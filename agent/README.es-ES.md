@@ -98,7 +98,7 @@ resultados.
 
 ```json
 {
-  "answer": "根据[[睡前消息588]](https://archive.bedtime.news/main/501-600/588.md)...",
+  "answer": "根据[[睡前消息588]](https://bedtimenewsstudio.github.io/BedtimeNews-Transcripts/contents/ShuiQianXiaoXi/0501-0600/0588.html)...",
   "followups": ["独山县后来如何化解债务？"],
   "grounded": true
 }
@@ -108,7 +108,7 @@ resultados.
 
 ```plaintext
 data: {"type": "step", "step": "route", "content": "..."}
-data: {"type": "citations", "urls": {"睡前消息588": "https://archive.bedtime.news/main/501-600/588.md"}}
+data: {"type": "citations", "urls": {"ShuiQianXiaoXi/0501-0600/0588.md": {"title": "睡前消息588", "url": "https://bedtimenewsstudio.github.io/BedtimeNews-Transcripts/contents/ShuiQianXiaoXi/0501-0600/0588.html"}}}
 data: {"type": "answer_chunk", "content": "根据"}
 data: {"type": "answer_chunk", "content": "睡前"}
 data: {"type": "answer_meta", "grounded": true}
@@ -282,12 +282,29 @@ docker compose exec indexer python -m src.debugger test
 docker compose exec agent python -m src.eval_agent --limit 1
 ```
 
-## Mapeo de Tipos de Episodio (desde la ruta doc_id)
+## De dónde vienen los títulos de las citas
 
-- `main/*` → "睡前消息"
-- `reference/*` → "参考信息"
-- `opinion/*` → "高见"
-- `daily/*/*` → "每日新闻"
-- `commercial/*` → "讲点黑话"
-- `business/*` → "产经破壁机"
-- `livestream/*/*` → "直播问答记录"
+En su salida cruda el modelo escribe el **URI** de la transcripción —p. ej.
+`[[ShuiQianXiaoXi/0501-0600/0588.md]]`— y no una URL ni el nombre chino del
+episodio. El URI ya está presente en su contexto, así que no hay número de
+episodio ni enlace que pueda inventar. Tras la generación, `_repair_citations`
+reescribe cada cita como `[[título normalizado]](url)`.
+
+Los títulos provienen de `rag.documents.title`, unido con LEFT JOIN durante la
+recuperación (escrito por el indexador desde el `URI映射.md` de origen). Si falta
+esa fila, se aplica una regla general:
+
+| Directorio         | Prefijo del título |
+| ------------------ | ------------------ |
+| `ShuiQianXiaoXi/`  | 睡前消息           |
+| `CanKaoXinXi/`     | 参考信息           |
+| `GaoJian/`         | 高见               |
+| `JiangDianHeiHua/` | 讲点黑话           |
+| `ChanJingPoBiJi/`  | 产经破壁机         |
+
+Las 29 excepciones documentadas (los especiales de `misc/` y similares) no se
+pueden derivar; en ese caso se muestra el propio URI: una etiqueta fea sobre un
+enlace que sigue funcionando.
+
+Los enlaces de las citas apuntan al sitio de transcripciones:
+`https://bedtimenewsstudio.github.io/BedtimeNews-Transcripts/contents/<URI sin .md>.html`

@@ -17,13 +17,16 @@ from .file_scanner import scan_files
 from .git_sync import sync_repository
 from .models import Chunk
 from .stats import collect_stats
+from .uri_mapping import load_uri_titles, resolve_title
 from .vector_db import (
     close_connection_pool,
     delete_chunks,
+    delete_document,
     delete_indexing_history,
     insert_chunks,
     log_file_action,
     update_indexing_history,
+    upsert_document_titles,
 )
 
 logging.basicConfig(
@@ -47,17 +50,24 @@ def main():
 
         logger.info(f"Changes: +{len(added)} ~{len(modified)} -{len(deleted)}")
 
+        # Titles are refreshed on every run, before the early return for "no
+        # changes": upstream can correct a 标准化标题 in URI映射.md without
+        # touching the transcript, and the agent reads titles from this table to
+        # label its citations.
+        logger.info("Phase 2: Refreshing document titles")
+        sync_document_titles(current_files)
+
         if not added and not modified and not deleted:
-            logger.info("No changes. Pipeline complete.")
+            logger.info("No content changes. Pipeline complete.")
             return
 
-        logger.info("Phase 2: Processing changes")
+        logger.info("Phase 3: Processing changes")
         process_deletions(deleted)
 
         all_chunks = process_content_changes(added, modified)
 
         if all_chunks:
-            logger.info("Phase 3: Statistics")
+            logger.info("Phase 4: Statistics")
             logger.info("-" * 70)
             stats = collect_stats(all_chunks)
             logger.info(f"Total documents:        {stats['total_documents']}")
@@ -83,14 +93,22 @@ def main():
         close_connection_pool()
 
 
+def sync_document_titles(current_files: set[str]) -> None:
+    """Write the URI -> 标准化标题 table for every currently indexable document."""
+    mapped = load_uri_titles()
+    titles = {uri: resolve_title(uri, mapped) for uri in sorted(current_files)}
+    upsert_document_titles(titles)
+
+
 def process_deletions(deleted_files: set[str]) -> None:
-    """Process deleted files: remove chunks and history."""
+    """Process deleted files: remove chunks, title and history."""
     if not deleted_files:
         return
     logger.info(f"Processing {len(deleted_files)} deleted files")
     for md_file in deleted_files:
         doc_id = get_doc_id(md_file)
         delete_chunks(doc_id)
+        delete_document(doc_id)
         delete_indexing_history(md_file)
         log_file_action(md_file, "DELETE", "")
 

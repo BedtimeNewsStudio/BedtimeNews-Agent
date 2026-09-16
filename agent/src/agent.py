@@ -89,7 +89,8 @@ async def agent_stream_query(
     Event Types:
         - "step": Intermediate pipeline steps with descriptions
         - "answer_chunk": LLM-generated answer content
-        - "citations": {"urls": {episode_name: transcript_url}}, emitted after
+        - "citations": {"urls": {name: {"title", "url"}}}, keyed by both the
+          document URI (what the model writes) and its 标准化标题; emitted after
           grading and before the first chunk, so clients can linkify citations
           while the answer streams.
         - "followups": {"items": [question, ...]}, suggested next questions

@@ -1,118 +1,30 @@
 # RAG Indexer Configuration
-# Defines which files from bedtimenews-archive-contents should be indexed
+# Selects which files of BedtimeNews-Transcripts get indexed.
+#
+# Patterns are matched against a document's URI — its path relative to
+# contents/, including the .md suffix (e.g. ShuiQianXiaoXi/0501-0600/0588.md).
 
 # Include patterns (processed first)
-# Files matching these patterns will be considered for indexing
 include:
   # 睡前消息
-  # ====== A small subset during development ======
-
-  # ------ 城投债 地方债 茅台 独山县 ------
-  #【睡前消息140】马前卒暴走，亲眼看看独山县怎么烧掉400亿！周年特辑（上）
-  # - main/101-200/140.md
-  #【睡前消息244】茅台院士退选，才能保卫股价和地方债
-  # - main/201-300/244.md
-  #【睡前消息565】茅台元宇宙+网易氪金=赌场
-  # - main/501-600/565.md
-  #【睡前消息581】信达支援贵州地方债，2023年酷似1999
-  # - main/501-600/581.md
-  #【睡前消息588】城投债四大网红，柳州第一
-  # - main/501-600/588.md
-
-  # ------ 人口问题 社会化抚养 ------
-  #【睡前消息268】再谈人口危机，社科就该少花钱？
-  # - main/201-300/268.md
-  #【睡前消息275】人均福利vs人口红利，如何共赢？
-  # - main/201-300/275.md
-  #【睡前消息296】搞暑托班问题很多，不如取消寒暑假
-  # - main/201-300/296.md
-  #【睡前消息541】社会化抚养概论
-  # - main/501-600/541.md
-  #【睡前消息544】评价社会化抚养，先帮父母写自传
-  # - main/501-600/544.md
-
-  # ------ 教育公平 衡水模式 山河四省 ------
-  #【睡前消息142】云南建免费女校照搬衡水模式，河北马督工高呼内卷
-  # - main/101-200/142.md
-  #【睡前消息285】高考过后，请放下“拱白菜”的心思
-  # - main/201-300/285.md
-  #【睡前消息316】衡中校长搞“高考移民”，不谈钱果然伤感情
-  # - main/301-400/316.md
-  #【睡前消息545】来自“山河四省”，四个字让我害怕
-  # - main/501-600/545.md
-  #【睡前消息652】只靠民间热情，“山河大学”建不起来
-  # - main/601-700/652.md
-  #【睡前消息966】衡水读高中 多带开塞露
-  # - main/901-1000/966.md
-  #【睡前消息896】高考平权 广东是突破口？
-  # - main/801-900/896.md
-
-  # ------ 中医 中药 以岭药业 ------
-  #【睡前消息377】云南白药，神话从铁路时代开始
-  # - main/301-400/377.md
-  #【睡前消息417】世卫组织“推荐”连花清瘟，谁告诉你的？
-  # - main/401-500/417.md
-  #【睡前消息424】媒体十年纪念，拿以岭药业做个示范
-  # - main/401-500/424.md
-  #【睡前消息430】挟洋自重的中成药，缺乏双盲的连花清瘟
-  # - main/401-500/430.md
-  #【睡前消息524】连花清瘟涨上天，这次不怪以岭药业
-  # - main/501-600/524.md
-  #【睡前消息539】三年“寒湿疫”，六天神药方
-  # - main/501-600/539.md
-
-  # ------ 俄乌 ------
-  #【睡前消息555】跟着毛主席 不怕合订本——俄乌战争一周年
-  # - main/501-600/555.md
-  #【睡前消息535】新年夜火箭打靶，俄军不能闪
-  # - main/501-600/535.md
-  #【睡前消息558】俄罗斯征兵、乌克兰“拉壮丁”，哪个值得学？
-  # - main/501-600/558.md
-
-  # ------ 正威集团 ------
-  #【睡前消息504】正威压过华为，王文银的十万亿铜矿在哪？
-  # - main/501-600/504.md
-  #【睡前消息506】你家乡的正威工厂，现在过得怎么样？
-  # - main/501-600/506.md
-  #【睡前消息517】正威旋转门，欢迎安庆人
-  # - main/501-600/517.md
-  #【睡前消息523】德隆系精神不死 转世信威和正威
-  # - main/501-600/523.md
-  #【睡前消息663】正威王文银，鲨鱼闻到血腥味
-  # - main/601-700/663.md
-
-  # ===============================================
-
-  # 睡前消息
-  - main/*/[0-9]*.md
+  - ShuiQianXiaoXi/*/*.md
 
   # 参考信息
-  - reference/*/[0-9]*.md
+  - CanKaoXinXi/*/*.md
 
   # 高见
-  - opinion/[0-9]*.md
-
-  # 每日新闻 (YYYY/MM/DD.md)
-  - daily/*/*/[0-9]*.md
+  - GaoJian/*/*.md
 
   # 讲点黑话
-  - commercial/[0-9]*.md
+  - JiangDianHeiHua/*/*.md
 
   # 产经破壁机
-  - business/[0-9]*.md
-  - business/-[0-9]*.md # -1.md and -2.md
-
-  # 直播问答记录
-  - livestream/*/*/[0-9]*.md
+  - ChanJingPoBiJi/*/*.md
 
 # Exclude patterns (processed after include)
-# Files matching these patterns will be skipped even if they match include
 exclude:
-  # Directory index files
-  - "main/[0-9]*-[0-9]*.md"
-  - "reference/[0-9]*-[0-9]*.md"
-  - "livestream/[0-9]*.md"
-  - "daily/[0-9]*.md"
+  # Per-channel navigation pages, not transcripts.
+  - "*/INDEX.md"
 
 # File validation rules
 validation:

@@ -9,9 +9,13 @@ markdown 文件、生成 embedding，并存入 PostgreSQL + pgvector。
 
 ## 功能
 
-- **自动同步**：从 [bedtimenews-archive-contents](https://github.com/bedtimenews/bedtimenews-archive-contents) 克隆/更新
+- **自动同步**：从 [BedtimeNews-Transcripts](https://github.com/BedtimeNewsStudio/BedtimeNews-Transcripts) 克隆/更新
 - **增量处理**：基于内容的变化检测（SHA256）
 - **定时执行**：进程内调度器，支持可配置的 cron 表达式（默认：每小时）
+- **只索引正文**：每篇文稿只抽取 `## 正文` 到 `## 附录` 之间的内容，
+  丢弃标题行、`**发布日期**` 元数据与附录的订正/核对记录
+- **URI 作为 doc_id**：文稿相对 `contents/` 的路径（含 `.md`）即其标识
+- **标准化标题**：解析上游 `URI映射.md`，把 URI → 标题写入 `rag.documents`
 - **智能分块**：感知 markdown 的语义分块
 - **批量 embedding**：高效的 embedding API 批量调用
 - **可监控**：内置调试工具与统计信息
@@ -47,37 +51,27 @@ INDEXER_CRON_SCHEDULE="0 2 * * *"
 
 ```yaml
 # 包含规则（先处理）
+# 匹配对象是文稿的 URI —— 相对 contents/ 的路径，含 .md 后缀。
 include:
   # 睡前消息
-  - "main/*/*.md"
+  - "ShuiQianXiaoXi/*/*.md"
 
   # 参考信息
-  - "reference/*/[0-9]*.md"
+  - "CanKaoXinXi/*/*.md"
 
   # 高见
-  - "opinion/[0-9]*.md"
-
-  # 每日新闻 (YYYY/MM/DD.md)
-  - "daily/*/*/[0-9]*.md"
+  - "GaoJian/*/*.md"
 
   # 讲点黑话
-  - "commercial/[0-9]*.md"
+  - "JiangDianHeiHua/*/*.md"
 
   # 产经破壁机
-  - "business/[0-9]*.md"
-  - "business/-[0-9]*.md" # -1.md and -2.md
-
-  # 直播问答记录
-  - "livestream/*/*/[0-9]*.md"
+  - "ChanJingPoBiJi/*/*.md"
 
 # 排除规则（在包含之后处理）
 exclude:
-  # 目录索引文件
-  - "main/[0-9]*-[0-9]*.md"
-  - "reference/[0-9]*-[0-9]*.md"
-  - "livestream/[0-9]*.md"
-  - "daily/[0-9]*.md"
-
+  # 各栏目的导航页，不是文稿
+  - "*/INDEX.md"
 
 # 文件校验规则
 validation:
@@ -109,14 +103,14 @@ docker compose exec indexer python -m src.debugger recent --limit 20
 docker compose exec indexer python -m src.debugger history
 
 # 指定文件的历史
-docker compose exec indexer python -m src.debugger history main/901-1000/960.md
+docker compose exec indexer python -m src.debugger history ShuiQianXiaoXi/0901-1000/0960.md
 ```
 
 ### 检查文档
 
 ```bash
 # 查看某个文档的 chunk
-docker compose exec indexer python -m src.debugger inspect main/901-1000/960.md
+docker compose exec indexer python -m src.debugger inspect ShuiQianXiaoXi/0901-1000/0960.md
 ```
 
 ### 查看日志
@@ -148,12 +142,14 @@ docker compose exec indexer python -m src.debugger clear
 
 ## 数据库 Schema
 
-Indexer 管理 `rag` schema 中的三张表：
+Indexer 管理 `rag` schema 中的四张表：
 
 **`rag.document_chunks`**：存储 chunk 与 embedding
 
-- `chunk_id`：唯一标识（`{doc_id}:{chunk_index}`）
-- `doc_id`：去掉扩展名的文档路径
+- `chunk_id`：唯一标识，形如 `ShuiQianXiaoXi_0501-0600_0588_chunk_000`
+  （URI 去掉 `.md`、`/` 换成 `_`，再加 chunk 序号）
+- `doc_id`：文稿 URI，**含 `.md`**，如 `ShuiQianXiaoXi/0501-0600/0588.md`；
+  与上游 `URI映射.md` 的键逐字一致
 - `chunk_index`：文档内从 0 开始的序号
 - `heading`：小节标题（如有）
 - `text`：chunk 内容
@@ -168,6 +164,18 @@ Indexer 管理 `rag` schema 中的三张表：
   `::halfvec`。只有在需要完整 float32 精度、超过 4000 维或二进制/稀疏
   embedding 时才应更换类型（还需要同时修改索引 opclass 与那些转换）。
 - `created_at`：时间戳
+
+**`rag.documents`**：URI → 标准化标题
+
+- `doc_id`：文稿 URI（主键，含 `.md`）
+- `title`：标准化标题，如 `睡前消息588`
+- `updated_at`：时间戳
+
+标题取自上游 `URI映射.md`。通则（`{栏目}/{百期文件夹}/{期号}.md` →
+`{栏目中文}{去零期号}`）覆盖绝大多数文稿，但 `misc/` 特辑、官方重号期、
+产经破壁机负数期等 29 篇例外无法由规则推导，因此以该文件为准。Agent 检索时
+LEFT JOIN 这张表，把引用渲染成标准化标题而不是原始 URI。每次流水线运行都会
+刷新全部标题——上游可能只改标题而不动文稿。
 
 **`rag.indexing_history`**：跟踪文件状态
 
@@ -376,7 +384,7 @@ docker compose exec indexer python -m src.debugger stats
 
 首次运行后应看到：
 
-- 仓库克隆到 `indexer/data/bedtimenews-archive-contents/`
+- 仓库克隆到 `indexer/data/BedtimeNews-Transcripts/`
 - chunk 存入 `rag.document_chunks`
 - 文件操作记录在 `rag.file_actions`
 
@@ -402,7 +410,7 @@ docker compose logs indexer | grep -i error
 docker compose exec indexer python -m src.pipeline
 
 # 确认 git clone 成功
-docker compose exec indexer ls -la data/bedtimenews-archive-contents/
+docker compose exec indexer ls -la data/BedtimeNews-Transcripts/
 ```
 
 **Embedding API 报错：**

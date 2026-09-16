@@ -8,7 +8,7 @@ Sistema agente RAG (Retrieval-Augmented Generation) para la base de conocimiento
 
 ## Descripción General
 
-Este sistema indexa transcripciones de videos del [archivo de BedtimeNews](https://archive.bedtime.news/) y permite búsqueda semántica con Q&A impulsado por LLM. Construido con LangGraph, proveedores de LLM/embedding conectables (DeepSeek para chat y los embeddings Qwen3 de SiliconFlow por defecto), y PostgreSQL + pgvector.
+Este sistema indexa transcripciones de videos de la [biblioteca de transcripciones de BedtimeNews](https://bedtimenewsstudio.github.io/BedtimeNews-Transcripts/) y permite búsqueda semántica con Q&A impulsado por LLM. Construido con LangGraph, proveedores de LLM/embedding conectables (DeepSeek para chat y los embeddings Qwen3 de SiliconFlow por defecto), y PostgreSQL + pgvector.
 
 **Características Principales:**
 
@@ -21,19 +21,22 @@ Este sistema indexa transcripciones de videos del [archivo de BedtimeNews](https
 
 ## Cobertura de Contenido
 
-El sistema indexa transcripciones de videos de [bedtimenews-archive-contents](https://github.com/bedtimenews/bedtimenews-archive-contents) cubriendo diversos temas a través de múltiples programas:
+El sistema indexa transcripciones de videos de [BedtimeNews-Transcripts](https://github.com/BedtimeNewsStudio/BedtimeNews-Transcripts):
+1812 transcripciones en cinco programas:
 
 **Catálogo de Programas:**
 
-| Catálogo      | Nombre     | Descripción                                                   |
-| ------------- | ---------- | ------------------------------------------------------------- |
-| `main/`       | 睡前消息   | Cobertura integral a través de todos los temas                |
-| `reference/`  | 参考信息   | Agregación diaria de noticias                                 |
-| `business/`   | 产经破壁机 | Economía, industria, negocios, tecnología                     |
-| `commercial/` | 讲点黑话   | Relaciones internacionales, geopolítica                       |
-| `opinion/`    | 高见       | Análisis técnico, infraestructura, ingeniería                 |
-| `daily/`      | 每日新闻   | Actualizaciones diarias de noticias                           |
-| `others/`     | 其它文稿   | Sesiones de preguntas en vivo y otros contenidos relacionados |
+| Directorio          | Nombre     | Presentador    | Contenido              | Nº  |
+| ------------------- | ---------- | -------------- | ---------------------- | --- |
+| `ShuiQianXiaoXi/`   | 睡前消息   | 马前卒（督工） | Programa principal     | 889 |
+| `CanKaoXinXi/`      | 参考信息   | 小黛           | Noticias diarias       | 649 |
+| `ChanJingPoBiJi/`   | 产经破壁机 | 产经组         | Industria y negocios   | 136 |
+| `JiangDianHeiHua/`  | 讲点黑话   | 黑岛（老会计） | Historia y personajes  |  72 |
+| `GaoJian/`          | 高见       | 高流           | Artículos monográficos |  66 |
+
+Solo se indexa la sección `## 正文` (cuerpo) de cada transcripción; el `## 附录`
+(apéndice: correcciones y notas de verificación) y la línea de metadatos
+`**发布日期**` quedan fuera de la recuperación.
 
 **Categorías de Temas:**
 

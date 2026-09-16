@@ -4,9 +4,9 @@ Usage (inside Docker container):
     docker compose exec indexer python -m src.debugger test
     docker compose exec indexer python -m src.debugger stats
     docker compose exec indexer python -m src.debugger history
-    docker compose exec indexer python -m src.debugger history main/901-1000/960.md
+    docker compose exec indexer python -m src.debugger history ShuiQianXiaoXi/0901-1000/0960.md
     docker compose exec indexer python -m src.debugger recent --limit 20
-    docker compose exec indexer python -m src.debugger inspect main/901-1000/960.md
+    docker compose exec indexer python -m src.debugger inspect ShuiQianXiaoXi/0901-1000/0960.md
     docker compose exec indexer python -m src.debugger logs
     docker compose exec indexer python -m src.debugger logs --lines 100
     docker compose exec indexer python -m src.debugger logs --all
@@ -19,9 +19,10 @@ import shutil
 import sys
 from pathlib import Path
 
-from .paths import BEDTIMENEWS_ARCHIVE_CONTENTS_DIR
+from .paths import BEDTIMENEWS_TRANSCRIPTS_DIR
 from .vector_db import (
     clear_all_chunks,
+    clear_document_titles,
     clear_file_actions,
     clear_indexing_history,
     get_file_chunks,
@@ -172,6 +173,7 @@ def _cmd_clear(force: bool = False):
         logger.warning("WARNING: This will delete ALL data from the database:")
         logger.warning("         - All chunks")
         logger.warning("         - All indexing history")
+        logger.warning("         - All document titles")
         logger.warning("         - All file action logs")
         logger.warning("         and remove the cloned git repository!")
         logger.warning("=" * 60)
@@ -181,14 +183,15 @@ def _cmd_clear(force: bool = False):
             return
 
     clear_all_chunks()
+    clear_document_titles()
     clear_indexing_history()
     clear_file_actions()
 
-    if BEDTIMENEWS_ARCHIVE_CONTENTS_DIR.exists():
-        shutil.rmtree(BEDTIMENEWS_ARCHIVE_CONTENTS_DIR)
-        logger.info(f"Deleted repository: {BEDTIMENEWS_ARCHIVE_CONTENTS_DIR}")
+    if BEDTIMENEWS_TRANSCRIPTS_DIR.exists():
+        shutil.rmtree(BEDTIMENEWS_TRANSCRIPTS_DIR)
+        logger.info(f"Deleted repository: {BEDTIMENEWS_TRANSCRIPTS_DIR}")
     else:
-        logger.info(f"Repository not found: {BEDTIMENEWS_ARCHIVE_CONTENTS_DIR}")
+        logger.info(f"Repository not found: {BEDTIMENEWS_TRANSCRIPTS_DIR}")
 
 
 def main():

@@ -7,14 +7,26 @@ from src.change_detector import calculate_file_hash, detect_changes, get_doc_id
 
 
 class TestGetDocId:
-    def test_strips_md_suffix(self):
-        assert get_doc_id("960.md") == "960"
+    """The doc_id is the URI verbatim — including .md — so it stays byte-for-byte
+    identical to the keys of the upstream URI映射.md."""
 
-    def test_preserves_directory_path(self):
-        assert get_doc_id("education/960.md") == "education/960"
+    def test_keeps_md_suffix(self):
+        assert (
+            get_doc_id("ShuiQianXiaoXi/0501-0600/0588.md")
+            == "ShuiQianXiaoXi/0501-0600/0588.md"
+        )
 
-    def test_nested_path(self):
-        assert get_doc_id("a/b/c/123.md") == "a/b/c/123"
+    def test_keeps_fractional_episode_suffix(self):
+        assert (
+            get_doc_id("ShuiQianXiaoXi/0001-0100/0013.5.md")
+            == "ShuiQianXiaoXi/0001-0100/0013.5.md"
+        )
+
+    def test_keeps_misc_special_path(self):
+        assert (
+            get_doc_id("ChanJingPoBiJi/misc/biz-001.md")
+            == "ChanJingPoBiJi/misc/biz-001.md"
+        )
 
 
 class TestDetectChanges:
@@ -54,9 +66,7 @@ class TestDetectChanges:
 
 class TestCalculateFileHash:
     def test_matches_sha256_of_content(self, tmp_path, monkeypatch):
-        monkeypatch.setattr(
-            change_detector, "BEDTIMENEWS_ARCHIVE_CONTENTS_DIR", tmp_path
-        )
+        monkeypatch.setattr(change_detector, "CONTENTS_DIR", tmp_path)
         content = b"hello bedtime news"
         (tmp_path / "doc.md").write_bytes(content)
         expected = hashlib.sha256(content).hexdigest()

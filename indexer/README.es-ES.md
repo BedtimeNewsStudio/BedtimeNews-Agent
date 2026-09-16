@@ -12,11 +12,18 @@ configuración.
 ## Características
 
 - **Sincronización automática**: Clona/actualiza desde
-  [bedtimenews-archive-contents](https://github.com/bedtimenews/bedtimenews-archive-contents)
+  [BedtimeNews-Transcripts](https://github.com/BedtimeNewsStudio/BedtimeNews-Transcripts)
 - **Procesamiento incremental**: Detección de cambios basada en contenido
   (SHA256)
 - **Ejecución programada**: Planificador en proceso con una expresión cron
   configurable (por defecto: cada hora)
+- **Indexación solo del cuerpo**: se extrae únicamente el tramo entre `## 正文`
+  y `## 附录`; se descartan la línea de título, la línea de metadatos
+  `**发布日期**` y las notas de corrección del apéndice
+- **URI como doc_id**: la ruta de la transcripción relativa a `contents/` (con
+  `.md`) es su identificador
+- **Títulos normalizados**: se analiza el `URI映射.md` de origen y se escribe la
+  correspondencia URI → título en `rag.documents`
 - **Fragmentación inteligente**: Fragmentación semántica consciente de Markdown
 - **Embeddings por lotes**: Uso eficiente de la API de embeddings por lotes
 - **Monitoreo**: Depurador y estadísticas integrados
@@ -53,37 +60,28 @@ Edita `index_config.yml`:
 
 ```yaml
 # Patrones de inclusión (procesados primero)
+# Se comparan con el URI de la transcripción: su ruta relativa a contents/,
+# incluyendo el sufijo .md.
 include:
   # 睡前消息
-  - "main/*/*.md"
+  - "ShuiQianXiaoXi/*/*.md"
 
   # 参考信息
-  - "reference/*/[0-9]*.md"
+  - "CanKaoXinXi/*/*.md"
 
   # 高见
-  - "opinion/[0-9]*.md"
-
-  # 每日新闻 (YYYY/MM/DD.md)
-  - "daily/*/*/[0-9]*.md"
+  - "GaoJian/*/*.md"
 
   # 讲点黑话
-  - "commercial/[0-9]*.md"
+  - "JiangDianHeiHua/*/*.md"
 
   # 产经破壁机
-  - "business/[0-9]*.md"
-  - "business/-[0-9]*.md" # -1.md and -2.md
+  - "ChanJingPoBiJi/*/*.md"
 
-  # 直播问答记录
-  - "livestream/*/*/[0-9]*.md"
-
-# Patrones de exclusión (procesados tras la inclusión)
+# Patrones de exclusión (procesados después de la inclusión)
 exclude:
-  # Archivos índice de directorio
-  - "main/[0-9]*-[0-9]*.md"
-  - "reference/[0-9]*-[0-9]*.md"
-  - "livestream/[0-9]*.md"
-  - "daily/[0-9]*.md"
-
+  # Páginas de navegación por canal, no transcripciones
+  - "*/INDEX.md"
 
 # Reglas de validación de archivos
 validation:
@@ -115,14 +113,14 @@ docker compose exec indexer python -m src.debugger recent --limit 20
 docker compose exec indexer python -m src.debugger history
 
 # Historial de un archivo específico
-docker compose exec indexer python -m src.debugger history main/901-1000/960.md
+docker compose exec indexer python -m src.debugger history ShuiQianXiaoXi/0901-1000/0960.md
 ```
 
 ### Inspeccionar Documentos
 
 ```bash
 # Ver los chunks de un documento
-docker compose exec indexer python -m src.debugger inspect main/901-1000/960.md
+docker compose exec indexer python -m src.debugger inspect ShuiQianXiaoXi/0901-1000/0960.md
 ```
 
 ### Ver Logs
@@ -154,12 +152,14 @@ docker compose exec indexer python -m src.debugger clear
 
 ## Esquema de Base de Datos
 
-El indexador gestiona tres tablas en el esquema `rag`:
+El indexador gestiona cuatro tablas en el esquema `rag`:
 
 **`rag.document_chunks`**: Almacena chunks con embeddings
 
 - `chunk_id`: Identificador único (`{doc_id}:{chunk_index}`)
-- `doc_id`: Ruta del documento sin extensión
+- `doc_id`: El URI de la transcripción, **incluyendo `.md`**, p. ej.
+  `ShuiQianXiaoXi/0501-0600/0588.md`, idéntico a la clave usada por el
+  `URI映射.md` de origen
 - `chunk_index`: Índice basado en 0 dentro del documento
 - `heading`: Encabezado de sección (si existe)
 - `text`: Contenido del chunk
@@ -178,6 +178,22 @@ El indexador gestiona tres tablas en el esquema `rag`:
   binarios/dispersos (también requiere cambiar la opclass del índice y esos
   casts).
 - `created_at`: Marca de tiempo
+
+**`rag.documents`**: URI → 标准化标题 (título normalizado)
+
+- `doc_id`: URI de la transcripción (clave primaria, incluye `.md`)
+- `title`: título normalizado, p. ej. `睡前消息588`
+- `updated_at`: marca de tiempo
+
+Los títulos provienen del `URI映射.md` de origen. Una regla general
+(`{canal}/{carpeta}/{número}.md` → `{nombre chino del canal}{número sin ceros}`)
+cubre la gran mayoría, pero 29 transcripciones —los especiales de `misc/`, los
+números de episodio duplicados oficialmente, las ediciones negativas de
+产经破壁机— no se pueden derivar con ninguna regla, así que ese archivo es la
+fuente autoritativa. El agente hace LEFT JOIN sobre esta tabla al recuperar para
+mostrar las citas con el título en lugar del URI. Cada ejecución refresca todos
+los títulos, ya que el origen puede corregir un título sin tocar la
+transcripción.
 
 **`rag.indexing_history`**: Rastrea el estado de los archivos
 
@@ -397,7 +413,7 @@ docker compose exec indexer python -m src.debugger stats
 
 Tras la primera ejecución deberías ver:
 
-- Repositorio clonado en `indexer/data/bedtimenews-archive-contents/`
+- Repositorio clonado en `indexer/data/BedtimeNews-Transcripts/`
 - Chunks en `rag.document_chunks`
 - Acciones de archivos registradas en `rag.file_actions`
 
@@ -423,7 +439,7 @@ docker compose logs indexer | grep -i error
 docker compose exec indexer python -m src.pipeline
 
 # Verificar que el git clone tuvo éxito
-docker compose exec indexer ls -la data/bedtimenews-archive-contents/
+docker compose exec indexer ls -la data/BedtimeNews-Transcripts/
 ```
 
 **Errores de la API de embeddings:**

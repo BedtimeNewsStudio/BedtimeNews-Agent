@@ -664,10 +664,10 @@ body {
   text-underline-offset: 0.2em;
 }
 
-/* Citations are markdown links into the transcript archive — `[[名称]](url)` —
+/* Citations are markdown links into the transcript site — `[[标准化标题]](url)` —
    so they are picked out by destination and set as compact reference chips
    rather than inline prose links. */
-.answer-body a[href*="archive.bedtime.news"] {
+.answer-body a[href*="bedtimenewsstudio.github.io/BedtimeNews-Transcripts"] {
   border: 1px solid rgba(var(--accent-rgb), 0.35);
   border-radius: 3px;
   padding: 0.02em 0.3em;
@@ -677,8 +677,8 @@ body {
   transition: background 0.18s var(--ease), border-color 0.18s var(--ease);
 }
 
-.answer-body a[href*="archive.bedtime.news"]:hover,
-.answer-body a[href*="archive.bedtime.news"]:focus-visible {
+.answer-body a[href*="bedtimenewsstudio.github.io/BedtimeNews-Transcripts"]:hover,
+.answer-body a[href*="bedtimenewsstudio.github.io/BedtimeNews-Transcripts"]:focus-visible {
   background: rgba(var(--accent-rgb), 0.12);
   border-color: var(--accent);
 }

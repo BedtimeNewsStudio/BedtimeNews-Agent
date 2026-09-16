@@ -161,7 +161,7 @@ recientes.
 
 ```json
 {"type": "step", "step": "condense|route|rewrite|retrieve|grade|generate", "content": "…"}
-{"type": "citations", "urls": {"episode name": "https://archive.bedtime.news/…"}}
+{"type": "citations", "urls": {"ShuiQianXiaoXi/0501-0600/0588.md": {"title": "睡前消息588", "url": "https://bedtimenewsstudio.github.io/BedtimeNews-Transcripts/contents/ShuiQianXiaoXi/0501-0600/0588.html"}}}
 {"type": "answer_chunk", "content": "…"}
 {"type": "answer_final", "content": "…", "grounded": true}
 {"type": "answer_meta", "grounded": true}

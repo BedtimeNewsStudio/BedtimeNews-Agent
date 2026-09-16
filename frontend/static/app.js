@@ -137,7 +137,7 @@ function normalizeMarkdown(raw) {
     .replace(/^([ \t]*)([*+-])(?=[^\s*+-])/gm, "$1$2 ");
 }
 
-// Citations arrive as ordinary markdown links — `[[名称]](https://archive…)` —
+// Citations arrive as ordinary markdown links — `[[标准化标题]](https://…​.html)` —
 // so markdown-it turns them into <a> elements on its own; styles.css picks them
 // out by href.
 function renderMarkdown(md, raw) {
@@ -145,23 +145,24 @@ function renderMarkdown(md, raw) {
 }
 
 // Mirror of the server's _repair_citations, applied to the partial answer while
-// it streams. The model writes citations as `《名称》` or a bare `[[名称]]` about
-// as often as it writes the full link, and the server only fixes that once
-// generation has finished — too late for someone watching the text appear. With
-// the episode -> URL map from the "citations" event we can do the same rewrite
-// per render tick, so each citation becomes a link the moment it finishes
-// arriving. A half-streamed `《产经破壁` has no closing mark yet, so it simply
-// doesn't match and is upgraded on a later tick.
+// it streams. The model cites a document by its URI — `[[ShuiQianXiaoXi/0501-
+// 0600/0588.md]]` — which is not what a reader should see, and the server only
+// rewrites it once generation has finished, too late for someone watching the
+// text appear. The "citations" event carries a name -> {title, url} map keyed by
+// both URI and 标准化标题, so the same substitution can run per render tick: each
+// citation turns into a titled link the moment it finishes arriving. A
+// half-streamed `[[ShuiQianXiaoXi/0501-` has no closing brackets yet, so it
+// simply doesn't match and is upgraded on a later tick.
 const CITATION_RE = /(?:\[\[([^[\]]+?)\]\]|《([^《》]+?)》)(\([^)]*\))?/g;
 
 function linkifyCitations(text, urls) {
   if (!urls) return text;
   return text.replace(CITATION_RE, (whole, bracketName, cjkName) => {
     const name = bracketName || cjkName;
-    const url = urls[name];
-    // Names we have no URL for are left exactly as written — that is what keeps
-    // a genuine 《书名》 in the prose from being turned into a link.
-    return url ? `[[${name}]](${url})` : whole;
+    const entry = urls[name];
+    // Names we have no entry for are left exactly as written — that is what
+    // keeps a genuine 《书名》 in the prose from being turned into a link.
+    return entry ? `[[${entry.title}]](${entry.url})` : whole;
   });
 }
 
@@ -181,7 +182,9 @@ function stripFollowupBlock(text) {
 // can find citations unambiguously in the model's output. They are punctuation
 // for that parser, not for the reader, so drop them once the link exists.
 function unwrapCitationLabels(root) {
-  const links = root.querySelectorAll('a[href*="archive.bedtime.news"]');
+  const links = root.querySelectorAll(
+    'a[href*="bedtimenewsstudio.github.io/BedtimeNews-Transcripts"]',
+  );
   for (const link of links) {
     const label = link.textContent;
     if (label.length > 2 && label.startsWith("[") && label.endsWith("]")) {

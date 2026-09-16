@@ -9,7 +9,7 @@
 
 ## 概述
 
-本系统对[睡前消息档案库](https://archive.bedtime.news/)的视频文稿进行索引，并通过LLM驱动的问答实现语义搜索。基于LangGraph、可插拔的 LLM/embedding 提供方（默认使用 DeepSeek 对话模型与 SiliconFlow 的 Qwen3 embedding）以及 PostgreSQL + pgvector 构建。
+本系统对[睡前消息文稿库](https://bedtimenewsstudio.github.io/BedtimeNews-Transcripts/)的视频文稿进行索引，并通过LLM驱动的问答实现语义搜索。基于LangGraph、可插拔的 LLM/embedding 提供方（默认使用 DeepSeek 对话模型与 SiliconFlow 的 Qwen3 embedding）以及 PostgreSQL + pgvector 构建。
 
 **核心功能：**
 
@@ -22,19 +22,21 @@
 
 ## 内容覆盖
 
-本系统索引来自[bedtimenews-archive-contents](https://github.com/bedtimenews/bedtimenews-archive-contents)的视频文稿，涵盖多个节目的多元主题：
+本系统索引来自 [BedtimeNews-Transcripts](https://github.com/BedtimeNewsStudio/BedtimeNews-Transcripts) 的视频文稿，涵盖五个栏目共
+1812 篇文稿：
 
 **节目目录：**
 
-| 目录          | 节目名称   | 描述                     |
-| ------------- | ---------- | ------------------------ |
-| `main/`       | 睡前消息   | 全面覆盖所有主题         |
-| `reference/`  | 参考信息   | 每日新闻聚合             |
-| `business/`   | 产经破壁机 | 经济、产业、商业、技术   |
-| `commercial/` | 讲点黑话   | 国际关系、地缘政治       |
-| `opinion/`    | 高见       | 技术分析、基础设施、工程 |
-| `daily/`      | 每日新闻   | 每日新闻更新             |
-| `others/`     | 其它文稿   | 直播问答及其它相关内容   |
+| 栏目目录            | 节目名称   | 主讲         | 内容         | 篇数 |
+| ------------------- | ---------- | ------------ | ------------ | ---- |
+| `ShuiQianXiaoXi/`   | 睡前消息   | 马前卒（督工） | 主栏目       |  889 |
+| `CanKaoXinXi/`      | 参考信息   | 小黛每日口播 | 每日资讯     |  649 |
+| `ChanJingPoBiJi/`   | 产经破壁机 | 产经组       | 产业与商业   |  136 |
+| `JiangDianHeiHua/`  | 讲点黑话   | 黑岛（老会计） | 历史与人物   |   72 |
+| `GaoJian/`          | 高见       | 高流         | 专题长文     |   66 |
+
+每篇文稿只有 `## 正文` 部分会被索引；`## 附录`（事实订正、核对记录）和
+`**发布日期**` 元数据行不进入检索。
 
 **主题分类：**
 

@@ -6,17 +6,22 @@ from pathlib import Path
 
 import yaml
 
-from .paths import BEDTIMENEWS_ARCHIVE_CONTENTS_DIR, INDEX_CONFIG_FILE
+from .paths import CONTENTS_DIR, INDEX_CONFIG_FILE
 
 logger = logging.getLogger(__name__)
 
 
 def scan_files() -> set[str]:
-    """Scan content directory and filter files based on config."""
+    """Scan the transcript tree and filter files based on config.
+
+    Returns the URIs of the files to index: each path relative to CONTENTS_DIR,
+    including the .md suffix, which is exactly the identifier the upstream
+    URI映射.md is keyed by.
+    """
     md_files = set()
-    for md_file in BEDTIMENEWS_ARCHIVE_CONTENTS_DIR.rglob("*.md"):
-        rel_path = md_file.relative_to(BEDTIMENEWS_ARCHIVE_CONTENTS_DIR).as_posix()
-        md_files.add(rel_path)
+    for md_file in CONTENTS_DIR.rglob("*.md"):
+        uri = md_file.relative_to(CONTENTS_DIR).as_posix()
+        md_files.add(uri)
 
     config = _load_config()
 
@@ -44,7 +49,7 @@ def _should_include_file(md_file: str, config: dict) -> bool:
     """Check if a file should be included based on config rules.
 
     Args:
-        md_file: Relative path to markdown file
+        md_file: Document URI (path relative to CONTENTS_DIR, with .md)
         config: Config rules for indexing
 
     Returns:
@@ -70,5 +75,5 @@ def _should_include_file(md_file: str, config: dict) -> bool:
     min_size = config.get("validation", {}).get("min_file_size", 0)
     max_size = config.get("validation", {}).get("max_file_size", 10485760)
 
-    file_size = os.path.getsize(BEDTIMENEWS_ARCHIVE_CONTENTS_DIR / md_file)
+    file_size = os.path.getsize(CONTENTS_DIR / md_file)
     return min_size <= file_size <= max_size

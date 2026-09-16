@@ -140,6 +140,7 @@ class _Retriever:
             ChunkResult(
                 chunk_id=doc["chunk_id"],
                 doc_id=doc["doc_id"],
+                title=doc.get("title"),
                 chunk_index=doc.get("chunk_index"),
                 heading=doc.get("heading") if request.include_heading else None,
                 text=doc["text"] if request.include_text else None,

@@ -8,6 +8,7 @@ from src.chunker import (
     chunk_document,
     count_words,
 )
+from src.document_loader import uri_to_slug
 from src.models import Document
 
 
@@ -93,8 +94,9 @@ class TestExtractLastWords:
         assert len(result) < len(text)
 
 
-def _doc(text: str, doc_id: str = "123") -> Document:
-    return Document(id=doc_id, file_path=f"{doc_id}.md", doc_id=doc_id, text=text)
+def _doc(text: str, uri: str = "ShuiQianXiaoXi/0001-0100/0123.md") -> Document:
+    slug = uri_to_slug(uri)
+    return Document(id=f"doc_{slug}", file_path=uri, doc_id=uri, slug=slug, text=text)
 
 
 class TestChunkDocument:
@@ -103,15 +105,19 @@ class TestChunkDocument:
         assert len(chunks) == 1
         chunk = chunks[0]
         assert chunk.chunk_index == 0
-        assert chunk.id == "123_chunk_000"
-        assert chunk.doc_id == "123"
+        assert chunk.id == "ShuiQianXiaoXi_0001-0100_0123_chunk_000"
+        assert chunk.doc_id == "ShuiQianXiaoXi/0001-0100/0123.md"
         assert chunk.word_count == count_words(chunk.text)
 
-    def test_chunk_id_slashes_replaced_with_underscores(self):
+    def test_chunk_id_is_the_uri_slug_plus_index(self):
         chunks = chunk_document(
-            _doc("hello world", doc_id="livestream/2023/05"), min_chunk_size=1
+            _doc("hello world", uri="ShuiQianXiaoXi/0501-0600/0588.md"),
+            min_chunk_size=1,
         )
-        assert chunks[0].id == "livestream_2023_05_chunk_000"
+        # The .md suffix is dropped and "/" becomes "_", so the chunk id stays a
+        # plain identifier while doc_id keeps the URI verbatim.
+        assert chunks[0].id == "ShuiQianXiaoXi_0501-0600_0588_chunk_000"
+        assert chunks[0].doc_id == "ShuiQianXiaoXi/0501-0600/0588.md"
 
     def test_chunks_below_min_size_are_filtered_out(self):
         # 2 words, min is 5 -> dropped entirely

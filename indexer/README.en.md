@@ -8,10 +8,17 @@ See the [main README](../README.en.md) for setup instructions.
 
 ## Features
 
-- **Auto-sync**: Clones/updates from [bedtimenews-archive-contents](https://github.com/bedtimenews/bedtimenews-archive-contents)
+- **Auto-sync**: Clones/updates from [BedtimeNews-Transcripts](https://github.com/BedtimeNewsStudio/BedtimeNews-Transcripts)
 - **Incremental processing**: Content-based change detection (SHA256)
 - **Scheduled execution**: In-process scheduler with a configurable cron
   expression (default: hourly)
+- **Body-only indexing**: only the span between `## 正文` and `## 附录` is
+  extracted; the title line, the `**发布日期**` metadata line and the appendix's
+  fact-correction notes are all dropped
+- **URI as doc_id**: a transcript's path relative to `contents/` (with `.md`) is
+  its identifier
+- **Standardised titles**: the upstream `URI映射.md` is parsed and the
+  URI → title mapping written to `rag.documents`
 - **Smart chunking**: Markdown-aware semantic chunking
 - **Batch embedding**: Efficient batched embedding API usage
 - **Monitoring**: Built-in debugger and statistics
@@ -47,37 +54,28 @@ Edit `index_config.yml`:
 
 ```yaml
 # Include patterns (processed first)
+# Matched against a transcript's URI — its path relative to contents/,
+# including the .md suffix.
 include:
   # 睡前消息
-  - "main/*/*.md" 
+  - "ShuiQianXiaoXi/*/*.md"
 
   # 参考信息
-  - "reference/*/[0-9]*.md"
+  - "CanKaoXinXi/*/*.md"
 
   # 高见
-  - "opinion/[0-9]*.md"
-
-  # 每日新闻 (YYYY/MM/DD.md)
-  - "daily/*/*/[0-9]*.md"
+  - "GaoJian/*/*.md"
 
   # 讲点黑话
-  - "commercial/[0-9]*.md"
+  - "JiangDianHeiHua/*/*.md"
 
   # 产经破壁机
-  - "business/[0-9]*.md"
-  - "business/-[0-9]*.md" # -1.md and -2.md
-
-  # 直播问答记录
-  - "livestream/*/*/[0-9]*.md"
+  - "ChanJingPoBiJi/*/*.md"
 
 # Exclude patterns (processed after include)
 exclude:
-  # Directory index files
-  - "main/[0-9]*-[0-9]*.md"
-  - "reference/[0-9]*-[0-9]*.md"
-  - "livestream/[0-9]*.md"
-  - "daily/[0-9]*.md"
-
+  # Per-channel navigation pages, not transcripts
+  - "*/INDEX.md"
 
 # File validation rules
 validation:
@@ -109,14 +107,14 @@ docker compose exec indexer python -m src.debugger recent --limit 20
 docker compose exec indexer python -m src.debugger history
 
 # History for specific file
-docker compose exec indexer python -m src.debugger history main/901-1000/960.md
+docker compose exec indexer python -m src.debugger history ShuiQianXiaoXi/0901-1000/0960.md
 ```
 
 ### Inspect Documents
 
 ```bash
 # View chunks for a document
-docker compose exec indexer python -m src.debugger inspect main/901-1000/960.md
+docker compose exec indexer python -m src.debugger inspect ShuiQianXiaoXi/0901-1000/0960.md
 ```
 
 ### View Logs
@@ -148,12 +146,14 @@ docker compose exec indexer python -m src.debugger clear
 
 ## Database Schema
 
-The indexer manages three tables in the `rag` schema:
+The indexer manages four tables in the `rag` schema:
 
 **`rag.document_chunks`**: Stores chunks with embeddings
 
 - `chunk_id`: Unique identifier (`{doc_id}:{chunk_index}`)
-- `doc_id`: Document path without extension
+- `doc_id`: The transcript's URI, **including `.md`**, e.g.
+  `ShuiQianXiaoXi/0501-0600/0588.md` — byte-for-byte the key used by the
+  upstream `URI映射.md`
 - `chunk_index`: 0-based index within document
 - `heading`: Section heading (if any)
 - `text`: Chunk content
@@ -169,6 +169,21 @@ The indexer manages three tables in the `rag` schema:
   full float32 precision, >4000 dims, or binary/sparse embeddings (also requires
   changing the index opclass and those casts).
 - `created_at`: Timestamp
+
+**`rag.documents`**: URI → 标准化标题 (standardised title)
+
+- `doc_id`: transcript URI (primary key, includes `.md`)
+- `title`: standardised title, e.g. `睡前消息588`
+- `updated_at`: timestamp
+
+Titles come from the upstream `URI映射.md`. A general rule
+(`{channel}/{bucket}/{number}.md` → `{Chinese channel name}{unpadded number}`)
+covers the vast majority, but 29 transcripts — the `misc/` specials, officially
+duplicated episode numbers, the negative-numbered 产经破壁机 issues — cannot be
+derived by any rule, so that file is authoritative. The agent LEFT JOINs this
+table at retrieval time to render citations with the title rather than the raw
+URI. Every pipeline run refreshes all titles, since upstream may correct a title
+without touching the transcript.
 
 **`rag.indexing_history`**: Tracks file status
 
@@ -376,7 +391,7 @@ docker compose exec indexer python -m src.debugger stats
 
 After first run, you should see:
 
-- Repository cloned to `indexer/data/bedtimenews-archive-contents/`
+- Repository cloned to `indexer/data/BedtimeNews-Transcripts/`
 - Chunks in `rag.document_chunks`
 - File actions logged in `rag.file_actions`
 
@@ -402,7 +417,7 @@ docker compose logs indexer | grep -i error
 docker compose exec indexer python -m src.pipeline
 
 # Verify git clone succeeded
-docker compose exec indexer ls -la data/bedtimenews-archive-contents/
+docker compose exec indexer ls -la data/BedtimeNews-Transcripts/
 ```
 
 **Embedding API errors:**
