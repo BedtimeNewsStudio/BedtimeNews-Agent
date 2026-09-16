@@ -2,7 +2,12 @@
 
 import pytest
 from src import document_loader
-from src.document_loader import extract_body, load_document, uri_to_slug
+from src.document_loader import (
+    clean_text,
+    extract_body,
+    load_document,
+    uri_to_slug,
+)
 
 # Shaped like a real transcript: title, publication-date line, the 正文 section
 # whose own sub-headings are also level 2, then the 附录 section.
@@ -98,7 +103,26 @@ class TestLoadDocument:
         # doc_id is the URI verbatim, .md included.
         assert doc.doc_id == uri
         assert doc.slug == "ShuiQianXiaoXi_0501-0600_0588"
-        assert doc.id == "doc_ShuiQianXiaoXi_0501-0600_0588"
         assert "大家好" in doc.text
         assert "事实订正" not in doc.text
         assert "发布日期" not in doc.text
+
+
+class TestCleanText:
+    def test_strips_inline_formatting_tags_but_keeps_their_text(self):
+        assert clean_text("强调<u>重点</u>内容") == "强调重点内容"
+        assert clean_text("换行<br/>后面") == "换行后面"
+        assert clean_text("<b>加粗</b>与<center>表名</center>") == "加粗与表名"
+
+    def test_preserves_comparison_operators_in_prose(self):
+        # A catch-all `<[^>]+>` reads everything between the `<` and the next
+        # `>` as a tag and deletes the clause in between. This line is real
+        # transcript text (ShuiQianXiaoXi/0301-0400/0321.md).
+        line = "抗力为H，如果ΔP<H，目标生存；如果ΔP>H，目标摧毁"
+        assert clean_text(line) == line
+
+    def test_preserves_numeric_comparisons(self):
+        assert clean_text("温度<100度，压力>2兆帕") == "温度<100度，压力>2兆帕"
+
+    def test_collapses_runs_of_blank_lines(self):
+        assert clean_text("一\n\n\n\n二") == "一\n\n二"

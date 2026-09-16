@@ -52,13 +52,14 @@ class TestSplitIntoSections:
         assert len(sections) == 1
         assert sections[0]["heading"] is None
         assert sections[0]["level"] == 0
-        assert sections[0]["breadcrumb"] == []
 
-    def test_breadcrumb_nesting(self):
-        # A (h1) -> B (h2 under A) -> C (h1, resets stack)
+    def test_records_heading_and_level_per_section(self):
         sections = _split_into_sections("# A\n## B\n# C")
-        crumbs = [s["breadcrumb"] for s in sections]
-        assert crumbs == [["A"], ["A", "B"], ["C"]]
+        assert [(s["heading"], s["level"]) for s in sections] == [
+            ("A", 1),
+            ("B", 2),
+            ("C", 1),
+        ]
 
     def test_section_content_spans_to_next_heading(self):
         sections = _split_into_sections("# A\nalpha\n# B\nbeta")
@@ -96,7 +97,7 @@ class TestExtractLastWords:
 
 def _doc(text: str, uri: str = "ShuiQianXiaoXi/0001-0100/0123.md") -> Document:
     slug = uri_to_slug(uri)
-    return Document(id=f"doc_{slug}", file_path=uri, doc_id=uri, slug=slug, text=text)
+    return Document(file_path=uri, doc_id=uri, slug=slug, text=text)
 
 
 class TestChunkDocument:

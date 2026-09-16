@@ -8,7 +8,6 @@ class Document:
     """Represents a loaded Markdown document.
 
     Attributes:
-        id: Unique identifier for the document
         file_path: Path to the source file
         doc_id: Document URI, e.g. "ShuiQianXiaoXi/0501-0600/0588.md"
         slug: doc_id without its .md suffix and with "/" replaced by "_",
@@ -16,7 +15,6 @@ class Document:
         text: Cleaned 正文 text of the document
     """
 
-    id: str
     file_path: str
     doc_id: str
     slug: str

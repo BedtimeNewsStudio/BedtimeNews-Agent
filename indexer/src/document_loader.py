@@ -42,7 +42,6 @@ def load_document(uri: str) -> Document:
     text = clean_text(extract_body(content, uri))
 
     return Document(
-        id=f"doc_{uri_to_slug(uri)}",
         file_path=str(file_path),
         doc_id=uri,
         slug=uri_to_slug(uri),
@@ -84,22 +83,15 @@ def extract_body(content: str, uri: str = "") -> str:
 
 
 def clean_text(text: str) -> str:
-    """Clean text content: remove YAML front matter, HTML, normalize whitespace.
+    """Normalise a transcript body for chunking.
 
     Args:
-        text: Raw text content
+        text: Raw 正文 text
 
     Returns:
         Cleaned text
     """
-    # Remove YAML front matter (--- ... ---)
-    pattern = r"^---\s*\n(.*?)\n---\s*\n"
-    match = re.match(pattern, text, re.DOTALL)
-    if match:
-        text = text[match.end() :]
-
-    # Remove HTML sections
-    text = _remove_html_sections(text)
+    text = _strip_inline_html(text)
 
     # Normalize line endings to \n
     text = text.replace("\r\n", "\n").replace("\r", "\n")
@@ -107,51 +99,19 @@ def clean_text(text: str) -> str:
     # Remove multiple consecutive blank lines
     text = re.sub(r"\n\s*\n\s*\n+", "\n\n", text)
 
-    # Strip leading/trailing whitespace
-    text = text.strip()
-
-    return text
+    return text.strip()
 
 
-def _remove_html_sections(text: str) -> str:
-    """Remove HTML sections and embedded content.
+# Inline formatting tags that actually occur in transcript bodies, kept as an
+# explicit whitelist rather than a catch-all `<[^>]+>`. The catch-all is unsafe
+# on this corpus: prose contains bare comparison operators, so a sentence like
+# "如果ΔP<H，目标生存；如果ΔP>H，目标摧毁" looks like a tag between the `<` and the
+# next `>` and loses the whole clause in between. A whitelist cannot do that.
+_INLINE_HTML_RE = re.compile(
+    r"</?(?:br|u|b|i|em|strong|center|sup|sub|p)\s*/?>", re.IGNORECASE
+)
 
-    Args:
-        text: Markdown text with potential HTML
 
-    Returns:
-        Text with HTML sections removed
-    """
-    # Remove the Tabs section with video embeds
-    text = re.sub(
-        r"#\s+Tabs\s+\{\.tabset\}.*?(?=\n#{1,6}\s+|\Z)", "", text, flags=re.DOTALL
-    )
-
-    # Remove HTML comments
-    text = re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
-
-    # Remove standalone HTML tags (div, iframe, etc.)
-    text = re.sub(
-        r"<(?:div|iframe|span)[^>]*>.*?</(?:div|iframe|span)>",
-        "",
-        text,
-        flags=re.DOTALL,
-    )
-    text = re.sub(r"<(?:div|iframe|span)[^>]*/?>", "", text)
-
-    # Remove any remaining empty div tags
-    text = re.sub(r"<div[^>]*>\s*</div>", "", text, flags=re.DOTALL)
-
-    # Remove font tags but keep inner text
-    text = re.sub(r"<font[^>]*>(.*?)</font>", r"\1", text, flags=re.DOTALL)
-
-    # Remove any remaining HTML tags
-    text = re.sub(r"<[^>]+>", "", text)
-
-    # Remove Markdown image syntax: ![alt text](url)
-    text = re.sub(r"!\[([^\]]*)\]\([^)]+\)", "", text)
-
-    # Remove standalone image placeholders
-    text = re.sub(r"^图片\s*$", "", text, flags=re.MULTILINE)
-
-    return text
+def _strip_inline_html(text: str) -> str:
+    """Drop inline formatting tags, keeping the text they wrap."""
+    return _INLINE_HTML_RE.sub("", text)

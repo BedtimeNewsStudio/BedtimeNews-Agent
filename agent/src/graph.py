@@ -100,10 +100,11 @@ _GRADING_SYSTEM_PROMPT = """You are a document relevance grader.
 
 Assess which documents are relevant to the user's input (question, topic, or statement).
 
-Each document is shown as a heading followed by an excerpt from its text. Judge
-by the excerpt. Headings in this archive are often just the episode's opening
-greeting and say nothing about the content — an unhelpful heading is not
-evidence that the document is irrelevant.
+Each document is shown as a heading followed by an excerpt from its text. The
+heading is the transcript section the excerpt came from, so it is usually a real
+topic label — but it describes only that one section of a wide-ranging episode.
+Judge by the excerpt; a heading that looks off-topic, or is missing entirely, is
+not by itself evidence that the document is irrelevant.
 
 A document is RELEVANT if it:
 - Discusses the same topic, event, or entity mentioned in the user input

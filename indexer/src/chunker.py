@@ -39,7 +39,6 @@ def chunk_document(
     for section in sections:
         section_chunks = _chunk_section(
             section,
-            document.doc_id,
             previous_overlap,
             target_chunk_size,
             max_chunk_size,
@@ -95,16 +94,15 @@ def _split_into_sections(text: str) -> list[dict[str, Any]]:
         text: Markdown text
 
     Returns:
-        List of section dictionaries with keys: heading, level, content, breadcrumb
+        List of section dictionaries with keys: heading, level, content
     """
     headings = _extract_headings(text)
 
     if not headings:
         # No headings found, treat entire text as one section
-        return [{"heading": None, "level": 0, "content": text, "breadcrumb": []}]
+        return [{"heading": None, "level": 0, "content": text}]
 
     sections = []
-    breadcrumb_stack = []
 
     for i, (pos, level, heading_text) in enumerate(headings):
         # Determine section content
@@ -112,22 +110,11 @@ def _split_into_sections(text: str) -> list[dict[str, Any]]:
         end_pos = headings[i + 1][0] if i + 1 < len(headings) else len(text)
         content = text[start_pos:end_pos].strip()
 
-        # Update breadcrumb stack
-        while breadcrumb_stack and breadcrumb_stack[-1][0] >= level:
-            breadcrumb_stack.pop()
-
-        # Add current heading to breadcrumb
-        breadcrumb_stack.append((level, heading_text))
-
-        # Create breadcrumb list
-        breadcrumb = [h[1] for h in breadcrumb_stack]
-
         sections.append(
             {
                 "heading": heading_text,
                 "level": level,
                 "content": content,
-                "breadcrumb": breadcrumb.copy(),
             }
         )
 
@@ -156,7 +143,6 @@ def _extract_headings(text: str) -> list[tuple[int, int, str]]:
 
 def _chunk_section(
     section: dict[str, Any],
-    doc_id: str,
     previous_overlap: str,
     target_chunk_size: int,
     max_chunk_size: int,
@@ -166,7 +152,6 @@ def _chunk_section(
 
     Args:
         section: Section dictionary from _split_into_sections
-        doc_id: Document ID
         previous_overlap: Overlap text from previous chunk
         target_chunk_size: Target size in words
         max_chunk_size: Maximum size in words
@@ -190,8 +175,6 @@ def _chunk_section(
             {
                 "text": chunk_text,
                 "heading": section["heading"],
-                "breadcrumb": section["breadcrumb"],
-                "doc_id": doc_id,
             }
         )
         return chunks
@@ -217,8 +200,6 @@ def _chunk_section(
                 {
                     "text": chunk_text,
                     "heading": section["heading"],
-                    "breadcrumb": section["breadcrumb"],
-                    "doc_id": doc_id,
                 }
             )
             # Extract overlap for next chunk
@@ -238,8 +219,6 @@ def _chunk_section(
             {
                 "text": "\n\n".join(current_chunk),
                 "heading": section["heading"],
-                "breadcrumb": section["breadcrumb"],
-                "doc_id": doc_id,
             }
         )
 
