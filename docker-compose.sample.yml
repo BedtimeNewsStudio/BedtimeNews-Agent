@@ -1,0 +1,28 @@
+# Local-only deterministic sample overlay. Set POSTGRES_DATA_DIR and
+# INDEXER_DATA_DIR to isolated host directories before invoking Compose.
+services:
+  postgres:
+    container_name: bedtimenews-sample-postgres
+    environment:
+      POSTGRES_DB: postgres_local
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres_user} -d postgres_local"]
+
+  indexer:
+    container_name: bedtimenews-sample-indexer
+    environment:
+      POSTGRES_DB: postgres_local
+      INDEXER_SCOPE: sample
+      INDEX_CONFIG_FILE: /app/index_config.sample.yml
+
+  agent:
+    container_name: bedtimenews-sample-agent
+    environment:
+      POSTGRES_DB: postgres_local
+
+  web:
+    container_name: bedtimenews-sample-web
+    environment:
+      POSTGRES_DB: postgres_local
+    ports: !override
+      - "${SAMPLE_FRONTEND_PORT:-18080}:8080"

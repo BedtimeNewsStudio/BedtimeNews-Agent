@@ -64,6 +64,7 @@ class Settings(BaseSettings):
 
     # Indexer configuration
     indexer_cron_schedule: str = os.environ.get("INDEXER_CRON_SCHEDULE", "0 * * * *")
+    indexer_scope: str = os.environ.get("INDEXER_SCOPE", "full")
 
 
 settings = Settings()

@@ -83,26 +83,34 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
 	        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 	    );
 
-	    -- Indexing history: file-level status via content hashing (incremental loads)
+	    -- Indexing history keeps two independent fingerprints. source_hash sees
+	    -- every Markdown edit; body_hash covers the exact normalized ## 正文 text
+	    -- represented by the stored chunks and embeddings.
 	    CREATE TABLE IF NOT EXISTS rag.indexing_history (
 	        id SERIAL PRIMARY KEY,
 	        file_path VARCHAR(500) UNIQUE NOT NULL,
-	        content_hash VARCHAR(64) NOT NULL,
+	        source_hash VARCHAR(64) NOT NULL,
+	        body_hash VARCHAR(64) NOT NULL,
+	        body_normalization_version SMALLINT NOT NULL,
 	        indexed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-	        last_modified TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+	        source_observed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 	    );
 	    CREATE INDEX IF NOT EXISTS idx_indexing_history_file_path ON rag.indexing_history(file_path);
-	    CREATE INDEX IF NOT EXISTS idx_indexing_history_content_hash ON rag.indexing_history(content_hash);
+	    CREATE INDEX IF NOT EXISTS idx_indexing_history_source_hash ON rag.indexing_history(source_hash);
+	    CREATE INDEX IF NOT EXISTS idx_indexing_history_body_hash ON rag.indexing_history(body_hash);
 
-	    -- File actions: audit log of ADD/MODIFY/DELETE during scheduled runs
+	    -- File actions distinguish source-only edits from actual RAG rebuilds.
 	    CREATE TABLE IF NOT EXISTS rag.file_actions (
 	        id SERIAL PRIMARY KEY,
 	        file_path VARCHAR(500) NOT NULL,
-	        action_type VARCHAR(10) NOT NULL,
-	        content_hash VARCHAR(64),
+	        action_type VARCHAR(16) NOT NULL,
+	        source_hash VARCHAR(64),
+	        body_hash VARCHAR(64),
 	        run_timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 	        processed_at TIMESTAMP WITH TIME ZONE,
-	        CONSTRAINT valid_action_type CHECK (action_type IN ('ADD', 'MODIFY', 'DELETE'))
+	        CONSTRAINT valid_action_type CHECK (
+	            action_type IN ('ADD', 'MODIFY', 'SOURCE_ONLY', 'DELETE')
+	        )
 	    );
 	    CREATE INDEX IF NOT EXISTS idx_file_actions_file_path ON rag.file_actions(file_path);
 	    CREATE INDEX IF NOT EXISTS idx_file_actions_timestamp ON rag.file_actions(run_timestamp);

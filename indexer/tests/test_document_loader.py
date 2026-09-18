@@ -126,3 +126,23 @@ class TestCleanText:
 
     def test_collapses_runs_of_blank_lines(self):
         assert clean_text("一\n\n\n\n二") == "一\n\n二"
+
+
+class TestIndexableFingerprint:
+    def test_hashes_empty_body_consistently(self, tmp_path, monkeypatch):
+        import hashlib
+
+        monkeypatch.setattr(document_loader, "CONTENTS_DIR", tmp_path)
+        uri = "malformed.md"
+        raw = b"# title\n\n## Appendix only\n"
+        (tmp_path / uri).write_bytes(raw)
+
+        loaded = document_loader.load_indexable_source(uri)
+
+        assert loaded.document.text == ""
+        assert loaded.source_hash == hashlib.sha256(raw).hexdigest()
+        assert loaded.body_hash == hashlib.sha256(b"").hexdigest()
+        assert (
+            loaded.body_normalization_version
+            == document_loader.BODY_NORMALIZATION_VERSION
+        )

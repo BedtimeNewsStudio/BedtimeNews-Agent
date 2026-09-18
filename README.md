@@ -185,6 +185,10 @@ git tag v0.1.0 && git push origin v0.1.0
 > 操作手册）、以及是否需要重新索引。`storage/postgres/init.sh` 只在全新数据卷
 > 上执行，schema 变更不会自动应用到已有部署。
 
+### 正文哈希 schema 升级
+
+Indexer 现在以实际送入分块与 embedding 的规范化 `## 正文` SHA256 判断向量是否失效，同时保留完整源文件哈希。已有数据卷必须在运行新版 Indexer 前执行 `storage/postgres/migrations/001_body_hashes.sql`；生产操作步骤见 [indexer/README.md](indexer/README.md)。`docker-compose.sample.yml` 提供固定小样本，本地运行时必须设置隔离的 `POSTGRES_DATA_DIR` / `INDEXER_DATA_DIR`。
+
 ## 服务专属文档
 
 - **[Frontend](frontend/README.md)**：UI定制

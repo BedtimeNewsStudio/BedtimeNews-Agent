@@ -24,6 +24,11 @@ def scan_files() -> set[str]:
         md_files.add(uri)
 
     config = _load_config()
+    required = set(config.get("required_uris", []))
+    missing = required - md_files
+    if missing:
+        formatted = ", ".join(sorted(missing))
+        raise RuntimeError(f"Required transcript URIs are missing: {formatted}")
 
     filtered_files = set()
     for md_file in md_files:
@@ -38,7 +43,7 @@ def _load_config() -> dict:
     """Load index configuration from YAML file."""
     try:
         with open(INDEX_CONFIG_FILE, encoding="utf-8") as f:
-            return yaml.safe_load(f)
+            return yaml.safe_load(f) or {}
     except FileNotFoundError as e:
         raise RuntimeError(f"Config file not found: {INDEX_CONFIG_FILE}") from e
     except yaml.YAMLError as e:

@@ -69,9 +69,11 @@ def _cmd_history(file_path: str | None = None):
         logger.info(f"Indexing history for: {file_path}")
         history = get_indexing_history(file_path)
         if history:
-            logger.info(f"  Content hash:  {history['content_hash']}")
+            logger.info(f"  Source hash:   {history['source_hash']}")
+            logger.info(f"  Body hash:     {history['body_hash']}")
+            logger.info(f"  Body version:  {history['body_normalization_version']}")
             logger.info(f"  Indexed at:    {history['indexed_at']}")
-            logger.info(f"  Last modified: {history['last_modified']}")
+            logger.info(f"  Source seen:   {history['source_observed_at']}")
         else:
             logger.info("  No history found")
     else:
@@ -101,13 +103,15 @@ def _cmd_inspect(file_path: str):
     """Inspect a specific file's chunks."""
     logger.info(f"Inspecting: {file_path}")
 
-    doc_id = Path(file_path).with_suffix("").as_posix()
+    doc_id = file_path
 
     history = get_indexing_history(file_path)
     if history:
-        logger.info(f"  Content hash:  {history['content_hash']}")
+        logger.info(f"  Source hash:   {history['source_hash']}")
+        logger.info(f"  Body hash:     {history['body_hash']}")
+        logger.info(f"  Body version:  {history['body_normalization_version']}")
         logger.info(f"  Indexed at:    {history['indexed_at']}")
-        logger.info(f"  Last modified: {history['last_modified']}")
+        logger.info(f"  Source seen:   {history['source_observed_at']}")
 
     chunks = get_file_chunks(doc_id)
     if chunks:

@@ -106,3 +106,15 @@ class TestShippedConfigPatterns:
         monkeypatch.setattr(file_scanner, "CONTENTS_DIR", tmp_path)
         _make_file(tmp_path, uri, size=500)
         assert _should_include_file(uri, self.CONFIG) is False
+
+
+def test_scan_fails_when_a_required_sample_uri_is_missing(tmp_path, monkeypatch):
+    monkeypatch.setattr(file_scanner, "CONTENTS_DIR", tmp_path)
+    monkeypatch.setattr(
+        file_scanner,
+        "_load_config",
+        lambda: {"required_uris": ["missing.md"], "include": ["*.md"]},
+    )
+
+    with pytest.raises(RuntimeError, match="missing.md"):
+        file_scanner.scan_files()

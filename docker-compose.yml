@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_HOST_AUTH_METHOD: scram-sha-256
     volumes:
-      - ./storage/postgres/volume:/var/lib/postgresql
+      - ${POSTGRES_DATA_DIR:-./storage/postgres/volume}:/var/lib/postgresql
       # init.sh reads EMBEDDING_DIM from the env_file (.env) to size the
       # embedding column. Runs only on first init of an empty data volume.
       - ./storage/postgres/init.sh:/docker-entrypoint-initdb.d/init.sh
@@ -40,7 +40,7 @@ services:
       # Read from the host shell environment (not stored in .env)
       - SILICONFLOW_API_KEY
     volumes:
-      - ./indexer/data:/data
+      - ${INDEXER_DATA_DIR:-./indexer/data}:/data
       - bedtimenews_indexer_logs:/var/log/indexer
     depends_on:
       postgres:

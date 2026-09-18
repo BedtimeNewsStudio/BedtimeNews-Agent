@@ -1,12 +1,18 @@
-"""Document loading and text cleaning."""
+"""Document loading, normalization, and indexing fingerprints."""
 
+import hashlib
 import logging
 import re
 
-from .models import Document
+from .models import Document, LoadedIndexableSource
 from .paths import CONTENTS_DIR
 
 logger = logging.getLogger(__name__)
+
+# Increment this whenever the normalized text passed to chunking changes. Rows
+# written by an older version are deliberately re-indexed even if the source
+# bytes are unchanged.
+BODY_NORMALIZATION_VERSION = 1
 
 # Every transcript is laid out as a `# 标题` line, a `**发布日期**` line, then
 # exactly one `## 正文` section followed by exactly one `## 附录` section (verified
@@ -23,30 +29,40 @@ def uri_to_slug(uri: str) -> str:
     return uri.removesuffix(".md").replace("/", "_")
 
 
-def load_document(uri: str) -> Document:
-    """Load a single transcript by its URI.
+def load_indexable_source(
+    uri: str, raw_bytes: bytes | None = None
+) -> LoadedIndexableSource:
+    """Load a transcript and fingerprint both its source and indexed body.
 
-    Args:
-        uri: Document URI — path relative to CONTENTS_DIR including the .md
-            suffix (e.g. "ShuiQianXiaoXi/0501-0600/0588.md"). This is also the
-            doc_id used throughout the system.
-
-    Returns:
-        Document object whose text is the transcript's 正文 only.
+    ``body_hash`` is calculated from the exact normalized string stored in
+    ``Document.text``. Title, publication date, appendix, and formatting that
+    normalization removes therefore cannot trigger unnecessary embeddings.
+    ``source_hash`` still observes every byte for non-RAG consumers such as the
+    transcript reader.
     """
     file_path = CONTENTS_DIR / uri
+    if raw_bytes is None:
+        raw_bytes = file_path.read_bytes()
 
-    with open(file_path, encoding="utf-8") as f:
-        content = f.read()
-
+    content = raw_bytes.decode("utf-8")
     text = clean_text(extract_body(content, uri))
-
-    return Document(
+    document = Document(
         file_path=str(file_path),
         doc_id=uri,
         slug=uri_to_slug(uri),
         text=text,
     )
+    return LoadedIndexableSource(
+        document=document,
+        source_hash=hashlib.sha256(raw_bytes).hexdigest(),
+        body_hash=hashlib.sha256(text.encode("utf-8")).hexdigest(),
+        body_normalization_version=BODY_NORMALIZATION_VERSION,
+    )
+
+
+def load_document(uri: str) -> Document:
+    """Load one transcript by URI, returning its normalized 正文 only."""
+    return load_indexable_source(uri).document
 
 
 def extract_body(content: str, uri: str = "") -> str:
@@ -83,14 +99,7 @@ def extract_body(content: str, uri: str = "") -> str:
 
 
 def clean_text(text: str) -> str:
-    """Normalise a transcript body for chunking.
-
-    Args:
-        text: Raw 正文 text
-
-    Returns:
-        Cleaned text
-    """
+    """Normalize a transcript body for chunking and body hashing."""
     text = _strip_inline_html(text)
 
     # Normalize line endings to \n

@@ -18,7 +18,7 @@ RUN pip install --no-cache-dir .
 
 # Copy source code and configuration files
 COPY src/ ./src/
-COPY index_config.yml .
+COPY index_config.yml index_config.sample.yml ./
 
 # The bind-mounted archive and persistent scheduler logs are the only writable
 # runtime locations.

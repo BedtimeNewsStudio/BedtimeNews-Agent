@@ -13,8 +13,7 @@ configuración.
 
 - **Sincronización automática**: Clona/actualiza desde
   [BedtimeNews-Transcripts](https://github.com/BedtimeNewsStudio/BedtimeNews-Transcripts)
-- **Procesamiento incremental**: Detección de cambios basada en contenido
-  (SHA256)
+- **Procesamiento incremental consciente del cuerpo**: huellas SHA-256 separadas para el Markdown completo y para el texto normalizado de `## 正文` enviado a embeddings; los cambios solo en título, fecha o apéndice no llaman al proveedor
 - **Ejecución programada**: Planificador en proceso con una expresión cron
   configurable (por defecto: cada hora)
 - **Indexación solo del cuerpo**: se extrae únicamente el tramo entre `## 正文`
@@ -32,10 +31,7 @@ configuración.
 
 ![Pipeline del indexador](../docs/diagrams/indexer-pipeline.svg)
 
-Los archivos añadidos y modificados se cargan, fragmentan, incrustan y
-confirman un archivo a la vez. Esto mantiene duraderos los archivos completados
-si un archivo posterior falla. Las eliminaciones quitan tanto los chunks
-almacenados como el historial de detección de cambios.
+Los archivos añadidos o con el cuerpo modificado se fragmentan e incrustan antes de que una sola transacción sustituya sus chunks e historial; un fallo del proveedor conserva la versión anterior. Los cambios solo en la fuente actualizan el historial sin tocar vectores, y las eliminaciones son transaccionales.
 
 ## Configuración
 
@@ -53,6 +49,10 @@ INDEXER_CRON_SCHEDULE="*/30 * * * *"
 # Diario a las 2 AM
 INDEXER_CRON_SCHEDULE="0 2 * * *"
 ```
+
+### Modo de muestra local
+
+`index_config.sample.yml` selecciona siete transcripciones deterministas. Solo se admite con `INDEXER_SCOPE=sample`, `INDEX_CONFIG_FILE=/app/index_config.sample.yml`, almacenamiento aislado y un `POSTGRES_DB` terminado en `_local`; el indexador rechaza cualquier otro destino. `docker-compose.sample.yml` aporta las sobreescrituras de servicios.
 
 ### Filtros de Documentos
 
@@ -195,20 +195,22 @@ mostrar las citas con el título en lugar del URI. Cada ejecución refresca todo
 los títulos, ya que el origen puede corregir un título sin tocar la
 transcripción.
 
-**`rag.indexing_history`**: Rastrea el estado de los archivos
+**`rag.indexing_history`**: estado de la representación indexada
 
-- `file_path`: Ruta relativa en el repositorio
-- `content_hash`: Hash SHA256 para detección de cambios
-- `indexed_at`: Cuándo se procesó el archivo
-- `last_modified`: Tiempo de modificación del archivo
+- `file_path`: URI de la transcripción
+- `source_hash`: SHA-256 del Markdown fuente completo
+- `body_hash`: SHA-256 del cuerpo normalizado representado por chunks/vectores
+- `body_normalization_version`: fuerza una reindexación al cambiar el normalizador
+- `indexed_at`: última indexación correcta del cuerpo
+- `source_observed_at`: última actualización aceptada de la fuente
 
-**`rag.file_actions`**: Registro de auditoría
+**`rag.file_actions`**: registro de auditoría
 
-- `file_path`: Ruta relativa
-- `action_type`: ADD, MODIFY o DELETE
-- `content_hash`: Hash SHA256 (NULL para DELETE)
-- `run_timestamp`: Cuándo se registró la acción
-- `processed_at`: Cuándo se procesó la acción
+- `action_type`: `ADD`, `MODIFY`, `SOURCE_ONLY` o `DELETE`
+- `source_hash` / `body_hash`: huellas explícitas (`NULL` al eliminar)
+- `run_timestamp` / `processed_at`: tiempos de registro y finalización
+
+Los volúmenes v0.2 existentes deben aplicar `storage/postgres/migrations/001_body_hashes.sql` antes de arrancar el indexador nuevo. Las filas heredadas con `body_hash` nulo se reindexan una vez de forma conservadora. Para una actualización limpia: respalda PostgreSQL, aplica la migración, vacía las cuatro tablas RAG y vuelve a poblar el corpus. No ejecutes el indexador antiguo contra el esquema nuevo.
 
 ## Cambiar el Modelo de Embedding
 

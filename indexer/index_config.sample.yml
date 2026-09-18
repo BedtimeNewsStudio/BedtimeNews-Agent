@@ -1,0 +1,25 @@
+# Deterministic local-only sample. Run with INDEXER_SCOPE=sample and a
+# POSTGRES_DB name ending in `_local`; the pipeline refuses any other target.
+required_uris:
+  - ShuiQianXiaoXi/0001-0100/0013.5.md
+  - ShuiQianXiaoXi/0501-0600/0588.md
+  - ShuiQianXiaoXi/misc/motiaonews1.md
+  - CanKaoXinXi/0401-0500/0490.md
+  - GaoJian/0001-0100/0012.md
+  - JiangDianHeiHua/0001-0100/0005.md
+  - ChanJingPoBiJi/misc/biz-001.md
+
+include:
+  - ShuiQianXiaoXi/0001-0100/0013.5.md
+  - ShuiQianXiaoXi/0501-0600/0588.md
+  - ShuiQianXiaoXi/misc/motiaonews1.md
+  - CanKaoXinXi/0401-0500/0490.md
+  - GaoJian/0001-0100/0012.md
+  - JiangDianHeiHua/0001-0100/0005.md
+  - ChanJingPoBiJi/misc/biz-001.md
+
+exclude: []
+
+validation:
+  min_file_size: 100
+  max_file_size: 10485760

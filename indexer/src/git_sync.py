@@ -31,7 +31,15 @@ def sync_repository() -> None:
             raise RuntimeError(f"Failed to clone repository: {output}")
     else:
         success, output = _run_command(
-            ["git", "pull", "origin", "main"], BEDTIMENEWS_TRANSCRIPTS_DIR
+            [
+                "git",
+                "-c",
+                f"safe.directory={BEDTIMENEWS_TRANSCRIPTS_DIR}",
+                "pull",
+                "origin",
+                "main",
+            ],
+            BEDTIMENEWS_TRANSCRIPTS_DIR,
         )
         if not success:
             logger.error(f"Failed to pull: {output}")

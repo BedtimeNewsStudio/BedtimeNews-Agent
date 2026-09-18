@@ -1,31 +1,21 @@
-"""Main content indexing pipeline.
-
-This pipeline:
-    1. Syncs latest content from git repository
-    2. Detects added/modified/deleted files
-    3. Loads, chunks, and stores content in vector database
-    4. Tracks indexing history for incremental updates
-"""
+"""Incremental body-only indexing pipeline."""
 
 import logging
 
-from .change_detector import calculate_file_hash, detect_changes, get_doc_id
+from .change_detector import ChangeSet, detect_changes, get_doc_id
 from .chunker import chunk_document
-from .document_loader import load_document
 from .embeddings import generate_embeddings
 from .file_scanner import scan_files
 from .git_sync import sync_repository
 from .models import Chunk
+from .settings import settings
 from .stats import collect_stats
 from .uri_mapping import load_uri_titles, resolve_title
 from .vector_db import (
     close_connection_pool,
-    delete_chunks,
-    delete_document,
-    delete_indexing_history,
-    insert_chunks,
-    log_file_action,
-    update_indexing_history,
+    delete_indexed_document,
+    record_source_only_change,
+    replace_document_index,
     upsert_document_titles,
 )
 
@@ -35,36 +25,54 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def main():
-    """Main entry point for content indexing pipeline."""
+def _validate_scope_safety() -> None:
+    """Fail closed before a partial scan can touch a production database."""
+    if settings.indexer_scope not in {"full", "sample"}:
+        raise ValueError("INDEXER_SCOPE must be 'full' or 'sample'")
+    if settings.indexer_scope == "sample" and not settings.postgres_db.endswith(
+        "_local"
+    ):
+        raise RuntimeError(
+            "Sample indexing is local-only: POSTGRES_DB must end with '_local'"
+        )
 
+
+def main():
+    """Synchronize sources and apply only changes to normalized 正文 text."""
     try:
         logger.info("=" * 70)
         logger.info(" CONTENT INDEXING PIPELINE")
         logger.info("=" * 70)
 
-        logger.info("Phase 1: Detecting changes")
+        _validate_scope_safety()
+        logger.info(f"Index scope: {settings.indexer_scope}")
+
+        logger.info("Phase 1: Detecting source and body changes")
         sync_repository()
         current_files = scan_files()
-        added, modified, deleted = detect_changes(current_files)
+        changes = detect_changes(current_files)
 
-        logger.info(f"Changes: +{len(added)} ~{len(modified)} -{len(deleted)}")
+        logger.info(
+            "Changes: +%d body~%d source~%d legacy~%d -%d",
+            len(changes.added),
+            len(changes.body_modified),
+            len(changes.source_only),
+            len(changes.legacy_requires_reindex),
+            len(changes.deleted),
+        )
 
-        # Titles are refreshed on every run, before the early return for "no
-        # changes": upstream can correct a 标准化标题 in URI映射.md without
-        # touching the transcript, and the agent reads titles from this table to
-        # label its citations.
+        # Mapping-only title corrections never affect the normalized body hash.
         logger.info("Phase 2: Refreshing document titles")
         sync_document_titles(current_files)
 
-        if not added and not modified and not deleted:
-            logger.info("No content changes. Pipeline complete.")
+        if not changes.has_changes:
+            logger.info("No source or body changes. Pipeline complete.")
             return
 
-        logger.info("Phase 3: Processing changes")
-        process_deletions(deleted)
-
-        all_chunks = process_content_changes(added, modified)
+        logger.info("Phase 3: Applying changes")
+        process_deletions(changes.deleted)
+        all_chunks = process_content_changes(changes)
+        process_source_only_changes(changes)
 
         if all_chunks:
             logger.info("Phase 4: Statistics")
@@ -82,7 +90,6 @@ def main():
         logger.info("=" * 70)
         logger.info(" PIPELINE COMPLETE")
         logger.info("=" * 70)
-
     except Exception:
         logger.error("=" * 70)
         logger.error(" PIPELINE FAILED")
@@ -94,84 +101,76 @@ def main():
 
 
 def sync_document_titles(current_files: set[str]) -> None:
-    """Write the URI -> 标准化标题 table for every currently indexable document."""
+    """Write URI -> 标准化标题 for every active document."""
     mapped = load_uri_titles()
     titles = {uri: resolve_title(uri, mapped) for uri in sorted(current_files)}
     upsert_document_titles(titles)
 
 
 def process_deletions(deleted_files: set[str]) -> None:
-    """Process deleted files: remove chunks, title and history."""
+    """Atomically remove deleted files from all RAG tables."""
     if not deleted_files:
         return
     logger.info(f"Processing {len(deleted_files)} deleted files")
-    for md_file in deleted_files:
-        doc_id = get_doc_id(md_file)
-        delete_chunks(doc_id)
-        delete_document(doc_id)
-        delete_indexing_history(md_file)
-        log_file_action(md_file, "DELETE", "")
+    for uri in sorted(deleted_files):
+        delete_indexed_document(uri, get_doc_id(uri))
 
 
-def process_content_changes(added: set[str], modified: set[str]) -> list[Chunk]:
-    """
-    Process added and modified files, committing each file independently.
-
-    Each file is embedded, inserted, and recorded in indexing_history as its
-    own unit of work. This keeps runs resumable: if the pipeline fails partway,
-    already-processed files stay committed and are skipped on the next run,
-    instead of discarding the whole batch (and its embedding API spend). It
-    also bounds memory, since only one file's embeddings are held at a time.
-
-    Returns all chunks produced across the processed files (for statistics).
-    """
-    files_to_process = []
-
-    for md_file in added:
-        doc_id = get_doc_id(md_file)
-        files_to_process.append((md_file, doc_id, "ADD", False))
-
-    for md_file in modified:
-        doc_id = get_doc_id(md_file)
-        files_to_process.append((md_file, doc_id, "MODIFY", True))
-
-    if not files_to_process:
+def process_content_changes(changes: ChangeSet) -> list[Chunk]:
+    """Embed and atomically replace added/body-changed/legacy documents."""
+    files = changes.reindex_files
+    if not files:
         return []
 
-    total = len(files_to_process)
     logger.info(
-        f"Processing {len(added)} added + {len(modified)} modified files "
-        f"({total} total, per-file embed + insert)"
+        "Re-indexing %d added + %d body-modified + %d legacy files",
+        len(changes.added),
+        len(changes.body_modified),
+        len(changes.legacy_requires_reindex),
     )
-
     all_chunks: list[Chunk] = []
 
-    for i, (md_file, doc_id, action, should_delete) in enumerate(
-        files_to_process, start=1
-    ):
-        # Replace existing chunks for modified files before re-inserting.
-        if should_delete:
-            delete_chunks(doc_id)
+    for index, uri in enumerate(sorted(files), start=1):
+        source = changes.loaded_sources[uri]
+        chunks = chunk_document(source.document)
+        embeddings = (
+            generate_embeddings([chunk.text for chunk in chunks]) if chunks else []
+        )
+        action = "ADD" if uri in changes.added else "MODIFY"
 
-        content_hash = calculate_file_hash(md_file)
-        document = load_document(doc_id)
-        chunks = chunk_document(document)
-
-        if chunks:
-            texts = [chunk.text for chunk in chunks]
-            embeddings = generate_embeddings(texts)
-            insert_chunks(chunks, embeddings=embeddings)
-
-        # Record progress only after chunks are durably inserted, so a crash
-        # leaves this file marked unprocessed and it is retried next run.
-        update_indexing_history(md_file, content_hash)
-        log_file_action(md_file, action, content_hash)
-
+        # No database state is touched until the embedding provider has returned.
+        replace_document_index(
+            file_path=uri,
+            doc_id=get_doc_id(uri),
+            chunks=chunks,
+            embeddings=embeddings,
+            source_hash=source.source_hash,
+            body_hash=source.body_hash,
+            body_normalization_version=source.body_normalization_version,
+            action_type=action,
+        )
         all_chunks.extend(chunks)
-
-        logger.info(f"  [{i}/{total}] {md_file}: {len(chunks)} chunks ({action})")
+        logger.info(f"  [{index}/{len(files)}] {uri}: {len(chunks)} chunks ({action})")
 
     return all_chunks
+
+
+def process_source_only_changes(changes: ChangeSet) -> None:
+    """Advance source state for title/date/appendix-only edits, without RAG work."""
+    if not changes.source_only:
+        return
+    logger.info(
+        "Recording %d source-only changes (zero embedding calls)",
+        len(changes.source_only),
+    )
+    for uri in sorted(changes.source_only):
+        source = changes.loaded_sources[uri]
+        record_source_only_change(
+            file_path=uri,
+            source_hash=source.source_hash,
+            body_hash=source.body_hash,
+            body_normalization_version=source.body_normalization_version,
+        )
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 """File and directory paths (inside container view)."""
 
+import os
 from pathlib import Path
 
 # Local clone of the upstream transcript repository
@@ -14,4 +15,4 @@ CONTENTS_DIR = BEDTIMENEWS_TRANSCRIPTS_DIR / "contents"
 # Authoritative URI -> 标准化标题 table maintained upstream.
 URI_MAPPING_FILE = BEDTIMENEWS_TRANSCRIPTS_DIR / "URI映射.md"
 
-INDEX_CONFIG_FILE = Path("/app/index_config.yml")
+INDEX_CONFIG_FILE = Path(os.environ.get("INDEX_CONFIG_FILE", "/app/index_config.yml"))

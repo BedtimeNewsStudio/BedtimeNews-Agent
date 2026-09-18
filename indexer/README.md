@@ -10,7 +10,7 @@ markdown 文件、生成 embedding，并存入 PostgreSQL + pgvector。
 ## 功能
 
 - **自动同步**：从 [BedtimeNews-Transcripts](https://github.com/BedtimeNewsStudio/BedtimeNews-Transcripts) 克隆/更新
-- **增量处理**：基于内容的变化检测（SHA256）
+- **正文感知增量处理**：分别记录完整 Markdown 与实际送入 embedding 的规范化 `## 正文` 的 SHA256；仅标题、日期或附录变化时不会调用 embedding
 - **定时执行**：进程内调度器，支持可配置的 cron 表达式（默认：每小时）
 - **只索引正文**：每篇文稿只抽取 `## 正文` 到 `## 附录` 之间的内容，
   丢弃标题行、`**发布日期**` 元数据与附录的订正/核对记录
@@ -24,9 +24,7 @@ markdown 文件、生成 embedding，并存入 PostgreSQL + pgvector。
 
 ![Indexer 流水线](../docs/diagrams/indexer-pipeline.svg)
 
-新增和修改的文件逐个完成加载、分块、embedding 与提交。这样即使后续
-文件失败，已完成的文件也保持持久。删除操作会同时移除已存储的 chunk
-与变化检测历史。
+新增和正文有变化的文件会先完成分块与 embedding，再用单个事务替换 chunk 和历史，因此 embedding 提供方失败时旧版本仍可检索。仅源文件其它部分变化时只更新历史，不触碰向量；删除也在单个事务内移除 chunk、标题和历史。
 
 ## 配置
 
@@ -44,6 +42,10 @@ INDEXER_CRON_SCHEDULE="*/30 * * * *"
 # 每天凌晨 2 点
 INDEXER_CRON_SCHEDULE="0 2 * * *"
 ```
+
+### 本地小样本模式
+
+`index_config.sample.yml` 固定选择七篇文稿，覆盖普通期号、小数期号、`misc` 与多个栏目。仅可在 `INDEXER_SCOPE=sample`、`INDEX_CONFIG_FILE=/app/index_config.sample.yml`、隔离的数据目录以及以 `_local` 结尾的 `POSTGRES_DB` 下运行；否则 Indexer 会拒绝启动。`docker-compose.sample.yml` 提供服务覆盖配置。
 
 ### 文档过滤规则
 
@@ -177,20 +179,22 @@ Indexer 管理 `rag` schema 中的四张表：
 LEFT JOIN 这张表，把引用渲染成标准化标题而不是原始 URI。每次流水线运行都会
 刷新全部标题——上游可能只改标题而不动文稿。
 
-**`rag.indexing_history`**：跟踪文件状态
+**`rag.indexing_history`**：记录当前索引真正代表的内容
 
-- `file_path`：仓库内的相对路径
-- `content_hash`：用于变化检测的 SHA256 哈希
-- `indexed_at`：文件处理时间
-- `last_modified`：文件修改时间
+- `file_path`：文稿 URI
+- `source_hash`：完整原始 Markdown 的 SHA256
+- `body_hash`：当前 chunk/向量所代表的规范化正文 SHA256
+- `body_normalization_version`：正文规范化逻辑版本，版本变化会强制重建
+- `indexed_at`：正文最后成功索引时间
+- `source_observed_at`：最后接受源文件变化的时间
 
 **`rag.file_actions`**：审计日志
 
-- `file_path`：相对路径
-- `action_type`：ADD、MODIFY 或 DELETE
-- `content_hash`：SHA256 哈希（DELETE 时为 NULL）
-- `run_timestamp`：操作记录时间
-- `processed_at`：操作处理时间
+- `action_type`：`ADD`、`MODIFY`、`SOURCE_ONLY` 或 `DELETE`
+- `source_hash` / `body_hash`：两个明确的哈希（删除时为 `NULL`）
+- `run_timestamp` / `processed_at`：记录与完成时间
+
+已有 v0.2 数据卷必须在新 Indexer 启动前执行 `storage/postgres/migrations/001_body_hashes.sql`。`body_hash` 为空的旧记录会保守地重新索引一次。若要保证完全一致，应先备份 PostgreSQL，执行迁移后清空四张 RAG 表并重新填充全部语料。新 schema 写入后不可再运行旧版 Indexer。
 
 ## 更换 Embedding 模型
 

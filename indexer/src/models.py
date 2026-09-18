@@ -21,6 +21,16 @@ class Document:
     text: str
 
 
+@dataclass(frozen=True)
+class LoadedIndexableSource:
+    """One source file and the exact body representation used for indexing."""
+
+    document: Document
+    source_hash: str
+    body_hash: str
+    body_normalization_version: int
+
+
 @dataclass
 class Chunk:
     """Represents a chunk of text from a document.

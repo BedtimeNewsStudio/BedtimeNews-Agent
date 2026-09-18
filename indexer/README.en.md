@@ -9,7 +9,7 @@ See the [main README](../README.en.md) for setup instructions.
 ## Features
 
 - **Auto-sync**: Clones/updates from [BedtimeNews-Transcripts](https://github.com/BedtimeNewsStudio/BedtimeNews-Transcripts)
-- **Incremental processing**: Content-based change detection (SHA256)
+- **Body-aware incremental processing**: separate SHA-256 fingerprints for the complete Markdown source and the exact normalized `## 正文` text sent to embeddings; title/date/appendix-only edits make zero embedding calls
 - **Scheduled execution**: In-process scheduler with a configurable cron
   expression (default: hourly)
 - **Body-only indexing**: only the span between `## 正文` and `## 附录` is
@@ -27,9 +27,7 @@ See the [main README](../README.en.md) for setup instructions.
 
 ![Indexer pipeline](../docs/diagrams/indexer-pipeline.svg)
 
-Added and modified files are loaded, chunked, embedded, and committed one file
-at a time. This keeps completed files durable if a later file fails. Deletions
-remove both stored chunks and change-detection history.
+Added and body-modified files are loaded and embedded before one transaction replaces their chunks and history, so a provider failure leaves the previous searchable version intact. Source-only edits update history without touching vectors. Deletions remove chunks, title, and history transactionally.
 
 ## Configuration
 
@@ -47,6 +45,10 @@ INDEXER_CRON_SCHEDULE="*/30 * * * *"
 # Daily at 2 AM
 INDEXER_CRON_SCHEDULE="0 2 * * *"
 ```
+
+### Local sample mode
+
+`index_config.sample.yml` names seven deterministic transcripts covering ordinary, fractional, `misc`, and multi-channel URIs. Run it only with `INDEXER_SCOPE=sample`, `INDEX_CONFIG_FILE=/app/index_config.sample.yml`, an isolated data directory, and a `POSTGRES_DB` ending in `_local`; the indexer refuses any other database target. `docker-compose.sample.yml` supplies the service overrides.
 
 ### Document Filters
 
@@ -185,20 +187,22 @@ table at retrieval time to render citations with the title rather than the raw
 URI. Every pipeline run refreshes all titles, since upstream may correct a title
 without touching the transcript.
 
-**`rag.indexing_history`**: Tracks file status
+**`rag.indexing_history`**: Tracks the representation currently indexed
 
-- `file_path`: Relative path in repository
-- `content_hash`: SHA256 hash for change detection
-- `indexed_at`: When file was processed
-- `last_modified`: File modification time
+- `file_path`: transcript URI
+- `source_hash`: SHA-256 of the complete raw Markdown source
+- `body_hash`: SHA-256 of the exact normalized body represented by chunks/vectors
+- `body_normalization_version`: forces re-indexing after an intentional normalizer change
+- `indexed_at`: last successful body indexing time
+- `source_observed_at`: last accepted source-only or body update
 
 **`rag.file_actions`**: Audit log
 
-- `file_path`: Relative path
-- `action_type`: ADD, MODIFY, or DELETE
-- `content_hash`: SHA256 hash (NULL for DELETE)
-- `run_timestamp`: When action was recorded
-- `processed_at`: When action was processed
+- `action_type`: `ADD`, `MODIFY`, `SOURCE_ONLY`, or `DELETE`
+- `source_hash` / `body_hash`: explicit fingerprints (`NULL` for `DELETE`)
+- `run_timestamp` / `processed_at`: record and completion times
+
+Existing v0.2 volumes must apply `storage/postgres/migrations/001_body_hashes.sql` before the new indexer starts. Legacy rows have a null `body_hash` and are conservatively re-indexed once. For a guaranteed clean upgrade, back up PostgreSQL, apply the migration, clear all four RAG tables, and repopulate the corpus. Never run the old indexer after rows use the new schema.
 
 ## Changing the Embedding Model
 
