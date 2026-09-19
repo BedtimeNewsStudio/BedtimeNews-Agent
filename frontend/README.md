@@ -2,39 +2,45 @@
 
 [中文](README.md) | [English](README.en.md) | [Español](README.es-ES.md)
 
-睡前消息智能 RAG 系统的自定义聊天 UI。一个静态单页应用（HTML/CSS/JS），
-由轻量 FastAPI 服务托管，并将聊天流代理到内部 agent 后端。
+睡前消息知识库的自定义 Web 前端：聊天问答与站内文稿阅读一体的单页应用
+（HTML/CSS/JS），由轻量 FastAPI 服务托管，并将聊天流与文稿 API 代理到内部
+agent 后端；文稿列表与正文阅读器同源托管于 `/transcripts`。
 
 全栈安装说明参见[主 README](../README.md)。
 
 ## 设计
 
-- **主题：** 暖墨/纸笺阅读桌配色——近黑暖中性色底、香槟色青铜主强调色，
-  以及用于进行中信号的浅海绿色。与节目 logo 配色解耦。浅色与深色默认
-  跟随操作系统的 `prefers-color-scheme`；页头切换写入会话级
-  `sessionStorage` 覆盖（刷新保留，新开标签回到系统偏好）。
-- **颜色令牌**是语义化、可换肤的（`--bg`、`--surface`、`--line`、
-  `--text`、`--text-dim`、`--muted`、`--accent`、`--accent-2`），深色
-  定义在 `:root`，浅色在 `[data-theme="light"]` 下覆盖。
-- **字体：** 全文统一系统 CJK 无衬线栈（PingFang SC / Microsoft YaHei /
-  Noto Sans SC），用字重与字号区分站名、栏目与正文；等宽栈仅用于少量
-  机器可读标签（如 URI 命名空间）。刻意只用系统字体——不加载 webfont
-  CDN，保证页面在中国大陆可靠加载。
-- **信号采集日志：** RAG 流水线的各个阶段（condense → route → rewrite →
-  retrieve → grade → generate）渲染为实时日志，回答开始后锁定并折叠。
-  只有当对话历史消解了追问指代时才显示 condense 阶段。
+- **主题：** 纯色 chatbot 配色（近 ChatGPT / Claude 默认观感）——深色底
+  `#212121`、浅色底 `#ffffff`，单一绿色主强调色 `--accent`，无背景渐变、
+  无双强调色装饰。浅/深默认跟随 `prefers-color-scheme`；页头 SVG 太阳/
+  月亮切换写入 `sessionStorage`（刷新保留，新开标签回到系统偏好）。
+- **颜色令牌**语义化、可换肤（`--bg`、`--surface`、`--line`、`--text`、
+  `--text-dim`、`--muted`、`--accent`、`--user-bubble` 等），深色在
+  `:root`，浅色在 `[data-theme="light"]`。
+- **字体：** 系统 CJK 无衬线栈；等宽仅用于少量机器标签。不加载 webfont CDN。
+- **布局（自动按视口宽度，无手动切换）：**
+  - **桌面（>900px）：** 对话居中；打开文稿时右侧挤出阅读栏（双栏）。
+    页头显示栏目 chips（睡前消息 / 参考信息 / …）、GitHub 与主题按钮
+    （圆角方框）。示例区按 8 类各 1 题，下方有「浏览文稿」入口。
+  - **手机（≤900px）：** 对话与文稿全屏互斥；底栏「对话 | 文稿」左右半分。
+    示例区不显示类名，仅 8 个 starter；无「浏览文稿」按钮（用底栏文稿）。
+    页头图标无边框；Edit 链接仅桌面显示。
+- **阅读栏：** 固定高度槽位（返回 / Edit / 关闭），列表↔正文切换时顶部分割线
+  不跳动；正文内不渲染标题/`h2`/脚注分隔横线。
+- **信号采集日志：** RAG 阶段（condense → … → generate）实时显示，回答开始后
+  锁定并折叠。
 
 ## 功能
 
 - 匿名聊天（无需登录）
-- 感知系统的浅色/深色主题，带持久的手动切换
-- 按类别分组的示例问题（完整问题文本即可点击）
-- 实时 SSE 流式输出，流水线步骤可见
-- 使用 [markdown-it](https://github.com/markdown-it/markdown-it) 渲染
-  Markdown 回答（本地内置；`html:false` 防 XSS），并附加应用专属的
-  引用标签
-- 会话仅存在于当前页面（刷新即清空）
-- 适配移动端；支持键盘操作；尊重 `prefers-reduced-motion`
+- 系统感知浅/深主题 + SVG 手动切换
+- 示例问题（桌面按类、手机扁平）与桌面「浏览文稿」
+- 栏目 chips + 文稿列表（发布时间新→旧，无日期沉底）+ 正文阅读
+- 桌面文稿页 GitHub Edit（指向 Transcripts 仓库 `edit/main/contents/…`）
+- 实时 SSE 流式输出与可见流水线步骤
+- markdown-it 渲染回答（本地内置，`html:false`）与应用内引用跳转
+- 会话仅存当前页（刷新清空）
+- 键盘可用；尊重 `prefers-reduced-motion`
 
 ## 架构
 
@@ -45,32 +51,31 @@ Frontend：
 - 运行在 Docker 容器中，通过纯 HTTP 对外提供服务，端口 8080（无 TLS——
   公网暴露与 TLS 终止由本仓库之外处理）
 - 是唯一发布到宿主机的服务（`FRONTEND_PORT`，默认 8080）
-- 通过内部 Docker 网络将 `/chat` 代理给 agent；agent 从不暴露给宿主机
+- 通过内部 Docker 网络将 `/chat` 与文稿 API 代理给 agent；agent 从不暴露给宿主机
 
 ## 组件
 
-- **server.py** — FastAPI 应用：托管 `static/`、暴露 `/api/starters`、
-  并把 `/chat` SSE 代理给 agent
-- **starters.py** — 示例问题数据（类别 + 问题）；纯数据，不依赖任何 UI
-  框架
-- **static/index.html** — 页面标记、主题引导脚本与对话轮次模板
-- **static/styles.css** — 可换肤的设计系统（`:root` +
-  `[data-theme="light"]`）
-- **static/app.js** — 示例问题列表、消息输入区、主题切换、SSE 解析、
-  Markdown 渲染
-- **static/markdown-it.min.js** — 本地内置的 Markdown 渲染器（MIT），
-  按需加载而非随页面加载
+- **server.py** — FastAPI：托管 `static/`、`/api/starters`、文稿 API 代理、
+  `/chat` SSE 代理、SPA 的 `/transcripts` 路由
+- **starters.py** — 示例问题数据（类别 + 问题）
+- **static/index.html** — 标记、主题引导脚本、底栏 tab、对话模板
+- **static/styles.css** — 纯色设计令牌与桌面/手机布局
+- **static/app.js** — 路由、栏目/列表/正文、示例、composer、主题、SSE、Markdown
+- **static/markdown-it.min.js** — 本地 Markdown 渲染器（MIT），按需加载
 - **static/bedtimenews.webp** — favicon / 品牌 logo
-- **pyproject.toml** — 依赖元数据（`fastapi`、`uvicorn`、`httpx`）
+- **pyproject.toml** — 依赖（`fastapi`、`uvicorn`、`httpx`）
 
 ## 端点
 
-| 方法 | 路径            | 用途                            |
-| ----- | --------------- | ------------------------------- |
-| GET   | `/`             | 托管 SPA（`static/index.html`） |
-| GET   | `/api/starters` | 示例问题 JSON（`categories`）   |
-| POST  | `/chat`         | 将 agent 的 SSE 流代理给浏览器  |
-| GET   | `/healthz`      | 存活检查                        |
+| 方法 | 路径                                  | 用途                           |
+| ---- | ------------------------------------- | ------------------------------ |
+| GET  | `/`                                   | SPA（`static/index.html`）     |
+| GET  | `/transcripts`、`/transcripts/{path}` | 同上（浏览器路由）             |
+| GET  | `/api/starters`                       | 示例问题 JSON（`categories`）  |
+| GET  | `/api/transcripts`                    | 文稿索引（代理 agent）         |
+| GET  | `/api/transcripts/{doc_id}`           | 单篇文稿（代理 agent）         |
+| POST | `/chat`                               | 将 agent 的 SSE 流代理给浏览器 |
+| GET  | `/healthz`                            | 存活检查                       |
 
 ## 开发流程
 
@@ -101,17 +106,17 @@ AGENT_BACKEND_HOST=localhost AGENT_BACKEND_PORT=8000 \
 - **示例问题 / 类别：** 编辑 `starters.py`（`CATEGORIES`）。
 - **样式：** 编辑 `static/styles.css`（设计令牌位于 `:root`）。
 - **文案 / 布局：** 编辑 `static/index.html`。
-- **Logo / favicon：** 替换 `static/bedtimenews.webp`。它以 2.1rem 渲染，
+- **Logo / favicon：** 替换 `static/bedtimenews.webp`。它以约 1.85rem 渲染，
   保持小体积即可——128px 见方足以覆盖 hi-DPI，且该文件被
   `CachedStaticFiles` 缓存一周。
 
 ## 配置
 
-| 变量                 | 默认值  | 用途                            |
-| -------------------- | ------- | ------------------------------- |
-| `AGENT_BACKEND_HOST` | `agent` | Docker 网络上的 agent 服务名    |
-| `AGENT_BACKEND_PORT` | `8000`  | Agent 端口                      |
-| `FRONTEND_PORT`      | `8080`  | Frontend 发布到的宿主机端口     |
+| 变量                 | 默认值  | 用途                         |
+| -------------------- | ------- | ---------------------------- |
+| `AGENT_BACKEND_HOST` | `agent` | Docker 网络上的 agent 服务名 |
+| `AGENT_BACKEND_PORT` | `8000`  | Agent 端口                   |
+| `FRONTEND_PORT`      | `8080`  | Frontend 发布到的宿主机端口  |
 
 ## 调试
 
@@ -154,7 +159,8 @@ Frontend 代理 agent 的 `/chat` 端点。
 ```
 
 服务器可能在事件之间发送 `: ping` SSE 注释，并以 `data: [DONE]` 结束每条
-流。成功的一轮恰好发送 `answer_final` 或 `answer_meta` 之一。
+流。成功的一轮恰好发送 `answer_final` 或 `answer_meta` 之一。引用 URL 为
+应用内路径 `/transcripts/…`（不是 GitHub Pages）。
 
 ## 限制（MVP）
 

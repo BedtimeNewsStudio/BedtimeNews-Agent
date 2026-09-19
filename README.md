@@ -1,15 +1,17 @@
-# 睡前消息智能体
+# 睡前消息知识库
 
 [中文](README.md) | [English](README.en.md) | [Español](README.es-ES.md)
 
-睡前消息知识库的智能 RAG（检索增强生成）系统。提供自动路由、语义搜索、
-检索文稿上下文与节目引用功能。
+睡前消息知识库网站：既能向智能体提问，也能在站内浏览与阅读全部节目文稿。
+问答由智能 RAG（检索增强生成）系统提供——自动路由、语义搜索、检索文稿
+上下文与节目引用。
 
 > **立即体验：** [bedtime.blog](https://bedtime.blog)
 
 ## 概述
 
-本系统对[睡前消息文稿库](https://github.com/BedtimeNewsStudio/BedtimeNews-Transcripts)的视频文稿进行索引，并通过LLM驱动的问答实现语义搜索。基于LangGraph、可插拔的 LLM/embedding 提供方（默认使用 DeepSeek 对话模型与 SiliconFlow 的 Qwen3 embedding）以及 PostgreSQL + pgvector 构建。
+文稿原文与智能系统分属两个仓库：文稿原文在
+[睡前消息文稿库（BedtimeNews-Transcripts）](https://github.com/BedtimeNewsStudio/BedtimeNews-Transcripts)中维护；本仓库（BedtimeNews-Agent）索引这些文稿，并运行同时提供聊天问答与站内文稿阅读的网站——索引到的文稿直接作为站内内容供浏览，回答中的引用也跳转到应用内阅读器。基于 LangGraph、可插拔的 LLM/embedding 提供方（默认使用 DeepSeek 对话模型与 SiliconFlow 的 Qwen3 embedding）以及 PostgreSQL + pgvector 构建。
 
 **核心功能：**
 
@@ -18,22 +20,21 @@
 - 基于LLM的文档相关性评分
 - 将检索文稿作为回答上下文，并提供 Markdown 引用与引用修复
 - 自动化文档索引与增量更新
-- 网页聊天界面
+- 网页界面：聊天提问 + 站内浏览/阅读文稿（引用直接跳转到应用内阅读器）
 
 ## 内容覆盖
 
-本系统索引来自 [BedtimeNews-Transcripts](https://github.com/BedtimeNewsStudio/BedtimeNews-Transcripts) 的视频文稿，涵盖五个栏目共
-1812 篇文稿：
+本系统索引来自 [BedtimeNews-Transcripts](https://github.com/BedtimeNewsStudio/BedtimeNews-Transcripts) 的视频文稿，涵盖五个栏目：
 
 **节目目录：**
 
-| 栏目目录            | 节目名称   | 主讲         | 内容         | 篇数 |
-| ------------------- | ---------- | ------------ | ------------ | ---- |
-| `ShuiQianXiaoXi/`   | 睡前消息   | 马前卒（督工） | 主栏目       |  889 |
-| `CanKaoXinXi/`      | 参考信息   | 小黛每日口播 | 每日资讯     |  649 |
-| `ChanJingPoBiJi/`   | 产经破壁机 | 产经组       | 产业与商业   |  136 |
-| `JiangDianHeiHua/`  | 讲点黑话   | 黑岛（老会计） | 历史与人物   |   72 |
-| `GaoJian/`          | 高见       | 高流         | 专题长文     |   66 |
+| 栏目目录           | 节目名称   | 主讲           | 内容       |
+| ------------------ | ---------- | -------------- | ---------- |
+| `ShuiQianXiaoXi/`  | 睡前消息   | 马前卒（督工） | 主栏目     |
+| `CanKaoXinXi/`     | 参考信息   | 小黛每日口播   | 每日资讯   |
+| `ChanJingPoBiJi/`  | 产经破壁机 | 产经组         | 产业与商业 |
+| `JiangDianHeiHua/` | 讲点黑话   | 黑岛（老会计） | 历史与人物 |
+| `GaoJian/`         | 高见       | 高流           | 专题长文   |
 
 每篇文稿只有 `## 正文` 部分会被索引；`## 附录`（事实订正、核对记录）和
 `**发布日期**` 元数据行不进入检索。
@@ -57,7 +58,8 @@
 
 **组件说明：**
 
-- **[Frontend](frontend/README.md)**：自定义聊天 UI（静态 HTML/CSS/JS，由轻量 FastAPI 服务托管）
+- **[Frontend](frontend/README.md)**：自定义聊天与文稿阅读 UI（静态 HTML/CSS/JS，
+  由轻量 FastAPI 服务托管；站内托管文稿列表与正文阅读器，文稿内容来自索引数据库）
 - **[Agent](agent/README.md)**：基于 LangGraph 的智能 RAG 服务
 - **[Indexer](indexer/README.md)**：自动化文档 embedding 流水线
 - **Database**：PostgreSQL + pgvector 扩展的向量数据库
@@ -213,7 +215,7 @@ BedtimeNews-Agent/
 │   ├── README.en.md
 │   └── README.es-ES.md
 ├── frontend/           # 自定义 Web UI（静态 + FastAPI）
-│   ├── server.py       # FastAPI：托管静态界面 + 代理 /chat SSE
+│   ├── server.py       # FastAPI：托管静态界面 + 代理 /chat SSE 与文稿 API
 │   ├── starters.py     # 示例提问数据
 │   ├── static/         # index.html、styles.css、app.js、logo
 │   ├── Dockerfile

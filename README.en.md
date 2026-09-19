@@ -1,16 +1,23 @@
-# BedtimeNews Agent
+# BedtimeNews Knowledge Base
 
 [中文](README.md) | [English](README.en.md) | [Español](README.es-ES.md)
 
-Agentic RAG (Retrieval-Augmented Generation) system for the 睡前消息
-(BedtimeNews) knowledge base. Provides Q&A with automatic routing, semantic
-search, retrieved-transcript context, and episode citations.
+The BedtimeNews knowledge base website: ask the agent questions and browse or
+read the full transcript archive in the same place. Q&A is powered by an
+agentic RAG (Retrieval-Augmented Generation) system — automatic routing,
+semantic search, retrieved-transcript context, and episode citations.
 
 > **Try it out:** [bedtime.blog](https://bedtime.blog)
 
 ## Overview
 
-This system indexes video transcripts from the [BedtimeNews transcript library](https://github.com/BedtimeNewsStudio/BedtimeNews-Transcripts) and enables semantic search with LLM-powered Q&A. Built with LangGraph, pluggable LLM/embedding providers (DeepSeek for chat and SiliconFlow's Qwen3 embeddings by default), and PostgreSQL + pgvector.
+The transcript texts and the intelligent system live in two separate repos: the
+source transcripts are maintained in
+[BedtimeNews-Transcripts](https://github.com/BedtimeNewsStudio/BedtimeNews-Transcripts),
+while this repo (BedtimeNews-Agent) indexes them and runs a website that serves
+both LLM-powered Q&A and in-app transcript reading — the indexed transcripts are
+served as in-app content, and citations in answers jump straight to the in-app
+reader. Built with LangGraph, pluggable LLM/embedding providers (DeepSeek for chat and SiliconFlow's Qwen3 embeddings by default), and PostgreSQL + pgvector.
 
 **Key Features:**
 
@@ -20,22 +27,23 @@ This system indexes video transcripts from the [BedtimeNews transcript library](
 - Retrieved transcripts supplied as answer context, with markdown citations and
   citation repair
 - Automated document indexing with incremental updates
-- Web-based chat interface
+- Web interface: chat Q&A plus in-app transcript browsing/reading (citations
+  jump straight to the in-app reader)
 
 ## Content Coverage
 
-The system indexes video transcripts from [BedtimeNews-Transcripts](https://github.com/BedtimeNewsStudio/BedtimeNews-Transcripts) —
-1812 transcripts across five programs:
+The system indexes video transcripts from [BedtimeNews-Transcripts](https://github.com/BedtimeNewsStudio/BedtimeNews-Transcripts)
+across five programs:
 
 **Program Catalog:**
 
-| Directory           | Name       | Host           | Content              | Count |
-| ------------------- | ---------- | -------------- | -------------------- | ----- |
-| `ShuiQianXiaoXi/`   | 睡前消息   | 马前卒（督工） | Main program         |   889 |
-| `CanKaoXinXi/`      | 参考信息   | 小黛           | Daily news briefing  |   649 |
-| `ChanJingPoBiJi/`   | 产经破壁机 | 产经组         | Industry and business|   136 |
-| `JiangDianHeiHua/`  | 讲点黑话   | 黑岛（老会计） | History and people   |    72 |
-| `GaoJian/`          | 高见       | 高流           | Long-form features   |    66 |
+| Directory          | Name       | Host           | Content               |
+| ------------------ | ---------- | -------------- | --------------------- |
+| `ShuiQianXiaoXi/`  | 睡前消息   | 马前卒（督工） | Main program          |
+| `CanKaoXinXi/`     | 参考信息   | 小黛           | Daily news briefing   |
+| `ChanJingPoBiJi/`  | 产经破壁机 | 产经组         | Industry and business |
+| `JiangDianHeiHua/` | 讲点黑话   | 黑岛（老会计） | History and people    |
+| `GaoJian/`         | 高见       | 高流           | Long-form features    |
 
 Only each transcript's `## 正文` (body) section is indexed; the `## 附录`
 (appendix — fact corrections and verification notes) and the `**发布日期**`
@@ -60,7 +68,9 @@ metadata line are excluded from retrieval.
 
 **Components:**
 
-- **[Frontend](frontend/README.en.md)**: Custom chat UI (static HTML/CSS/JS served by a small FastAPI app)
+- **[Frontend](frontend/README.en.md)**: Custom chat + transcript-reading UI
+  (static HTML/CSS/JS served by a small FastAPI app; hosts the in-app
+  transcript list and reader, with content served from the index database)
 - **[Agent](agent/README.en.md)**: LangGraph-based agentic RAG service
 - **[Indexer](indexer/README.en.md)**: Automated document embedding pipeline
 - **Database**: PostgreSQL with pgvector extension as vector database
@@ -222,7 +232,7 @@ BedtimeNews-Agent/
 │   ├── README.en.md
 │   └── README.es-ES.md
 ├── frontend/           # Custom web UI (static + FastAPI)
-│   ├── server.py       # FastAPI: serves static UI + proxies /chat SSE
+│   ├── server.py       # FastAPI: serves static UI + proxies /chat SSE and transcript APIs
 │   ├── starters.py     # Sample questions data
 │   ├── static/         # index.html, styles.css, app.js, logo
 │   ├── Dockerfile

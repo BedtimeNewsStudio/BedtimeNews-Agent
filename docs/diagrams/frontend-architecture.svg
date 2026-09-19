@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1050" height="360" viewBox="0 0 1050 360" role="img" aria-labelledby="title desc">
   <title id="title">Frontend request architecture</title>
-  <desc id="desc">Requests travel from the browser to the web frontend over plain HTTP on port 8080; the web service proxies /chat to the agent API. Server-sent events return on a parallel rail.</desc>
+  <desc id="desc">Requests travel from the browser to the web frontend over plain HTTP on port 8080; the web service proxies /chat and the transcript APIs to the agent API. Server-sent events return on a parallel rail.</desc>
   <defs>
     <linearGradient id="canvas" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#ffffff"/>

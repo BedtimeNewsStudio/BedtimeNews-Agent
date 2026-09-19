@@ -55,6 +55,7 @@ const els = {
   readingBarLabel: document.getElementById("reading-bar-label"),
   readingBack: document.getElementById("reading-back"),
   readingClose: document.getElementById("reading-close"),
+  readingEdit: document.getElementById("reading-edit"),
   readerView: document.getElementById("reader-view"),
   readerTitle: document.getElementById("reader-title"),
   readerBody: document.getElementById("reader-body"),
@@ -62,6 +63,8 @@ const els = {
   chatPane: document.getElementById("chat-pane"),
   chatFab: document.getElementById("chat-fab"),
   chatClose: document.getElementById("chat-close"),
+  tabChat: document.getElementById("tab-chat"),
+  tabArchive: document.getElementById("tab-archive"),
 };
 
 let busy = false;
@@ -276,6 +279,7 @@ let sampleCategories = [];
 
 function renderSampleQuestions() {
   els.grid.replaceChildren();
+  const mobile = mobileDrawer.matches;
   for (const cat of sampleCategories) {
     const topics = shuffle(cat.topics || []).slice(0, PER_CATEGORY);
     if (!topics.length) continue;
@@ -283,10 +287,13 @@ function renderSampleQuestions() {
     const group = document.createElement("section");
     group.className = "sample-group";
 
-    const label = document.createElement("h2");
-    label.className = "sample-label";
-    label.textContent = cat.name;
-    group.appendChild(label);
+    // Desktop keeps category names as structure; mobile drops them for density.
+    if (!mobile) {
+      const label = document.createElement("h2");
+      label.className = "sample-label";
+      label.textContent = cat.name;
+      group.appendChild(label);
+    }
 
     for (const topic of topics) {
       const btn = document.createElement("button");
@@ -297,6 +304,24 @@ function renderSampleQuestions() {
       group.appendChild(btn);
     }
     els.grid.appendChild(group);
+  }
+
+  // Desktop only: same destination as the masthead「睡前消息」chip. Mobile uses
+  // the bottom「文稿」tab instead, so this control would be redundant there.
+  if (!mobile) {
+    const browse = document.createElement("button");
+    browse.type = "button";
+    browse.className = "browse-archive";
+    browse.textContent = "浏览文稿";
+    browse.addEventListener("click", () => {
+      try {
+        sessionStorage.setItem("archive-channel", "ShuiQianXiaoXi");
+      } catch {
+        /* ignore */
+      }
+      navigate("/transcripts?channel=ShuiQianXiaoXi");
+    });
+    els.grid.appendChild(browse);
   }
 }
 
@@ -411,6 +436,9 @@ function itemSearchText(item) {
 }
 
 function renderArchiveHead() {
+  // Large in-page channel title (e.g. 睡前消息). The reading-bar chrome must
+  // not repeat this name — that is cleared in updateReadingBar for archive.
+  els.archiveTitle.hidden = false;
   els.archiveTitle.textContent = channelLabel(currentChannel);
 }
 
@@ -427,14 +455,27 @@ function archiveRowTitle(item) {
   return source;
 }
 
+function archiveSortKey(item) {
+  // ISO dates sort lexicographically; missing dates sink below dated ones.
+  const date = item.publication_date || "";
+  const hasDate = /^\d{4}-\d{2}-\d{2}/.test(date) ? "1" : "0";
+  return `${hasDate}\0${date}\0${item.doc_id || ""}`;
+}
+
 function renderArchive(items = transcriptItems || []) {
   const scoped = currentChannel
     ? items.filter((item) => item.channel === currentChannel)
     : [];
   const query = els.archiveSearch.value.trim().toLocaleLowerCase("zh-CN");
-  const visible = query
+  const filtered = query
     ? scoped.filter((item) => itemSearchText(item).includes(query))
-    : scoped;
+    : scoped.slice();
+  // Newest publication_date first; undated last. Defensive if the API order changes.
+  const visible = filtered.sort((a, b) => {
+    const ka = archiveSortKey(a);
+    const kb = archiveSortKey(b);
+    return ka < kb ? 1 : ka > kb ? -1 : 0;
+  });
   els.archiveGroups.replaceChildren();
 
   // The vertical frequency line still marks the block as one channel's signal,
@@ -450,11 +491,10 @@ function renderArchive(items = transcriptItems || []) {
     link.dataset.route = "";
     const label = document.createElement("span");
     label.className = "archive-item-title";
-    label.textContent = item.canonical_title || item.source_title || item.doc_id;
-    const source = document.createElement("span");
-    source.className = "archive-item-source";
-    source.textContent = archiveRowTitle(item);
-    link.append(label, source);
+    // Keep the full episode title (often includes 睡前消息N). Do not add a
+    // second line that repeats the canonical name.
+    label.textContent = item.source_title || item.canonical_title || item.doc_id;
+    link.append(label);
     if (item.publication_date) {
       const date = document.createElement("time");
       date.dateTime = item.publication_date;
@@ -499,14 +539,76 @@ function setView(view) {
     document.body.classList.remove("chat-open");
     els.chatFab.setAttribute("aria-expanded", "false");
   }
-  // A closed pane is clipped to zero width but still in the document, so it has
-  // to be taken out of the tab order and the accessibility tree by hand.
+  // Closed / off-mode panes stay out of the tab order and a11y tree.
   els.readingPane.toggleAttribute("inert", !browse);
+  if (mobileDrawer.matches) {
+    // Mobile: full-screen modes — the inactive pane is fully inert.
+    els.chatPane.toggleAttribute("inert", browse);
+  } else {
+    els.chatPane.toggleAttribute("inert", false);
+  }
   if (!browse && els.readingPane.contains(document.activeElement)) {
     els.appShell.focus();
   }
+  if (browse && mobileDrawer.matches && els.chatPane.contains(document.activeElement)) {
+    els.readingPane.focus?.();
+  }
   syncChatPanelAccessibility();
+  updateMobileTabs();
   keepChatAtBottom(wasAtBottom);
+}
+
+function updateMobileTabs() {
+  const browse = document.body.dataset.view === "browse";
+  if (els.tabChat) {
+    els.tabChat.setAttribute("aria-current", browse ? "false" : "page");
+  }
+  if (els.tabArchive) {
+    els.tabArchive.setAttribute("aria-current", browse ? "page" : "false");
+  }
+}
+
+function preferredArchiveChannel() {
+  try {
+    const saved = sessionStorage.getItem("archive-channel");
+    if (saved) return saved;
+  } catch {
+    /* ignore */
+  }
+  if (currentChannel) return currentChannel;
+  if (currentArticle?.channel) return currentArticle.channel;
+  if (transcriptItems?.length) {
+    const counts = new Map();
+    for (const item of transcriptItems) {
+      counts.set(item.channel, (counts.get(item.channel) || 0) + 1);
+    }
+    return [...counts.keys()].sort(
+      (a, b) => counts.get(b) - counts.get(a) || a.localeCompare(b),
+    )[0];
+  }
+  return null;
+}
+
+async function openArchiveTab() {
+  const channel = preferredArchiveChannel();
+  if (channel) {
+    try {
+      sessionStorage.setItem("archive-channel", channel);
+    } catch {
+      /* ignore */
+    }
+    navigate(`/transcripts?channel=${encodeURIComponent(channel)}`);
+    return;
+  }
+  try {
+    await loadTranscriptIndex();
+  } catch {
+    /* fall through */
+  }
+  const fallback = preferredArchiveChannel();
+  if (fallback) {
+    navigate(`/transcripts?channel=${encodeURIComponent(fallback)}`);
+  }
 }
 
 function setPanelLevel(level) {
@@ -527,21 +629,57 @@ function readingBackTarget() {
     : "/";
 }
 
+const TRANSCRIPTS_EDIT_BASE =
+  "https://github.com/BedtimeNewsStudio/BedtimeNews-Transcripts/edit/main/contents/";
+
+function githubEditUrl(docId) {
+  if (!docId) return null;
+  // doc_id is already path-like: ShuiQianXiaoXi/1001-1100/1075.md
+  return (
+    TRANSCRIPTS_EDIT_BASE +
+    String(docId)
+      .split("/")
+      .map(encodeURIComponent)
+      .join("/")
+  );
+}
+
 function updateReadingBar() {
-  els.readingBack.hidden = !readingBackTarget();
-  if (panelLevel === "reader") {
-    els.readingBarLabel.textContent =
-      currentArticle?.canonical_title || "正在载入…";
-  } else if (panelLevel === "archive") {
-    els.readingBarLabel.textContent = channelLabel(currentChannel);
-  } else {
-    els.readingBarLabel.textContent = "";
+  // Titles live in the pane (archive H1 / reader H1). Top chrome keeps fixed
+  // slots so borders do not jump when back/edit appear.
+  els.readingBarLabel.textContent = "";
+  const canGoBack = Boolean(readingBackTarget());
+  els.readingBack.hidden = false;
+  els.readingBack.classList.toggle("is-slot-hidden", !canGoBack);
+  els.readingBack.tabIndex = canGoBack ? 0 : -1;
+  els.readingBack.setAttribute("aria-hidden", canGoBack ? "false" : "true");
+
+  const editUrl =
+    panelLevel === "reader" ? githubEditUrl(currentArticle?.doc_id) : null;
+  if (els.readingEdit) {
+    els.readingEdit.hidden = false;
+    if (editUrl) {
+      els.readingEdit.classList.remove("is-slot-hidden");
+      els.readingEdit.href = editUrl;
+      els.readingEdit.removeAttribute("aria-hidden");
+      els.readingEdit.tabIndex = 0;
+    } else {
+      els.readingEdit.classList.add("is-slot-hidden");
+      els.readingEdit.removeAttribute("href");
+      els.readingEdit.setAttribute("aria-hidden", "true");
+      els.readingEdit.tabIndex = -1;
+    }
   }
 }
 
 async function showArchive(generation, channel) {
   currentArticle = null;
   currentChannel = channel;
+  try {
+    sessionStorage.setItem("archive-channel", channel);
+  } catch {
+    /* ignore */
+  }
   setView("browse");
   setPanelLevel("archive");
   renderArchiveHead();
@@ -567,6 +705,13 @@ function prepareReader(uri) {
   els.readerState.textContent = "正在接收文稿…";
   els.readerTitle.textContent = "";
   els.readerBody.replaceChildren();
+  if (els.readingEdit) {
+    els.readingEdit.hidden = false;
+    els.readingEdit.classList.add("is-slot-hidden");
+    els.readingEdit.removeAttribute("href");
+    els.readingEdit.setAttribute("aria-hidden", "true");
+    els.readingEdit.tabIndex = -1;
+  }
   // Re-trigger the page-in. The element is reused between articles, so the
   // animation has to be dropped and reflowed back on to run again.
   els.readerView.classList.remove("is-entering");
@@ -593,7 +738,7 @@ async function showReader(uri, generation) {
     updateReadingBar();
     updateChannelBar();
     document.title = `${article.canonical_title || article.source_title} · 睡前消息知识库`;
-    els.readerTitle.textContent = article.source_title;
+    els.readerTitle.textContent = article.source_title || article.canonical_title || "";
     els.readerBody.innerHTML = article.body_html;
     for (const link of els.readerBody.querySelectorAll("a")) {
       const href = link.getAttribute("href") || "";
@@ -683,19 +828,28 @@ function navigate(href) {
 /* --------------------------------------------------------- chat pane state */
 
 function syncChatPanelAccessibility() {
+  // Mobile uses full-screen modes (tabs), not a side drawer.
+  if (mobileDrawer.matches) {
+    const browse = document.body.dataset.view === "browse";
+    els.chatPane.toggleAttribute("inert", browse);
+    els.chatPane.toggleAttribute("aria-hidden", browse);
+    document.body.classList.remove("chat-open");
+    els.chatFab.setAttribute("aria-expanded", "false");
+    return;
+  }
   const drawerClosed =
-    mobileDrawer.matches &&
     document.body.dataset.view === "browse" &&
     !document.body.classList.contains("chat-open");
-  els.chatPane.toggleAttribute("inert", drawerClosed);
-  if (drawerClosed) {
-    els.chatPane.setAttribute("aria-hidden", "true");
-  } else {
-    els.chatPane.removeAttribute("aria-hidden");
-  }
+  // Desktop never hides chat; drawerClosed is always false on desktop.
+  els.chatPane.toggleAttribute("inert", false);
+  els.chatPane.removeAttribute("aria-hidden");
 }
 
 function openChatPanel() {
+  if (mobileDrawer.matches) {
+    navigate("/");
+    return;
+  }
   if (document.body.dataset.view === "chat") return;
   document.body.classList.add("chat-open");
   els.chatFab.setAttribute("aria-expanded", "true");
@@ -704,12 +858,13 @@ function openChatPanel() {
 }
 
 function closeChatPanel() {
+  if (mobileDrawer.matches) {
+    // On mobile the archive is a full-screen mode; "close chat" is N/A.
+    return;
+  }
   document.body.classList.remove("chat-open");
   els.chatFab.setAttribute("aria-expanded", "false");
   syncChatPanelAccessibility();
-  if (mobileDrawer.matches && document.body.dataset.view === "browse") {
-    els.chatFab.focus();
-  }
 }
 
 els.archiveSearch.addEventListener("input", () => renderArchive());
@@ -717,9 +872,41 @@ els.channelBar.addEventListener("click", (event) => {
   const chip = event.target.closest(".channel-chip");
   if (!chip) return;
   const channel = chip.dataset.channel;
+  try {
+    sessionStorage.setItem("archive-channel", channel);
+  } catch {
+    /* ignore */
+  }
   navigate(`/transcripts?channel=${encodeURIComponent(channel)}`);
 });
 els.readingClose.addEventListener("click", () => navigate("/"));
+
+els.tabChat?.addEventListener("click", () => navigate("/"));
+els.tabArchive?.addEventListener("click", () => {
+  openArchiveTab();
+});
+mobileDrawer.addEventListener("change", () => {
+  syncChatPanelAccessibility();
+  updateMobileTabs();
+  // Category labels vs flat list depends on viewport.
+  if (sampleCategories.length) renderSampleQuestions();
+});
+
+// Keep the composer above the mobile keyboard when the visual viewport shrinks.
+function syncComposerToKeyboard() {
+  if (!window.visualViewport) return;
+  const vv = window.visualViewport;
+  const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+  document.documentElement.style.setProperty(
+    "--keyboard-inset",
+    `${inset}px`,
+  );
+}
+if (window.visualViewport) {
+  window.visualViewport.addEventListener("resize", syncComposerToKeyboard);
+  window.visualViewport.addEventListener("scroll", syncComposerToKeyboard);
+  syncComposerToKeyboard();
+}
 
 // Fragment links (footnote ref <-> appendix) must move only #reading-scroll.
 // scrollIntoView() and bare hash navigation also scroll ancestor/viewport
@@ -769,7 +956,6 @@ els.readingBack.addEventListener("click", () => {
 });
 els.chatFab.addEventListener("click", openChatPanel);
 els.chatClose.addEventListener("click", closeChatPanel);
-mobileDrawer.addEventListener("change", syncChatPanelAccessibility);
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
   if (document.body.classList.contains("chat-open")) {
@@ -1197,13 +1383,6 @@ function setComposerBusy(isBusy) {
   els.send.classList.toggle("is-stop", isBusy);
   els.send.textContent = isBusy ? "停止" : "发送";
   els.send.setAttribute("aria-label", isBusy ? "停止生成" : "发送问题");
-  if (!isBusy) {
-    const arrow = document.createElement("span");
-    arrow.className = "send-arrow";
-    arrow.setAttribute("aria-hidden", "true");
-    arrow.textContent = "▸";
-    els.send.appendChild(arrow);
-  }
 }
 
 function stopStreaming() {
@@ -1287,6 +1466,8 @@ function applyTheme(theme, preference) {
   if (theme !== currentTheme()) crossFadeTheme();
   document.documentElement.dataset.theme = theme;
   document.documentElement.dataset.themePreference = preference;
+  const meta = document.getElementById("theme-color-meta");
+  if (meta) meta.setAttribute("content", theme === "light" ? "#ffffff" : "#212121");
   updateThemeToggle();
 }
 

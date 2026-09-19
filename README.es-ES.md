@@ -1,14 +1,27 @@
-# BedtimeNews Agent
+# BedtimeNews Knowledge Base
 
 [中文](README.md) | [English](README.en.md) | [Español](README.es-ES.md)
 
-Sistema agente RAG (Retrieval-Augmented Generation) para la base de conocimiento de 睡前消息 (BedtimeNews). Proporciona Q&A con enrutamiento automático, búsqueda semántica, contexto de transcripciones recuperadas y citas de episodios.
+El sitio web de la base de conocimiento de BedtimeNews (睡前消息): pregunta al
+agente y navega o lee el archivo completo de transcripciones en el mismo lugar.
+El Q&A funciona con un sistema RAG agéntico (Retrieval-Augmented Generation) —
+enrutamiento automático, búsqueda semántica, contexto de transcripciones
+recuperadas y citas de episodios.
 
 > **¡Pruébalo:** [bedtime.blog](https://bedtime.blog)
 
 ## Descripción General
 
-Este sistema indexa transcripciones de videos de la [biblioteca de transcripciones de BedtimeNews](https://github.com/BedtimeNewsStudio/BedtimeNews-Transcripts) y permite búsqueda semántica con Q&A impulsado por LLM. Construido con LangGraph, proveedores de LLM/embedding conectables (DeepSeek para chat y los embeddings Qwen3 de SiliconFlow por defecto), y PostgreSQL + pgvector.
+Los textos de las transcripciones y el sistema inteligente viven en dos repos
+separados: las transcripciones fuente se mantienen en
+[BedtimeNews-Transcripts](https://github.com/BedtimeNewsStudio/BedtimeNews-Transcripts),
+mientras que este repositorio (BedtimeNews-Agent) las indexa y opera un sitio
+web que sirve tanto Q&A impulsado por LLM como lectura de transcripciones dentro
+de la aplicación — las transcripciones indexadas se ofrecen como contenido del
+propio sitio, y las citas de las respuestas saltan directamente al lector
+integrado. Construido con LangGraph, proveedores de LLM/embedding conectables
+(DeepSeek para chat y los embeddings Qwen3 de SiliconFlow por defecto), y
+PostgreSQL + pgvector.
 
 **Características Principales:**
 
@@ -17,22 +30,24 @@ Este sistema indexa transcripciones de videos de la [biblioteca de transcripcion
 - Calificación basada en LLM de documentos
 - Transcripciones recuperadas proporcionadas como contexto de respuesta, con citas en formato markdown y reparación de citas
 - Indexación automatizada de documentos con actualizaciones incrementales
-- Interfaz de chat basada en web
+- Interfaz web: chat de preguntas y respuestas más navegación y lectura de
+  transcripciones dentro del sitio (las citas saltan directamente al lector
+  integrado)
 
 ## Cobertura de Contenido
 
-El sistema indexa transcripciones de videos de [BedtimeNews-Transcripts](https://github.com/BedtimeNewsStudio/BedtimeNews-Transcripts):
-1812 transcripciones en cinco programas:
+El sistema indexa transcripciones de videos de [BedtimeNews-Transcripts](https://github.com/BedtimeNewsStudio/BedtimeNews-Transcripts)
+en cinco programas:
 
 **Catálogo de Programas:**
 
-| Directorio          | Nombre     | Presentador    | Contenido              | Nº  |
-| ------------------- | ---------- | -------------- | ---------------------- | --- |
-| `ShuiQianXiaoXi/`   | 睡前消息   | 马前卒（督工） | Programa principal     | 889 |
-| `CanKaoXinXi/`      | 参考信息   | 小黛           | Noticias diarias       | 649 |
-| `ChanJingPoBiJi/`   | 产经破壁机 | 产经组         | Industria y negocios   | 136 |
-| `JiangDianHeiHua/`  | 讲点黑话   | 黑岛（老会计） | Historia y personajes  |  72 |
-| `GaoJian/`          | 高见       | 高流           | Artículos monográficos |  66 |
+| Directorio         | Nombre     | Presentador    | Contenido              |
+| ------------------ | ---------- | -------------- | ---------------------- |
+| `ShuiQianXiaoXi/`  | 睡前消息   | 马前卒（督工） | Programa principal     |
+| `CanKaoXinXi/`     | 参考信息   | 小黛           | Noticias diarias       |
+| `ChanJingPoBiJi/`  | 产经破壁机 | 产经组         | Industria y negocios   |
+| `JiangDianHeiHua/` | 讲点黑话   | 黑岛（老会计） | Historia y personajes  |
+| `GaoJian/`         | 高见       | 高流           | Artículos monográficos |
 
 Solo se indexa la sección `## 正文` (cuerpo) de cada transcripción; el `## 附录`
 (apéndice: correcciones y notas de verificación) y la línea de metadatos
@@ -206,7 +221,7 @@ BedtimeNews-Agent/
 │   ├── README.en.md
 │   └── README.es-ES.md
 ├── frontend/           # Interfaz web personalizada (estático + FastAPI)
-│   ├── server.py       # FastAPI: sirve UI estática + proxy /chat SSE
+│   ├── server.py       # FastAPI: sirve UI estática + proxy de /chat SSE y las APIs de transcripciones
 │   ├── starters.py     # Datos de preguntas de muestra
 │   ├── static/         # index.html, styles.css, app.js, logo
 │   ├── Dockerfile

@@ -268,7 +268,10 @@ def list_transcripts() -> list[dict[str, Any]]:
             SELECT doc_id, canonical_title, source_title, channel,
                    publication_date, source_hash, updated_at
             FROM rag.transcripts
-            ORDER BY channel, doc_id;
+            -- Newest first within each channel; undated episodes sink to the end.
+            ORDER BY channel,
+                     publication_date DESC NULLS LAST,
+                     doc_id DESC;
             """
         )
         return [dict(row) for row in cursor.fetchall()]
