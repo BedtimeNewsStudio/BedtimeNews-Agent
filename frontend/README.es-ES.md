@@ -12,19 +12,22 @@ completa de la pila.
 
 ## Diseño
 
-- **Tema:** los colores se derivan del logo del programa — una base azul
-  marino profundo, un acento primario azul real, y un acento amarillo dorado
-  para señales en vivo/en progreso. Los temas claro y oscuro siguen el
-  `prefers-color-scheme` del SO en vivo por defecto. El interruptor del
-  encabezado crea una anulación persistente en `localStorage`.
+- **Tema:** paleta de escritorio de lectura en tinta cálida / papel — neutros
+  casi negros cálidos, un acento primario bronce champán, y un acento verde
+  marino suave para señales en progreso. Independiente de los colores del logo
+  del programa. Claro y oscuro siguen el `prefers-color-scheme` del SO por
+  defecto; el interruptor del encabezado escribe una anulación de sesión en
+  `sessionStorage` (sobrevive al recargar, se reinicia en una pestaña nueva).
 - **Tokens de color** son semánticos y tematizables (`--bg`, `--surface`,
   `--line`, `--text`, `--text-dim`, `--muted`, `--accent`, `--accent-2`),
   definidos para el tema oscuro en `:root` y sobrescritos bajo
   `[data-theme="light"]`.
-- **Tipografía:** pila CJK del sistema (PingFang SC / Microsoft YaHei / Noto
-  Sans SC) para lectura y una pila monoespaciada para etiquetas/datos. Las
-  fuentes son solo del sistema por diseño — sin CDN de webfonts, así la página
-  carga de forma fiable desde China continental.
+- **Tipografía:** una sola pila sans CJK del sistema (PingFang SC /
+  Microsoft YaHei / Noto Sans SC) para marca, canales y lectura; la jerarquía
+  viene del peso y el tamaño. La monoespaciada se reserva para pocas etiquetas
+  legibles por máquina (p. ej. espacios de nombres URI). Fuentes solo del
+  sistema por diseño — sin CDN de webfonts, así la página carga de forma fiable
+  desde China continental.
 - **Registro de adquisición de señales:** las etapas aplicables del pipeline
   RAG (condense → route → rewrite → retrieve → grade → generate) se renderizan
   como un registro en vivo que se bloquea cuando comienza la respuesta y luego

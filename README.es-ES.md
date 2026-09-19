@@ -4,7 +4,7 @@
 
 Sistema agente RAG (Retrieval-Augmented Generation) para la base de conocimiento de 睡前消息 (BedtimeNews). Proporciona Q&A con enrutamiento automático, búsqueda semántica, contexto de transcripciones recuperadas y citas de episodios.
 
-> **¡Pruébalo:** [chat.bedtime.blog](https://chat.bedtime.blog)
+> **¡Pruébalo:** [bedtime.blog](https://bedtime.blog)
 
 ## Descripción General
 

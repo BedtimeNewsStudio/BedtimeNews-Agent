@@ -5,42 +5,26 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>睡前消息知识库</title>
-  <meta name="description" content="睡前消息知识库。检索全部节目文稿，给出有据可查的回答。" />
+  <meta name="description" content="在同一处阅读睡前消息文稿，并随时向知识库 Agent 提问。" />
   <link rel="icon" type="image/webp" href="/bedtimenews.webp" />
   <script>
     // Set theme before first paint to avoid a flash.
-    //
-    // The override lives in sessionStorage, so a manual choice survives reloads
-    // within a visit but every fresh arrival starts from the OS preference
-    // again. Queried as `dark` to match app.js — asking the opposite question in
-    // the two places would disagree on a browser that reports neither.
     (function () {
       var root = document.documentElement;
       var systemTheme =
-        !window.matchMedia ||
-          window.matchMedia("(prefers-color-scheme: dark)").matches
+        !window.matchMedia || window.matchMedia("(prefers-color-scheme: dark)").matches
           ? "dark"
           : "light";
       var preference = null;
-
       try {
         var q = new URLSearchParams(location.search).get("theme");
-        preference =
-          q === "light" || q === "dark" ? q : sessionStorage.getItem("theme");
-        if (preference !== "light" && preference !== "dark") {
-          preference = null;
-        }
-        if (q === "light" || q === "dark") {
-          sessionStorage.setItem("theme", q);
-        }
-        // The override used to be permanent; drop the stale key so it stops
-        // showing up in devtools long after it lost any effect.
+        preference = q === "light" || q === "dark" ? q : sessionStorage.getItem("theme");
+        if (preference !== "light" && preference !== "dark") preference = null;
+        if (q === "light" || q === "dark") sessionStorage.setItem("theme", q);
         localStorage.removeItem("theme");
       } catch (e) {
-        // Storage may be unavailable, but the system preference still applies.
         console.warn("Theme storage is unavailable; using the system preference.", e);
       }
-
       root.dataset.theme = preference || systemTheme;
       root.dataset.themePreference = preference ? "user" : "system";
     })();
@@ -48,17 +32,22 @@
   <link rel="stylesheet" href="/styles.css" />
 </head>
 
-<body>
-  <a class="skip-link" href="#composer-input">跳到提问框</a>
+<body data-view="chat">
+  <a class="skip-link" href="#app-shell">跳到主要内容</a>
 
   <header class="masthead">
-    <a class="masthead-brand" href="/" aria-label="返回首页">
+    <a class="masthead-brand" href="/" data-route aria-label="返回首页">
       <img class="brand-logo" src="/bedtimenews.webp" alt="睡前消息" />
       <span class="wordmark-cn">睡前消息知识库</span>
     </a>
+
+    <!-- Sections of the one archive, on the title's own line. Each channel is
+         its own page, so there is no "everything" entry. Built by app.js from
+         the transcript index; hidden until that arrives. -->
+    <nav class="channel-bar" id="channel-bar" aria-label="栏目" hidden></nav>
+
     <div class="masthead-right">
       <nav class="masthead-links" aria-label="外部链接">
-        <a class="mast-link" href="https://bedtimenewsstudio.github.io/BedtimeNews-Transcripts/" target="_blank" rel="noopener noreferrer">文稿</a>
         <a class="mast-link mast-icon" href="https://github.com/BedtimeNewsStudio/BedtimeNews-Agent" target="_blank"
           rel="noopener noreferrer" aria-label="GitHub 仓库" title="GitHub 仓库">
           <svg viewBox="0 0 16 16" width="17" height="17" aria-hidden="true" focusable="false" fill="currentColor">
@@ -73,43 +62,77 @@
     </div>
   </header>
 
-  <main class="stage" id="stage">
-    <!-- Empty state: sample questions -->
-    <section class="hero" id="hero">
-      <div class="sample-section">
-        <div class="sample-head">
-          <span class="sample-title">示例提问</span>
-          <p class="sample-lede">按主题浏览，或直接提问。</p>
-          <button class="sample-reshuffle" id="sample-reshuffle" type="button" hidden>换一批</button>
-        </div>
-        <div class="sample-grid" id="sample-grid">
-          <!-- categories injected by app.js -->
-        </div>
+  <main class="app-shell" id="app-shell" tabindex="-1">
+    <section class="chat-pane" id="chat-pane" aria-label="知识库 Agent">
+      <header class="chat-pane-head">
+        <span>ASK THE ARCHIVE</span>
+        <button class="chat-close" id="chat-close" type="button" aria-label="关闭 Agent 面板">×</button>
+      </header>
+      <div class="stage" id="stage">
+        <section class="hero" id="hero">
+          <div class="sample-section">
+            <div class="sample-head">
+              <span class="sample-title">示例提问</span>
+              <p class="sample-lede">按主题浏览，或直接提问。</p>
+              <button class="sample-reshuffle" id="sample-reshuffle" type="button" hidden>换一批</button>
+            </div>
+            <div class="sample-grid" id="sample-grid"></div>
+          </div>
+        </section>
+        <section class="log" id="log"></section>
+        <output class="sr-only" id="stream-status" aria-live="polite"></output>
       </div>
+
+      <footer class="composer">
+        <form class="composer-form" id="composer-form">
+          <span class="composer-prompt" aria-hidden="true">&gt;</span>
+          <label class="sr-only" for="composer-input">输入你的问题</label>
+          <textarea id="composer-input" class="composer-input" rows="1" placeholder="输入你的问题，回车发送"
+            autocomplete="off" spellcheck="false"></textarea>
+          <button type="submit" class="composer-send" id="composer-send">
+            发送<span class="send-arrow" aria-hidden="true">▸</span>
+          </button>
+        </form>
+        <p class="composer-note"><span class="app-version" id="app-version" hidden></span>仅回答节目相关问题 · 刷新清空对话</p>
+      </footer>
     </section>
 
-    <!-- Conversation log (populated after first query). Deliberately not a
-         live region: streamed tokens would re-announce the whole answer on
-         every update. Progress is announced via #stream-status instead. -->
-    <section class="log" id="log"></section>
-    <output class="sr-only" id="stream-status" aria-live="polite"></output>
+    <!-- The archive and the reader share one pane: a window the chat pushes
+         open rather than a page it navigates away to. Collapsed to zero width
+         and inert while closed; app.js drives the rest. -->
+    <aside class="reading-pane" id="reading-pane" aria-label="文稿" inert>
+      <header class="reading-bar">
+        <button class="reading-back" id="reading-back" type="button" aria-label="返回文稿列表" title="返回文稿列表"
+          hidden>←</button>
+        <p class="reading-bar-label" id="reading-bar-label"></p>
+        <button class="reading-close" id="reading-close" type="button" aria-label="关闭文稿面板" title="关闭文稿面板">×</button>
+      </header>
+      <div class="reading-scroll" id="reading-scroll">
+        <div class="content-pane">
+          <section class="archive-view" id="archive-view" hidden aria-labelledby="archive-title">
+            <header class="archive-head">
+              <h1 id="archive-title"></h1>
+              <input class="archive-search" id="archive-search" type="search" placeholder="输入标题或期号"
+                aria-label="输入标题或期号" autocomplete="off" />
+            </header>
+            <div class="archive-groups" id="archive-groups"></div>
+            <p class="archive-state" id="archive-state" role="status">正在接收文稿目录…</p>
+          </section>
+
+          <article class="reader-view" id="reader-view" hidden>
+            <header class="reader-head">
+              <h1 id="reader-title"></h1>
+            </header>
+            <div class="reader-body" id="reader-body"></div>
+            <p class="reader-state" id="reader-state" role="status"></p>
+          </article>
+        </div>
+      </div>
+    </aside>
   </main>
 
-  <footer class="composer">
-    <form class="composer-form" id="composer-form">
-      <span class="composer-prompt" aria-hidden="true">&gt;</span>
-      <label class="sr-only" for="composer-input">输入你的问题</label>
-      <textarea id="composer-input" class="composer-input" rows="1" placeholder="输入你的问题，回车发送" autocomplete="off"
-        spellcheck="false"></textarea>
-      <button type="submit" class="composer-send" id="composer-send">
-        发送<span class="send-arrow" aria-hidden="true">▸</span>
-      </button>
-    </form>
-    <p class="composer-note"><span class="app-version" id="app-version" hidden></span>仅回答与睡前消息等节目内容相关的问题 ·
-      刷新页面将清空本次对话</p>
-  </footer>
+  <button class="chat-fab" id="chat-fab" type="button" aria-controls="chat-pane" aria-expanded="false">问 Agent</button>
 
-  <!-- Templates -->
   <template id="tpl-query">
     <article class="turn turn-query">
       <div class="query-card">
@@ -129,18 +152,12 @@
           <span class="signal-toggle" aria-hidden="true"></span>
         </button>
         <ol class="signal-stages">
-          <li class="stage-item" data-stage="condense"><span class="stage-name">理解</span><span
-              class="stage-line"></span></li>
-          <li class="stage-item" data-stage="route"><span class="stage-name">路由</span><span class="stage-line"></span>
-          </li>
-          <li class="stage-item" data-stage="rewrite"><span class="stage-name">优化</span><span class="stage-line"></span>
-          </li>
-          <li class="stage-item" data-stage="retrieve"><span class="stage-name">检索</span><span
-              class="stage-line"></span></li>
-          <li class="stage-item" data-stage="grade"><span class="stage-name">评分</span><span class="stage-line"></span>
-          </li>
-          <li class="stage-item" data-stage="generate"><span class="stage-name">生成</span><span
-              class="stage-line"></span></li>
+          <li class="stage-item" data-stage="condense"><span class="stage-name">理解</span><span class="stage-line"></span></li>
+          <li class="stage-item" data-stage="route"><span class="stage-name">路由</span><span class="stage-line"></span></li>
+          <li class="stage-item" data-stage="rewrite"><span class="stage-name">优化</span><span class="stage-line"></span></li>
+          <li class="stage-item" data-stage="retrieve"><span class="stage-name">检索</span><span class="stage-line"></span></li>
+          <li class="stage-item" data-stage="grade"><span class="stage-name">评分</span><span class="stage-line"></span></li>
+          <li class="stage-item" data-stage="generate"><span class="stage-name">生成</span><span class="stage-line"></span></li>
         </ol>
       </div>
       <div class="answer" hidden>
@@ -149,7 +166,6 @@
     </article>
   </template>
 
-  <!-- markdown-it is loaded on demand by app.js, once a question is asked. -->
   <script type="module" src="/app.js"></script>
 </body>
 

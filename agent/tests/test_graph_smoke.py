@@ -29,10 +29,7 @@ from src.models import ChunkResult, RetrieveResponse
 # titled link the reader sees is produced by the repair pass, not by the model.
 CITED_URI = "CanKaoXinXi/0401-0500/0490.md"
 ANSWER = f"鹤岗是资源枯竭型城市的代表 [[{CITED_URI}]]。"
-CITED_URL = (
-    "https://bedtimenewsstudio.github.io/BedtimeNews-Transcripts"
-    "/contents/CanKaoXinXi/0401-0500/0490.html"
-)
+CITED_URL = "/transcripts/CanKaoXinXi/0401-0500/0490.md"
 FOLLOWUPS = ["鹤岗的房价现在怎么样？", "还有哪些收缩型城市？"]
 
 # What the generation model returns: the answer, the delimiter, then suggestions.
@@ -247,10 +244,7 @@ def test_source_list_is_not_appended_when_the_model_cited(stub_pipeline):
 
 
 def test_citation_repair_covers_every_spelling():
-    url = (
-        "https://bedtimenewsstudio.github.io/BedtimeNews-Transcripts"
-        "/contents/ChanJingPoBiJi/0001-0100/0067.html"
-    )
+    url = "/transcripts/ChanJingPoBiJi/0001-0100/0067.md"
     canonical = f"[[产经破壁机67]]({url})"
     citation_map = {
         # Keyed by both spellings, exactly as build_citation_map does.

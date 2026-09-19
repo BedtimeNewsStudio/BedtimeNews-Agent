@@ -25,11 +25,12 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from importlib import metadata
 from pathlib import Path
+from urllib.parse import quote
 
 import httpx
 from fastapi import FastAPI, Request
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import Response
 from starlette.types import Scope
@@ -37,7 +38,9 @@ from starters import CATEGORIES
 
 AGENT_BACKEND_HOST = os.environ.get("AGENT_BACKEND_HOST", "agent")
 AGENT_BACKEND_PORT = os.environ.get("AGENT_BACKEND_PORT", "8000")
-CHAT_ENDPOINT = f"http://{AGENT_BACKEND_HOST}:{AGENT_BACKEND_PORT}/chat"  # noqa: S5332
+AGENT_BASE_URL = f"http://{AGENT_BACKEND_HOST}:{AGENT_BACKEND_PORT}"  # noqa: S5332
+CHAT_ENDPOINT = f"{AGENT_BASE_URL}/chat"
+TRANSCRIPTS_ENDPOINT = f"{AGENT_BASE_URL}/transcripts"
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -62,6 +65,19 @@ app = FastAPI(title="睡前消息知识库", lifespan=lifespan)
 # Compress text assets. Starlette excludes text/event-stream from compression,
 # which is what keeps the /chat stream flushing event-by-event.
 app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; "
+        "connect-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'none'"
+    )
+    return response
 
 
 def _sse_error(message: str) -> bytes:
@@ -143,6 +159,57 @@ async def chat(request: Request) -> StreamingResponse:
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
         },
+    )
+
+
+async def _proxy_transcript_json(request: Request, upstream_url: str) -> Response:
+    client = _client
+    if client is None:
+        return JSONResponse(
+            {"detail": "文稿服务尚未就绪"},
+            status_code=503,
+            headers={"Cache-Control": "no-cache"},
+        )
+    headers = {}
+    if etag := request.headers.get("if-none-match"):
+        headers["If-None-Match"] = etag
+    try:
+        response = await client.get(upstream_url, headers=headers)
+    except (httpx.TimeoutException, httpx.NetworkError):
+        return JSONResponse(
+            {"detail": "文稿服务暂时不可用"},
+            status_code=503,
+            headers={"Cache-Control": "no-cache"},
+        )
+
+    forwarded = {"Cache-Control": response.headers.get("cache-control", "no-cache")}
+    if etag := response.headers.get("etag"):
+        forwarded["ETag"] = etag
+    return Response(
+        content=response.content,
+        status_code=response.status_code,
+        media_type=response.headers.get("content-type", "application/json"),
+        headers=forwarded,
+    )
+
+
+@app.get("/api/transcripts")
+async def transcript_index(request: Request) -> Response:
+    return await _proxy_transcript_json(request, TRANSCRIPTS_ENDPOINT)
+
+
+@app.get("/api/transcripts/{doc_id:path}")
+async def transcript_detail(doc_id: str, request: Request) -> Response:
+    encoded = quote(doc_id, safe="/")
+    return await _proxy_transcript_json(request, f"{TRANSCRIPTS_ENDPOINT}/{encoded}")
+
+
+@app.get("/transcripts", include_in_schema=False)
+@app.get("/transcripts/{doc_id:path}", include_in_schema=False)
+async def transcript_spa(doc_id: str = "") -> FileResponse:
+    del doc_id
+    return FileResponse(
+        STATIC_DIR / "index.html", headers={"Cache-Control": "no-cache"}
     )
 
 

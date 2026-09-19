@@ -1,16 +1,24 @@
 """FastAPI application for BedtimeNews Agentic RAG service."""
 
 import asyncio
+import hashlib
+import json
 import logging
 from contextlib import asynccontextmanager
+from pathlib import PurePosixPath
 
-from fastapi import FastAPI, HTTPException, status
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from .chat import nonstream_chat, stream_chat
 from .models import ChatRequest, ChatResponse
 from .settings import settings
-from .vector_db import close_connection_pool
+from .vector_db import (
+    close_connection_pool,
+    get_transcript,
+    list_transcripts,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -89,3 +97,64 @@ async def chat(request: ChatRequest):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Chat processing failed: {str(e)}",
         ) from e
+
+
+def _validate_transcript_uri(doc_id: str) -> str:
+    """Accept only canonical relative Markdown URIs, never filesystem paths."""
+    if not doc_id or "\x00" in doc_id or "\\" in doc_id:
+        raise HTTPException(status_code=404, detail="Transcript not found")
+    if any(part in {"", ".", ".."} for part in doc_id.split("/")):
+        raise HTTPException(status_code=404, detail="Transcript not found")
+    path = PurePosixPath(doc_id)
+    if path.is_absolute() or path.suffix.lower() != ".md":
+        raise HTTPException(status_code=404, detail="Transcript not found")
+    return path.as_posix()
+
+
+def _etag_for(payload) -> str:
+    encoded = json.dumps(
+        jsonable_encoder(payload),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    return f'"{hashlib.sha256(encoded).hexdigest()}"'
+
+
+def _conditional_json(request: Request, payload, etag: str) -> Response:
+    headers = {"ETag": etag, "Cache-Control": "no-cache"}
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers=headers)
+    return JSONResponse(jsonable_encoder(payload), headers=headers)
+
+
+@app.get("/transcripts")
+async def transcript_index(request: Request) -> Response:
+    """Reader-navigation metadata reconstructed from upstream Markdown."""
+    try:
+        items = await asyncio.to_thread(list_transcripts)
+    except Exception as exc:
+        logger.exception("Transcript index unavailable")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Transcript service unavailable",
+        ) from exc
+    payload = {"items": items}
+    return _conditional_json(request, payload, _etag_for(payload))
+
+
+@app.get("/transcripts/{doc_id:path}")
+async def transcript_detail(doc_id: str, request: Request) -> Response:
+    """One sanitized reader document selected only by its exact DB URI."""
+    canonical = _validate_transcript_uri(doc_id)
+    try:
+        article = await asyncio.to_thread(get_transcript, canonical)
+    except Exception as exc:
+        logger.exception("Transcript unavailable: %s", canonical)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Transcript service unavailable",
+        ) from exc
+    if article is None:
+        raise HTTPException(status_code=404, detail="Transcript not found")
+    return _conditional_json(request, article, _etag_for(article))

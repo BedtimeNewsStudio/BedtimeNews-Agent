@@ -9,7 +9,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor, execute_batch
 from psycopg2.pool import ThreadedConnectionPool
 
-from .models import Chunk
+from .models import Chunk, TranscriptProjection
 from .settings import settings
 
 logger = logging.getLogger(__name__)
@@ -279,7 +279,8 @@ def get_table_stats() -> dict[str, Any]:
         cursor = conn.cursor()
         cursor.execute("""
             SELECT COUNT(*) AS total_chunks,
-                   COUNT(DISTINCT doc_id) AS total_documents
+                   COUNT(DISTINCT doc_id) AS total_documents,
+                   (SELECT COUNT(*) FROM rag.transcripts) AS reader_documents
             FROM rag.document_chunks;
         """)
         row = cursor.fetchone()
@@ -541,3 +542,86 @@ def clear_indexing_history() -> None:
 def clear_file_actions() -> None:
     with _Connection() as conn:
         conn.cursor().execute("DELETE FROM rag.file_actions;")
+
+
+@retry_on_transient_error()
+def get_transcript_states() -> dict[str, tuple[str, int]]:
+    """Return source hash and renderer version for every reader projection."""
+    with _Connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT doc_id, source_hash, projection_version FROM rag.transcripts;"
+        )
+        return {
+            row["doc_id"]: (row["source_hash"], row["projection_version"])
+            for row in cursor.fetchall()
+        }
+
+
+@retry_on_transient_error()
+def upsert_transcript_projection(projection: TranscriptProjection) -> None:
+    """Atomically publish one sanitized Markdown-derived reader document."""
+    with _Connection() as conn:
+        conn.cursor().execute(
+            """
+            INSERT INTO rag.transcripts (
+                doc_id, canonical_title, source_title, channel,
+                publication_date, body_html, source_hash, projection_version
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (doc_id) DO UPDATE
+            SET canonical_title = EXCLUDED.canonical_title,
+                source_title = EXCLUDED.source_title,
+                channel = EXCLUDED.channel,
+                publication_date = EXCLUDED.publication_date,
+                body_html = EXCLUDED.body_html,
+                source_hash = EXCLUDED.source_hash,
+                projection_version = EXCLUDED.projection_version,
+                updated_at = CURRENT_TIMESTAMP;
+            """,
+            (
+                projection.doc_id,
+                projection.canonical_title,
+                projection.source_title,
+                projection.channel,
+                projection.publication_date,
+                projection.body_html,
+                projection.source_hash,
+                projection.projection_version,
+            ),
+        )
+
+
+@retry_on_transient_error()
+def delete_transcript_projection(doc_id: str) -> None:
+    with _Connection() as conn:
+        conn.cursor().execute(
+            "DELETE FROM rag.transcripts WHERE doc_id = %s;", (doc_id,)
+        )
+
+
+@retry_on_transient_error()
+def sync_transcript_titles(titles: dict[str, str], batch_size: int = 500) -> None:
+    """Refresh canonical titles without re-rendering or touching embeddings."""
+    if not titles:
+        return
+    rows = [(title, doc_id) for doc_id, title in titles.items()]
+    query = """
+        UPDATE rag.transcripts
+        SET canonical_title = %s,
+            updated_at = CASE
+                WHEN canonical_title IS DISTINCT FROM %s THEN CURRENT_TIMESTAMP
+                ELSE updated_at
+            END
+        WHERE doc_id = %s;
+    """
+    expanded = [(title, title, doc_id) for title, doc_id in rows]
+    with _Connection() as conn:
+        cursor = conn.cursor()
+        for start in range(0, len(expanded), batch_size):
+            execute_batch(cursor, query, expanded[start : start + batch_size])
+
+
+@retry_on_transient_error()
+def clear_transcript_projections() -> None:
+    with _Connection() as conn:
+        conn.cursor().execute("DELETE FROM rag.transcripts;")

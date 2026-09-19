@@ -1,6 +1,6 @@
 [project]
 name = "bedtimenews-frontend"
-version = "0.2.0"
+version = "0.3.0"
 description = "Custom FastAPI + static UI frontend for Bedtime News"
 requires-python = ">=3.12"
 dependencies = [

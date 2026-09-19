@@ -19,6 +19,7 @@ class ChangeSet:
     legacy_requires_reindex: set[str] = field(default_factory=set)
     deleted: set[str] = field(default_factory=set)
     loaded_sources: dict[str, LoadedIndexableSource] = field(default_factory=dict)
+    current_source_hashes: dict[str, str] = field(default_factory=dict)
 
     @property
     def has_changes(self) -> bool:
@@ -51,6 +52,7 @@ def detect_changes(current_files: set[str]) -> ChangeSet:
     for uri in sorted(current_files):
         raw_bytes = (CONTENTS_DIR / uri).read_bytes()
         source_hash = hashlib.sha256(raw_bytes).hexdigest()
+        changes.current_source_hashes[uri] = source_hash
         history = histories.get(uri)
 
         if history is None:

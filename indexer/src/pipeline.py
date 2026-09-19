@@ -1,4 +1,4 @@
-"""Incremental body-only indexing pipeline."""
+"""Incremental RAG indexing and transcript projection pipeline."""
 
 import logging
 
@@ -8,15 +8,21 @@ from .embeddings import generate_embeddings
 from .file_scanner import scan_files
 from .git_sync import sync_repository
 from .models import Chunk
+from .paths import CONTENTS_DIR
 from .settings import settings
 from .stats import collect_stats
+from .transcript_export import TRANSCRIPT_PROJECTION_VERSION, project_transcript
 from .uri_mapping import load_uri_titles, resolve_title
 from .vector_db import (
     close_connection_pool,
     delete_indexed_document,
+    delete_transcript_projection,
+    get_transcript_states,
     record_source_only_change,
     replace_document_index,
+    sync_transcript_titles,
     upsert_document_titles,
+    upsert_transcript_projection,
 )
 
 logging.basicConfig(
@@ -38,7 +44,7 @@ def _validate_scope_safety() -> None:
 
 
 def main():
-    """Synchronize sources and apply only changes to normalized 正文 text."""
+    """Synchronize Markdown, RAG state, titles, and reader projections."""
     try:
         logger.info("=" * 70)
         logger.info(" CONTENT INDEXING PIPELINE")
@@ -51,7 +57,6 @@ def main():
         sync_repository()
         current_files = scan_files()
         changes = detect_changes(current_files)
-
         logger.info(
             "Changes: +%d body~%d source~%d legacy~%d -%d",
             len(changes.added),
@@ -61,21 +66,43 @@ def main():
             len(changes.deleted),
         )
 
-        # Mapping-only title corrections never affect the normalized body hash.
         logger.info("Phase 2: Refreshing document titles")
-        sync_document_titles(current_files)
+        titles = sync_document_titles(current_files)
 
-        if not changes.has_changes:
-            logger.info("No source or body changes. Pipeline complete.")
-            return
+        all_chunks: list[Chunk] = []
+        sync_errors: list[tuple[str, Exception]] = []
+        try:
+            if changes.has_changes:
+                logger.info("Phase 3: Applying RAG changes")
+                process_deletions(changes.deleted)
+                all_chunks = process_content_changes(changes)
+                process_source_only_changes(changes)
+            else:
+                logger.info("Phase 3: No RAG changes")
+        except Exception as exc:
+            logger.exception("RAG synchronization failed; reader sync will still run")
+            sync_errors.append(("RAG", exc))
 
-        logger.info("Phase 3: Applying changes")
-        process_deletions(changes.deleted)
-        all_chunks = process_content_changes(changes)
-        process_source_only_changes(changes)
+        rendered = removed = 0
+        try:
+            logger.info("Phase 4: Synchronizing reader projections")
+            rendered, removed = sync_transcript_projections(
+                current_files,
+                changes.current_source_hashes,
+                titles,
+            )
+        except Exception as exc:
+            logger.exception("Reader projection synchronization failed")
+            sync_errors.append(("reader projection", exc))
+
+        if sync_errors:
+            failed = ", ".join(label for label, _ in sync_errors)
+            raise RuntimeError(f"{failed} synchronization failed") from sync_errors[0][
+                1
+            ]
 
         if all_chunks:
-            logger.info("Phase 4: Statistics")
+            logger.info("Phase 5: RAG statistics")
             logger.info("-" * 70)
             stats = collect_stats(all_chunks)
             logger.info(f"Total documents:        {stats['total_documents']}")
@@ -86,6 +113,9 @@ def main():
             logger.info(f"Max tokens:             {stats['max_tokens']}")
             logger.info(f"Embedding model:        {stats['embedding_model']}")
             logger.info(f"Estimated API calls:    {stats['estimated_api_calls']}")
+
+        if not changes.has_changes and not rendered and not removed:
+            logger.info("No source, body, or reader changes.")
 
         logger.info("=" * 70)
         logger.info(" PIPELINE COMPLETE")
@@ -100,11 +130,12 @@ def main():
         close_connection_pool()
 
 
-def sync_document_titles(current_files: set[str]) -> None:
-    """Write URI -> 标准化标题 for every active document."""
+def sync_document_titles(current_files: set[str]) -> dict[str, str]:
+    """Write and return URI -> 标准化标题 for every active document."""
     mapped = load_uri_titles()
     titles = {uri: resolve_title(uri, mapped) for uri in sorted(current_files)}
     upsert_document_titles(titles)
+    return titles
 
 
 def process_deletions(deleted_files: set[str]) -> None:
@@ -138,7 +169,6 @@ def process_content_changes(changes: ChangeSet) -> list[Chunk]:
         )
         action = "ADD" if uri in changes.added else "MODIFY"
 
-        # No database state is touched until the embedding provider has returned.
         replace_document_index(
             file_path=uri,
             doc_id=get_doc_id(uri),
@@ -171,6 +201,45 @@ def process_source_only_changes(changes: ChangeSet) -> None:
             body_hash=source.body_hash,
             body_normalization_version=source.body_normalization_version,
         )
+
+
+def sync_transcript_projections(
+    current_files: set[str],
+    current_source_hashes: dict[str, str],
+    titles: dict[str, str],
+) -> tuple[int, int]:
+    """Apply source add/modify/delete independently of embedding history."""
+    stored_states = get_transcript_states()
+    removed = sorted(set(stored_states) - current_files)
+    changed = sorted(
+        uri
+        for uri in current_files
+        if stored_states.get(uri)
+        != (current_source_hashes[uri], TRANSCRIPT_PROJECTION_VERSION)
+    )
+
+    for uri in removed:
+        delete_transcript_projection(uri)
+
+    for index, uri in enumerate(changed, start=1):
+        raw_bytes = (CONTENTS_DIR / uri).read_bytes()
+        projection = project_transcript(uri, raw_bytes, titles[uri])
+        expected_hash = current_source_hashes[uri]
+        if projection.source_hash != expected_hash:
+            raise RuntimeError(f"Transcript changed during pipeline run: {uri}")
+        upsert_transcript_projection(projection)
+        logger.info(f"  [{index}/{len(changed)}] rendered {uri}")
+
+    # URI映射.md is outside contents/, so title-only mapping corrections have no
+    # transcript source hash. Refresh the lightweight title field separately.
+    sync_transcript_titles(titles)
+    logger.info(
+        "Reader projections: rendered=%d removed=%d unchanged=%d",
+        len(changed),
+        len(removed),
+        len(current_files) - len(changed),
+    )
+    return len(changed), len(removed)
 
 
 if __name__ == "__main__":

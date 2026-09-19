@@ -117,3 +117,59 @@ def test_gzip_compresses_static_text_but_not_event_stream(client):
     assert stream_response.headers["content-type"].startswith("text/event-stream")
     assert "content-encoding" not in stream_response.headers
     assert stream_response.content == event
+
+
+class _FakeJsonClient:
+    def __init__(self, response):
+        self.response = response
+        self.calls = []
+
+    async def get(self, url, **kwargs):
+        self.calls.append((url, kwargs))
+        return self.response
+
+
+def _json_upstream(status_code=200, payload=None, headers=None):
+    request = httpx.Request("GET", server.TRANSCRIPTS_ENDPOINT)
+    return httpx.Response(
+        status_code,
+        json=payload or {},
+        headers=headers,
+        request=request,
+    )
+
+
+def test_transcript_index_proxies_etag_and_revalidation(client):
+    upstream = _FakeJsonClient(
+        _json_upstream(200, {"items": [{"doc_id": "a.md"}]}, {"ETag": '"abc"'})
+    )
+    server._client = upstream
+
+    response = client.get("/api/transcripts", headers={"If-None-Match": '"old"'})
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["doc_id"] == "a.md"
+    assert response.headers["etag"] == '"abc"'
+    assert upstream.calls == [
+        (server.TRANSCRIPTS_ENDPOINT, {"headers": {"If-None-Match": '"old"'}})
+    ]
+
+
+def test_transcript_detail_percent_encodes_upstream_uri(client):
+    upstream = _FakeJsonClient(_json_upstream(404, {"detail": "not found"}))
+    server._client = upstream
+
+    response = client.get("/api/transcripts/栏目/一期.md")
+
+    assert response.status_code == 404
+    assert upstream.calls[0][0].endswith("/%E6%A0%8F%E7%9B%AE/%E4%B8%80%E6%9C%9F.md")
+
+
+def test_transcript_deep_links_return_spa_and_security_headers(client):
+    response = client.get("/transcripts/ShuiQianXiaoXi/0501-0600/0588.md")
+
+    assert response.status_code == 200
+    assert "睡前消息知识库" in response.text
+    assert response.headers["cache-control"] == "no-cache"
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert "frame-src 'none'" in response.headers["content-security-policy"]

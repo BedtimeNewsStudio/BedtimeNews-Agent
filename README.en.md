@@ -6,7 +6,7 @@ Agentic RAG (Retrieval-Augmented Generation) system for the 睡前消息
 (BedtimeNews) knowledge base. Provides Q&A with automatic routing, semantic
 search, retrieved-transcript context, and episode citations.
 
-> **Try it out:** [chat.bedtime.blog](https://chat.bedtime.blog)
+> **Try it out:** [bedtime.blog](https://bedtime.blog)
 
 ## Overview
 

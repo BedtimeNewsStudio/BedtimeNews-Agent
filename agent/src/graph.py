@@ -64,6 +64,7 @@ import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Annotated, Any, Literal, TypedDict
+from urllib.parse import quote
 
 from langchain_core.documents import Document
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
@@ -1154,11 +1155,9 @@ def _split_followups(answer: str) -> tuple[str, list[str]]:
     return head.strip(), followups
 
 
-# The transcripts are published as a static site built from the upstream repo:
-# contents/<URI>.md becomes contents/<URI>.html under this prefix.
-TRANSCRIPTS_BASE_URL = (
-    "https://bedtimenewsstudio.github.io/BedtimeNews-Transcripts/contents/"
-)
+# Same-origin reader route. Keep the canonical URI, including .md, so citations
+# and transcript API lookups share one identifier end to end.
+TRANSCRIPTS_BASE_URL = "/transcripts/"
 
 _TRANSCRIPT_LINK = f"]({TRANSCRIPTS_BASE_URL}"
 
@@ -1175,7 +1174,7 @@ def _has_citation(answer: str) -> bool:
 
 def _citation_url(doc_id: str) -> str:
     """Public transcript page for a document URI."""
-    return f"{TRANSCRIPTS_BASE_URL}{doc_id.removesuffix('.md')}.html"
+    return f"{TRANSCRIPTS_BASE_URL}{quote(doc_id, safe='/')}"
 
 
 def _display_title(doc_id: str, title: str | None = None) -> str:

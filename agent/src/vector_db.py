@@ -256,3 +256,37 @@ def fetch_chunk_texts(chunk_ids: list[str]) -> dict[str, str]:
         cursor = conn.cursor()
         cursor.execute(query, chunk_ids)
         return {row["chunk_id"]: row["text"] for row in cursor.fetchall()}
+
+
+@retry_on_transient_error()
+def list_transcripts() -> list[dict[str, Any]]:
+    """Return deterministic reader-navigation metadata for every transcript."""
+    with _Connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT doc_id, canonical_title, source_title, channel,
+                   publication_date, source_hash, updated_at
+            FROM rag.transcripts
+            ORDER BY channel, doc_id;
+            """
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+
+@retry_on_transient_error()
+def get_transcript(doc_id: str) -> dict[str, Any] | None:
+    """Return one sanitized reader projection by exact canonical URI."""
+    with _Connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT doc_id, canonical_title, source_title, channel,
+                   publication_date, body_html, source_hash, updated_at
+            FROM rag.transcripts
+            WHERE doc_id = %s;
+            """,
+            (doc_id,),
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None

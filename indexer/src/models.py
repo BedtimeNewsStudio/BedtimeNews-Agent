@@ -50,3 +50,17 @@ class Chunk:
     text: str
     word_count: int = 0
     heading: str | None = None
+
+
+@dataclass(frozen=True)
+class TranscriptProjection:
+    """Sanitized reader-facing projection of one transcript source."""
+
+    doc_id: str
+    canonical_title: str
+    source_title: str
+    channel: str
+    publication_date: str | None
+    body_html: str
+    source_hash: str
+    projection_version: int

@@ -5,7 +5,7 @@
 睡前消息知识库的智能 RAG（检索增强生成）系统。提供自动路由、语义搜索、
 检索文稿上下文与节目引用功能。
 
-> **立即体验：** [chat.bedtime.blog](https://chat.bedtime.blog)
+> **立即体验：** [bedtime.blog](https://bedtime.blog)
 
 ## 概述
 

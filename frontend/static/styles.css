@@ -1,16 +1,17 @@
 /* ============================================================================
    睡前消息知识库
-   Color theme derived from the show logo: a deep navy-black night sky, a
-   royal-blue title (primary accent), and a golden-yellow moon (live accent).
+   Reading-desk palette: warm ink neutrals and paper tones, independent of the
+   show logo. Primary accent is a soft champagne bronze for actions and links;
+   the live accent is a quiet seafoam for in-progress signals.
 
    Semantic tokens (themeable):
      --bg / --surface / --line   background, raised panels, borders
      --text / --text-dim / --muted   primary, secondary, label text
-     --accent (blue)   brand, primary action, links, citations, "done"
-     --accent-2 (gold) live signal — scanning / in-progress / streaming cursor
+     --accent (bronze)   brand, primary action, links, citations, "done"
+     --accent-2 (seafoam) live signal — scanning / in-progress / streaming cursor
    Dark is the token default; [data-theme="light"] overrides. The effective
    theme follows the live OS preference until the masthead toggle creates a
-   persistent user override.
+   session override.
    ============================================================================ */
 
 /* The page background is a gradient built from custom properties. Swapping a
@@ -23,47 +24,47 @@
 @property --bg {
   syntax: "<color>";
   inherits: true;
-  initial-value: #0f121c;
+  initial-value: #0e0e0f;
 }
 
 @property --bg-grad-top {
   syntax: "<color>";
   inherits: true;
-  initial-value: #171b2b;
+  initial-value: #171716;
 }
 
 @property --bg-grad-bottom {
   syntax: "<color>";
   inherits: true;
-  initial-value: #0a0c14;
+  initial-value: #0a0a0b;
 }
 
 @property --glow {
   syntax: "<color>";
   inherits: true;
-  initial-value: rgba(74, 125, 240, 0.12);
+  initial-value: rgba(196, 165, 116, 0.12);
 }
 
 :root {
   color-scheme: dark;
-  --bg: #0f121c;
-  --bg-grad-top: #171b2b;
-  --bg-grad-bottom: #0a0c14;
-  --bg-rgb: 15, 18, 28;
-  --surface: #1a1e2e;
-  --line: #2a3043;
-  --text: #eaeef8;
-  --text-dim: #9aa4bc;
-  --muted: #616c85;
-  --accent: #4a7df0;
-  --accent-strong: #5f8ef5;
-  --accent-rgb: 74, 125, 240;
-  --accent-2: #f2c14e;
-  --accent2-rgb: 242, 193, 78;
-  --on-accent: #ffffff;
+  --bg: #0e0e0f;
+  --bg-grad-top: #171716;
+  --bg-grad-bottom: #0a0a0b;
+  --bg-rgb: 14, 14, 15;
+  --surface: #1c1c1f;
+  --line: #2e2e32;
+  --text: #f2f1ef;
+  --text-dim: #a8a6a1;
+  --muted: #6f6d68;
+  --accent: #c4a574;
+  --accent-strong: #d4b896;
+  --accent-rgb: 196, 165, 116;
+  --accent-2: #7eb8a8;
+  --accent2-rgb: 126, 184, 168;
+  --on-accent: #1a1612;
 
-  /* Moonlight wash at the top of the page. Themed, because the same alpha that
-     reads as a glow against a night sky is invisible against daylight. */
+  /* Soft wash at the top of the page. Alpha is themed so light mode can use a
+     stronger tint without the dark wash vanishing into the paper ground. */
   --glow: rgba(var(--accent-rgb), 0.12);
 
   --max-col: 50rem;
@@ -81,27 +82,26 @@
   --theme-fade: 320ms;
 }
 
-/* Daylight over the same sky, rather than white with a blue rinse: the tint is
-   deepest overhead and clears toward the horizon where the reading happens, so
-   panels sit on colour and white surfaces read as raised. */
+/* Paper desk rather than blue daylight: warm ivory overhead, clearing toward a
+   near-white reading ground so raised surfaces stay white and borders stay soft. */
 [data-theme="light"] {
   color-scheme: light;
-  --bg: #e7eef9;
-  --bg-grad-top: #cbd9f1;
-  --bg-grad-bottom: #f6f9fd;
-  --bg-rgb: 231, 238, 249;
+  --bg: #f6f3ee;
+  --bg-grad-top: #ebe6dc;
+  --bg-grad-bottom: #faf8f5;
+  --bg-rgb: 246, 243, 238;
   --surface: #ffffff;
-  --line: #c4d0e6;
-  --text: #0e1420;
-  --text-dim: #46536b;
-  --muted: #647089;
-  --accent: #2a5fe0;
-  --accent-strong: #1e4fd0;
-  --accent-rgb: 42, 95, 224;
-  --accent-2: #b1770f;
-  --accent2-rgb: 177, 119, 15;
+  --line: #ddd6c8;
+  --text: #1c1916;
+  --text-dim: #5c574f;
+  --muted: #8a847a;
+  --accent: #9a7b4f;
+  --accent-strong: #7d6340;
+  --accent-rgb: 154, 123, 79;
+  --accent-2: #3d7a6c;
+  --accent2-rgb: 61, 122, 108;
   --on-accent: #ffffff;
-  --glow: rgba(var(--accent-rgb), 0.18);
+  --glow: rgba(var(--accent-rgb), 0.16);
 }
 
 * {
@@ -115,7 +115,7 @@ html {
 body {
   margin: 0;
   background-color: var(--bg);
-  /* faint blue "moonlight" glow at the top over a deep night-sky gradient */
+  /* soft bronze wash at the top over a warm ink gradient */
   background-image: radial-gradient(120% 80% at 50% -12%,
       var(--glow),
       transparent 60%),
@@ -130,7 +130,12 @@ body {
   line-height: 1.7;
   display: flex;
   flex-direction: column;
-  min-height: 100%;
+  /* The panes are viewport-height columns that scroll on their own, so opening
+     the reading pane cannot re-anchor the conversation to a moving window. */
+  height: 100%;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -140,7 +145,7 @@ body {
   top: 0;
   z-index: 100;
   background: var(--accent);
-  color: var(--text);
+  color: var(--on-accent);
   padding: 0.5rem 1rem;
   font-family: var(--font-mono);
   font-size: 0.8rem;
@@ -160,13 +165,14 @@ body {
   justify-content: space-between;
   gap: 1rem;
   padding: 0.85rem clamp(1rem, 4vw, 2.5rem);
-  background: rgba(var(--bg-rgb), 0.82);
-  backdrop-filter: blur(10px);
+  background: rgba(var(--bg-rgb), 0.86);
+  backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--line);
 }
 
 .masthead-brand {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 0.7rem;
   color: var(--text);
@@ -185,15 +191,15 @@ body {
 .brand-logo {
   width: 2.1rem;
   height: 2.1rem;
-  border-radius: 6px;
+  border-radius: 8px;
   object-fit: cover;
   display: block;
 }
 
 .wordmark-cn {
-  font-weight: 700;
-  font-size: 1.05rem;
-  letter-spacing: 0.12em;
+  font-weight: 650;
+  font-size: 0.98rem;
+  letter-spacing: 0.04em;
 }
 
 .masthead-links {
@@ -204,8 +210,8 @@ body {
 
 .mast-link {
   font-family: var(--font-cjk);
-  font-size: 0.82rem;
-  letter-spacing: 0.12em;
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
   color: var(--text-dim);
   text-decoration: none;
   transition: color 0.18s var(--ease);
@@ -230,6 +236,7 @@ body {
 
 .masthead-right {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 1.1rem;
 }
@@ -241,7 +248,7 @@ body {
   width: 2rem;
   height: 2rem;
   border: 1px solid var(--line);
-  border-radius: 5px;
+  border-radius: 8px;
   background: transparent;
   color: var(--text-dim);
   font-size: 0.95rem;
@@ -261,6 +268,58 @@ body {
 
 [data-theme="light"] .theme-toggle-icon::before {
   content: "☾";
+}
+
+/* --------------------------------------------------------------- channel bar */
+/* Channel sections share the masthead row with the wordmark. Same sans family
+   as the rest of the UI — weight and color do the hierarchy, not a second face. */
+.channel-bar {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+  min-width: 0;
+  margin-left: 0.85rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.channel-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.channel-bar[hidden] {
+  display: none;
+}
+
+.channel-chip {
+  appearance: none;
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--font-cjk);
+  font-size: 0.84rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  white-space: nowrap;
+  padding: 0.28rem 0.55rem;
+  cursor: pointer;
+  transition: color 0.18s var(--ease), box-shadow 0.18s var(--ease);
+}
+
+.channel-chip:hover,
+.channel-chip:focus-visible {
+  color: var(--text);
+}
+
+/* Inset rather than a border, so lighting a section cannot nudge the row. */
+.channel-chip[aria-current="true"] {
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 var(--accent);
 }
 
 /* -------------------------------------------------------------------- stage */
@@ -293,16 +352,16 @@ body {
 }
 
 .sample-title {
-  font-weight: 700;
-  font-size: 1.15rem;
-  letter-spacing: 0.08em;
+  font-weight: 650;
+  font-size: 1.05rem;
+  letter-spacing: 0.02em;
 }
 
 .sample-lede {
   flex: 1 1 16rem;
   margin: 0;
-  font-size: 0.85rem;
-  line-height: 1.5;
+  font-size: 0.84rem;
+  line-height: 1.55;
   color: var(--text-dim);
 }
 
@@ -311,7 +370,7 @@ body {
   flex-shrink: 0;
   background: transparent;
   border: 1px solid var(--line);
-  border-radius: 4px;
+  border-radius: 8px;
   color: var(--text-dim);
   font-family: var(--font-cjk);
   font-size: 0.75rem;
@@ -345,9 +404,10 @@ body {
 
 .sample-label {
   margin: 0 0 0.3rem;
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.18em;
+  font-family: var(--font-cjk);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
   color: var(--muted);
 }
 
@@ -415,15 +475,17 @@ body {
   background: var(--surface);
   border: 1px solid var(--line);
   border-right: 2px solid var(--accent);
-  border-radius: 6px 6px 2px 6px;
+  border-radius: 10px 10px 4px 10px;
   padding: 0.7rem 1rem 0.85rem;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .query-tag {
   display: block;
-  font-family: var(--font-mono);
-  font-size: 0.6rem;
-  letter-spacing: 0.2em;
+  font-family: var(--font-cjk);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
   color: var(--muted);
   margin-bottom: 0.35rem;
 }
@@ -437,8 +499,8 @@ body {
 /* ----------------------------------------------------- signal acquisition */
 .signal {
   border: 1px solid var(--line);
-  border-radius: 6px;
-  background: rgba(var(--accent-rgb), 0.05);
+  border-radius: 10px;
+  background: rgba(var(--accent-rgb), 0.06);
   overflow: hidden;
   margin-bottom: 1rem;
 }
@@ -451,10 +513,10 @@ body {
   background: transparent;
   border: 0;
   color: var(--text-dim);
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
+  font-family: var(--font-cjk);
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
   padding: 0.6rem 0.9rem;
   cursor: pointer;
 }
@@ -480,7 +542,7 @@ body {
 
 .signal-label {
   color: var(--text);
-  letter-spacing: 0.18em;
+  font-weight: 550;
 }
 
 .signal-status {
@@ -536,9 +598,10 @@ body {
 }
 
 .stage-name {
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
-  letter-spacing: 0.14em;
+  font-family: var(--font-cjk);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
   color: var(--muted);
   position: relative;
   padding-left: 0.9rem;
@@ -654,7 +717,7 @@ body {
   font-size: 0.86em;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 3px;
+  border-radius: 6px;
   padding: 0.05rem 0.3rem;
 }
 
@@ -667,9 +730,9 @@ body {
 /* Citations are markdown links into the transcript site — `[[标准化标题]](url)` —
    so they are picked out by destination and set as compact reference chips
    rather than inline prose links. */
-.answer-body a[href*="bedtimenewsstudio.github.io/BedtimeNews-Transcripts"] {
-  border: 1px solid rgba(var(--accent-rgb), 0.35);
-  border-radius: 3px;
+.answer-body a[data-transcript-link] {
+  border: 1px solid rgba(var(--accent-rgb), 0.4);
+  border-radius: 6px;
   padding: 0.02em 0.3em;
   margin: 0 0.1em;
   white-space: nowrap;
@@ -677,8 +740,8 @@ body {
   transition: background 0.18s var(--ease), border-color 0.18s var(--ease);
 }
 
-.answer-body a[href*="bedtimenewsstudio.github.io/BedtimeNews-Transcripts"]:hover,
-.answer-body a[href*="bedtimenewsstudio.github.io/BedtimeNews-Transcripts"]:focus-visible {
+.answer-body a[data-transcript-link]:hover,
+.answer-body a[data-transcript-link]:focus-visible {
   background: rgba(var(--accent-rgb), 0.12);
   border-color: var(--accent);
 }
@@ -696,9 +759,10 @@ body {
 }
 
 .followups-label {
-  font-family: var(--font-mono);
-  font-size: 0.62rem;
-  letter-spacing: 0.18em;
+  font-family: var(--font-cjk);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
   color: var(--muted);
   margin-right: 0.15rem;
 }
@@ -749,17 +813,26 @@ body {
 
 /* ---------------------------------------------------------------- composer */
 .composer {
-  position: sticky;
-  bottom: 0;
+  position: relative;
+  flex: 0 0 auto;
   z-index: 20;
   width: 100%;
   max-width: var(--max-col);
   margin: 0 auto;
-  /* Generous top padding so the gradient has room to work: content scrolling
-     under the composer fades out over ~2rem instead of being sliced mid-line on
-     a short window. */
-  padding: 2.2rem clamp(1rem, 4vw, 2rem) 1.1rem;
-  background: linear-gradient(180deg, rgba(var(--bg-rgb), 0) 0%, var(--bg) 60%);
+  padding: 0.9rem clamp(1rem, 4vw, 2rem) 1.1rem;
+  background: var(--bg);
+}
+
+/* The conversation scrolls in its own column now, so content no longer slides
+   under the composer — but a hard cut where the scroll area ends still reads as
+   a slice. This puts the fade back, above the composer rather than inside it. */
+.composer::before {
+  content: "";
+  position: absolute;
+  inset: auto 0 100% 0;
+  height: 2rem;
+  background: linear-gradient(180deg, rgba(var(--bg-rgb), 0) 0%, var(--bg) 100%);
+  pointer-events: none;
 }
 
 .composer-form {
@@ -768,8 +841,9 @@ body {
   gap: 0.6rem;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 14px;
   padding: 0.55rem 0.65rem 0.55rem 0.9rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
   transition: border-color 0.18s var(--ease), box-shadow 0.18s var(--ease);
 }
 
@@ -778,7 +852,8 @@ body {
    otherwise focusing the field draws two nested rings. */
 .composer-form:focus-within {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.18);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.2),
+    0 1px 2px rgba(0, 0, 0, 0.12);
 }
 
 .composer-prompt {
@@ -810,7 +885,7 @@ body {
   flex-shrink: 0;
   appearance: none;
   border: 0;
-  border-radius: 6px;
+  border-radius: 10px;
   background: var(--accent);
   color: var(--on-accent);
   font-family: var(--font-cjk);
@@ -861,9 +936,9 @@ body {
 .composer-note {
   margin: 0.6rem 0 0;
   text-align: center;
-  font-family: var(--font-mono);
-  font-size: 0.62rem;
-  letter-spacing: 0.08em;
+  font-family: var(--font-cjk);
+  font-size: 0.72rem;
+  letter-spacing: 0.01em;
   color: var(--muted);
 }
 
@@ -939,4 +1014,546 @@ body {
   .composer-send {
     padding: 0.5rem 0.7rem;
   }
+}
+
+/* ================================================ chat + reading desk shell */
+/* Two columns of one window. The conversation is centred while the pane is
+   shut; opening the pane narrows the column and the reading desk grows beside
+   it, in equal halves. Nothing here changes the conversation's own metrics, so
+   the squeeze moves it sideways and does not jog it vertically. */
+.app-shell {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Reached by the skip link, so the ring belongs inside the viewport. */
+.app-shell:focus-visible {
+  outline-offset: -3px;
+}
+
+.chat-pane {
+  flex: 1 1 0%;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.chat-pane .stage {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.chat-pane-head,
+.chat-fab,
+.chat-close {
+  display: none;
+}
+
+/* Clipped to zero width rather than display:none, because a display switch
+   cannot be animated. app.js marks it inert while it is shut, so it stays out
+   of the tab order and the accessibility tree. */
+.reading-pane {
+  flex: 0 0 0%;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-left: 0 solid var(--line);
+  transition: flex-basis 0.46s var(--ease), border-left-width 0.46s var(--ease);
+}
+
+body[data-view="browse"] .reading-pane {
+  flex-basis: 50%;
+  border-left-width: 1px;
+}
+
+/* The contents fade up behind the widening column, so the pane reads as a
+   surface being revealed instead of text being stretched into place. */
+.reading-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden auto;
+  opacity: 0;
+  /* Same ambient wash the page carries, so the pane is a surface of the site
+     rather than a panel dropped on top of it. Parked on the scroll area so the
+     bar above it sits on the flat base and reads as chrome. */
+  background: linear-gradient(180deg,
+      rgba(var(--accent-rgb), 0.06),
+      transparent 22rem);
+  transition: opacity 0.26s var(--ease);
+}
+
+body[data-view="browse"] .reading-scroll {
+  opacity: 1;
+  transition-delay: 0.14s;
+}
+
+.reading-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.8rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+
+.reading-bar-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-cjk);
+  font-size: 0.82rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--text-dim);
+}
+
+/* Back and close carry the same weight as the theme toggle: chrome, not
+   content. */
+.reading-bar button {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 1.9rem;
+  height: 1.9rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.18s var(--ease), border-color 0.18s var(--ease);
+}
+
+.reading-bar button:hover,
+.reading-bar button:focus-visible {
+  color: var(--accent-2);
+  border-color: var(--accent-2);
+}
+
+/* [hidden] would otherwise lose to the display above it. */
+.reading-bar button[hidden] {
+  display: none;
+}
+
+.content-pane {
+  min-width: 0;
+  padding: clamp(1.5rem, 2.6vw, 2.6rem) clamp(1rem, 2.4vw, 2rem) 4rem;
+}
+
+.archive-view,
+.reader-view {
+  width: 100%;
+  max-width: 72rem;
+  margin: 0 auto;
+}
+
+.archive-head {
+  max-width: 54rem;
+  margin-bottom: clamp(2rem, 6vw, 4.5rem);
+}
+
+.chat-pane-head {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.archive-head h1,
+.reader-head h1 {
+  margin: 0.2rem 0 0.7rem;
+  font-size: clamp(1.75rem, 4.2vw, 3.4rem);
+  font-weight: 650;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+
+.archive-search {
+  width: min(100%, 42rem);
+  margin-top: 0.45rem;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 1.08rem;
+  padding: 0.55rem 0;
+}
+
+.archive-search:focus {
+  border-bottom-color: var(--accent);
+  outline: 0;
+}
+
+
+.archive-groups {
+  display: grid;
+}
+
+.archive-group {
+  position: relative;
+  padding-left: clamp(1.2rem, 3vw, 2.2rem);
+}
+
+/* The vertical frequency line is the archive's signature: every channel is a
+   separate signal on one shared receiver, rather than another generic card grid. */
+.archive-group::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 2px;
+  background: linear-gradient(var(--accent), rgba(var(--accent2-rgb), 0.28));
+}
+
+.archive-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.archive-list li {
+  border-bottom: 1px solid rgba(var(--accent-rgb), 0.12);
+  /* The full corpus is 1800-odd rows. Skipping layout for the ones outside the
+     viewport keeps opening the pane off the animation's critical path. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 3.5rem;
+}
+
+/* Title and date on one line, source underneath: the pane is half a window at
+   its widest, which is not enough for three columns. */
+.archive-list a {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.15rem 0.75rem;
+  align-items: baseline;
+  padding: 0.72rem 0;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.archive-list a:hover .archive-item-title,
+.archive-list a:focus-visible .archive-item-title {
+  color: var(--accent);
+}
+
+.archive-item-title {
+  font-weight: 650;
+  transition: color 0.18s var(--ease);
+}
+
+.archive-item-source {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 0.86rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.archive-list time {
+  grid-column: 2;
+  grid-row: 1;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--muted);
+  text-align: right;
+}
+
+.archive-state,
+.reader-state {
+  color: var(--text-dim);
+}
+
+.reader-view {
+  max-width: 52rem;
+}
+
+.reader-head {
+  padding-bottom: 2rem;
+  margin-bottom: 2.5rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.reader-head h1 {
+  font-size: clamp(1.85rem, 4.2vw, 3.65rem);
+  text-wrap: balance;
+}
+
+.reader-body {
+  font-size: 1.04rem;
+  line-height: 1.88;
+  overflow-wrap: anywhere;
+}
+
+.reader-body h2,
+.reader-body h3,
+.reader-body h4,
+.reader-body h5,
+.reader-body h6 {
+  margin: 2.6rem 0 1rem;
+  line-height: 1.35;
+  color: var(--text);
+}
+
+.reader-body h2 {
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+  font-size: 1.42rem;
+}
+
+.reader-body p,
+.reader-body ul,
+.reader-body ol,
+.reader-body blockquote,
+.reader-body pre,
+.reader-body table {
+  margin: 0 0 1.3rem;
+}
+
+.reader-body blockquote {
+  margin-inline: 0;
+  padding-left: 1rem;
+  border-left: 2px solid var(--accent-2);
+  color: var(--text-dim);
+}
+
+.reader-body code,
+.reader-body pre {
+  font-family: var(--font-mono);
+}
+
+.reader-body pre {
+  max-width: 100%;
+  padding: 1rem;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.reader-body table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+.reader-body th,
+.reader-body td {
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--line);
+  text-align: left;
+}
+
+.reader-body a {
+  color: var(--accent);
+  text-underline-offset: 0.2em;
+}
+
+/* A new document arrives in the window the way a page does: replaced, not
+   reflowed in place. app.js re-adds the class for each article. */
+.reader-view.is-entering {
+  animation: reading-in 0.34s var(--ease) both;
+}
+
+@keyframes reading-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.6rem);
+  }
+}
+
+
+.reader-body .footnote-ref a,
+.reader-body a.transcript-fragment-link {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.reader-body .footnote-ref a:hover,
+.reader-body .footnote-backref:hover {
+  text-decoration: underline;
+}
+
+.reader-body .footnotes {
+  margin-top: 2.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.92rem;
+  color: var(--text-dim);
+}
+
+.reader-body .footnotes-list {
+  padding-left: 1.25rem;
+}
+
+.reader-body .footnote-item:target,
+.reader-body .footnote-ref:has(a:target),
+.reader-body [id]:target {
+  background: rgba(var(--accent-rgb), 0.12);
+  border-radius: 4px;
+  outline: 2px solid rgba(var(--accent-rgb), 0.35);
+  outline-offset: 2px;
+}
+
+.transcript-image-note {
+  color: var(--muted);
+  font-size: 0.88em;
+}
+
+@media (min-width: 901px) {
+  /* Half a window is narrower than a page, so the archive and reader type
+     scales down with the pane it lives in. */
+  .archive-head {
+    margin-bottom: 2.2rem;
+  }
+
+  .archive-head h1 {
+    font-size: clamp(1.6rem, 2.6vw, 2.5rem);
+  }
+
+  .reader-head h1 {
+    font-size: clamp(1.5rem, 2.4vw, 2.3rem);
+  }
+}
+
+@media (max-width: 900px) {
+  /* A phone has no room for two columns: the reading desk takes the whole
+     window, and the conversation goes back to being a drawer over it. */
+  .reading-pane {
+    transition: none;
+  }
+
+  body[data-view="browse"] .reading-pane {
+    flex-basis: 100%;
+    border-left-width: 0;
+  }
+
+  body[data-view="browse"] .reading-scroll {
+    transition-delay: 0s;
+  }
+
+  body[data-view="browse"] .chat-pane {
+    position: fixed;
+    inset: 3.5rem 0 0 auto;
+    z-index: 50;
+    width: min(92vw, 31rem);
+    height: calc(100dvh - 3.5rem);
+    min-height: 0;
+    overflow-y: auto;
+    border-left: 1px solid var(--line);
+    background: var(--bg);
+    box-shadow: -1rem 0 3rem rgba(0, 0, 0, 0.28);
+    transform: translateX(105%);
+    transition: transform 0.25s var(--ease);
+  }
+
+  body[data-view="browse"].chat-open .chat-pane {
+    transform: translateX(0);
+  }
+
+  body[data-view="browse"] .chat-pane-head {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.8rem 1rem;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .chat-close {
+    display: grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    font-size: 1.5rem;
+    cursor: pointer;
+  }
+
+  body[data-view="browse"] .chat-fab {
+    position: fixed;
+    right: 1rem;
+    bottom: 1rem;
+    z-index: 45;
+    display: block;
+    border: 1px solid var(--accent-2);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text);
+    font: 600 0.82rem var(--font-cjk);
+    padding: 0.65rem 1rem;
+    box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.2);
+  }
+
+  body[data-view="browse"] .chat-pane .stage {
+    width: auto;
+    padding: 1rem;
+  }
+
+  body[data-view="browse"] .chat-pane .composer {
+    width: auto;
+    padding-inline: 0.75rem;
+  }
+}
+
+@media (max-width: 620px) {
+  /* On a phone the sections need the width more than the wordmark does: left at
+     full size it gives them a 100px slot to hold five names. The logo still
+     names the site — its alt text is the link's accessible name — and the tab
+     title carries the rest. */
+  .wordmark-cn {
+    display: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .masthead {
+    padding-inline: 0.8rem;
+  }
+
+  .masthead-links {
+    gap: 0.8rem;
+  }
+
+  .content-pane {
+    padding-inline: 1rem;
+  }
+
+  .archive-head h1,
+  .reader-head h1 {
+    letter-spacing: -0.02em;
+  }
+
+  .archive-group {
+    padding-left: 0.85rem;
+  }
+
+  .archive-list a {
+    gap: 0.25rem 0.6rem;
+  }
+
 }

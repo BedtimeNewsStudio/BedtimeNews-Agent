@@ -25,6 +25,7 @@ from .vector_db import (
     clear_document_titles,
     clear_file_actions,
     clear_indexing_history,
+    clear_transcript_projections,
     get_file_chunks,
     get_indexed_files,
     get_indexing_history,
@@ -60,6 +61,7 @@ def _cmd_stats():
     stats = get_table_stats()
     logger.info(f"Total documents:        {stats['total_documents']}")
     logger.info(f"Total chunks:           {stats['total_chunks']}")
+    logger.info(f"Reader documents:       {stats['reader_documents']}")
     logger.info("=" * 60)
 
 
@@ -178,6 +180,7 @@ def _cmd_clear(force: bool = False):
         logger.warning("         - All chunks")
         logger.warning("         - All indexing history")
         logger.warning("         - All document titles")
+        logger.warning("         - All reader projections")
         logger.warning("         - All file action logs")
         logger.warning("         and remove the cloned git repository!")
         logger.warning("=" * 60)
@@ -188,6 +191,7 @@ def _cmd_clear(force: bool = False):
 
     clear_all_chunks()
     clear_document_titles()
+    clear_transcript_projections()
     clear_indexing_history()
     clear_file_actions()
 

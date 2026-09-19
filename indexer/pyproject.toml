@@ -1,6 +1,6 @@
 [project]
 name = "bedtimenews-indexer"
-version = "0.2.0"
+version = "0.3.0"
 description = "Index pipeline for Bedtime News"
 requires-python = ">=3.12"
 dependencies = [
@@ -15,6 +15,9 @@ dependencies = [
     # Config
     "PyYAML>=6.0.3",
     "pydantic-settings>=2.15.0",
+    "markdown-it-py>=4.0.0",
+    "mdit-py-plugins>=0.5.0",
+    "bleach>=6.3.0",
 ]
 
 [build-system]

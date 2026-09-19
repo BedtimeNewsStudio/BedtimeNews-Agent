@@ -9,15 +9,17 @@
 
 ## 设计
 
-- **主题：** 配色源自节目 logo——深藏青底色、宝蓝色主强调色，以及用于
-  直播/进行中信号的金黄色强调色。浅色与深色主题默认跟随操作系统的
-  `prefers-color-scheme`。页头切换按钮会写入持久的 `localStorage` 覆盖。
+- **主题：** 暖墨/纸笺阅读桌配色——近黑暖中性色底、香槟色青铜主强调色，
+  以及用于进行中信号的浅海绿色。与节目 logo 配色解耦。浅色与深色默认
+  跟随操作系统的 `prefers-color-scheme`；页头切换写入会话级
+  `sessionStorage` 覆盖（刷新保留，新开标签回到系统偏好）。
 - **颜色令牌**是语义化、可换肤的（`--bg`、`--surface`、`--line`、
   `--text`、`--text-dim`、`--muted`、`--accent`、`--accent-2`），深色
   定义在 `:root`，浅色在 `[data-theme="light"]` 下覆盖。
-- **字体：** 正文使用系统 CJK 字体栈（PingFang SC / Microsoft YaHei /
-  Noto Sans SC），标签/数据使用等宽字体栈。刻意只用系统字体——不加载
-  webfont CDN，保证页面在中国大陆可靠加载。
+- **字体：** 全文统一系统 CJK 无衬线栈（PingFang SC / Microsoft YaHei /
+  Noto Sans SC），用字重与字号区分站名、栏目与正文；等宽栈仅用于少量
+  机器可读标签（如 URI 命名空间）。刻意只用系统字体——不加载 webfont
+  CDN，保证页面在中国大陆可靠加载。
 - **信号采集日志：** RAG 流水线的各个阶段（condense → route → rewrite →
   retrieve → grade → generate）渲染为实时日志，回答开始后锁定并折叠。
   只有当对话历史消解了追问指代时才显示 condense 阶段。

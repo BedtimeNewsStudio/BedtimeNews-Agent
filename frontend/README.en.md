@@ -10,16 +10,19 @@ See the [main README](../README.en.md) for full-stack setup.
 
 ## Design
 
-- **Theme:** colors are derived from the show logo — a deep navy-black base, a
-  royal-blue primary accent, and a golden-yellow accent for live/in-progress
-  signals. Light and dark themes follow the live OS `prefers-color-scheme` by
-  default. The masthead toggle creates a persistent `localStorage` override.
+- **Theme:** a warm ink / paper reading-desk palette — near-black warm neutrals,
+  a champagne-bronze primary accent, and a quiet seafoam live accent for
+  in-progress signals. Independent of the show logo colors. Light and dark follow
+  the live OS `prefers-color-scheme` by default; the masthead toggle writes a
+  session-scoped `sessionStorage` override (survives reload, resets on a new tab).
 - **Color tokens** are semantic and themeable (`--bg`, `--surface`, `--line`,
   `--text`, `--text-dim`, `--muted`, `--accent`, `--accent-2`), defined for dark
   in `:root` and overridden under `[data-theme="light"]`.
-- **Type:** system CJK stack (PingFang SC / Microsoft YaHei / Noto Sans SC) for
-  reading and a monospace stack for labels/data. Fonts are system-only by design
-  — no webfont CDN, so the page loads reliably from mainland China.
+- **Type:** one system CJK sans stack (PingFang SC / Microsoft YaHei /
+  Noto Sans SC) for wordmark, channels, and reading; hierarchy comes from weight
+  and size. Monospace is reserved for a few machine-readable labels (e.g. URI
+  namespaces). Fonts are system-only by design — no webfont CDN, so the page
+  loads reliably from mainland China.
 - **Signal-acquisition log:** applicable RAG pipeline stages
   (condense → route → rewrite → retrieve → grade → generate) render as a live
   log that locks once the answer starts, then collapses. Condense appears only

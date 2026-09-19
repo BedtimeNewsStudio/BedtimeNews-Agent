@@ -42,11 +42,34 @@ const els = {
   status: document.getElementById("stream-status"),
   reshuffle: document.getElementById("sample-reshuffle"),
   version: document.getElementById("app-version"),
+  appShell: document.getElementById("app-shell"),
+  stage: document.getElementById("stage"),
+  channelBar: document.getElementById("channel-bar"),
+  archiveView: document.getElementById("archive-view"),
+  archiveTitle: document.getElementById("archive-title"),
+  archiveGroups: document.getElementById("archive-groups"),
+  archiveSearch: document.getElementById("archive-search"),
+  archiveState: document.getElementById("archive-state"),
+  readingPane: document.getElementById("reading-pane"),
+  readingScroll: document.getElementById("reading-scroll"),
+  readingBarLabel: document.getElementById("reading-bar-label"),
+  readingBack: document.getElementById("reading-back"),
+  readingClose: document.getElementById("reading-close"),
+  readerView: document.getElementById("reader-view"),
+  readerTitle: document.getElementById("reader-title"),
+  readerBody: document.getElementById("reader-body"),
+  readerState: document.getElementById("reader-state"),
+  chatPane: document.getElementById("chat-pane"),
+  chatFab: document.getElementById("chat-fab"),
+  chatClose: document.getElementById("chat-close"),
 };
 
 let busy = false;
 // Aborts the run in flight when the reader hits stop.
 let abortController = null;
+const mobileDrawer = window.matchMedia("(max-width: 900px)");
+// Must match the .reading-pane flex-basis transition in styles.css.
+const PANE_SLIDE_MS = 460;
 
 /* ---------------------------------------------------------------- helpers */
 
@@ -98,15 +121,21 @@ function loadMarkdown() {
 function createRenderer() {
   const md = window.markdownit({ html: false, linkify: true, breaks: true });
 
-  // Open links in a new tab.
+  // Keep same-origin transcript citations inside this SPA; only genuinely
+  // external links open a new tab.
   const defaultLinkOpen =
     md.renderer.rules.link_open ||
     function (tokens, idx, options, env, self) {
       return self.renderToken(tokens, idx, options);
     };
   md.renderer.rules.link_open = function (tokens, idx, options, env, self) {
-    tokens[idx].attrSet("target", "_blank");
-    tokens[idx].attrSet("rel", "noopener noreferrer");
+    const href = String(tokens[idx].attrGet("href") || "");
+    if (href.startsWith("/transcripts/")) {
+      tokens[idx].attrSet("data-transcript-link", "true");
+    } else {
+      tokens[idx].attrSet("target", "_blank");
+      tokens[idx].attrSet("rel", "noopener noreferrer");
+    }
     return defaultLinkOpen(tokens, idx, options, env, self);
   };
 
@@ -182,9 +211,7 @@ function stripFollowupBlock(text) {
 // can find citations unambiguously in the model's output. They are punctuation
 // for that parser, not for the reader, so drop them once the link exists.
 function unwrapCitationLabels(root) {
-  const links = root.querySelectorAll(
-    'a[href*="bedtimenewsstudio.github.io/BedtimeNews-Transcripts"]',
-  );
+  const links = root.querySelectorAll("a[data-transcript-link]");
   for (const link of links) {
     const label = link.textContent;
     if (label.length > 2 && label.startsWith("[") && label.endsWith("]")) {
@@ -197,18 +224,24 @@ function unwrapCitationLabels(root) {
 // the page out. During a stream they are called from the throttled render, not
 // per token, so that cost is paid ~12x a second instead of once per chunk.
 
+// The conversation scrolls inside .stage — the page itself never scrolls, so
+// the chat keeps its place through every squeeze and release of the reading
+// pane instead of being re-anchored to a moving window.
+
 // Is the reader following along at the bottom, rather than having scrolled up
 // to re-read something? Must be sampled *before* new text is appended: growing
 // the document moves the bottom away and would answer false every time.
 function isNearBottom() {
-  return window.innerHeight + window.scrollY >= document.body.scrollHeight - 160;
+  return (
+    els.stage.clientHeight + els.stage.scrollTop >= els.stage.scrollHeight - 160
+  );
 }
 
 // Instant (not smooth) scrolling: on iOS Safari a perpetual smooth-scroll
 // animation starves requestAnimationFrame callbacks, which would freeze the
 // streamed answer mid-flight.
 function scrollToEnd() {
-  window.scrollTo({ top: document.body.scrollHeight });
+  els.stage.scrollTo({ top: els.stage.scrollHeight });
 }
 
 /* ---------------------------------------------------------- sample questions */
@@ -280,6 +313,482 @@ async function loadSampleQuestions() {
       '<p class="sample-error">示例加载失败，可直接在下方输入问题。</p>';
   }
 }
+
+/* ------------------------------------------------------- channel + reader */
+
+const CHANNEL_LABELS = {
+  ShuiQianXiaoXi: "睡前消息",
+  CanKaoXinXi: "参考信息",
+  GaoJian: "高见",
+  JiangDianHeiHua: "讲点黑话",
+  ChanJingPoBiJi: "产经破壁机",
+};
+
+let transcriptItems = null;
+let transcriptIndexPromise = null;
+let currentArticle = null;
+// What the reading pane holds: null (closed) | "archive" | "reader".
+let panelLevel = null;
+// Channel scope of the list, and of the article on screen while reading.
+let currentChannel = null;
+let routeGeneration = 0;
+
+function transcriptPath(uri) {
+  return `/transcripts/${uri.split("/").map(encodeURIComponent).join("/")}`;
+}
+
+function channelLabel(channel) {
+  return CHANNEL_LABELS[channel] || channel;
+}
+
+// One fetch serves the channel bar, the archive and the reader's prev/next
+// pair. Callers await the same promise; only a failure clears it, so a later
+// route can retry.
+async function loadTranscriptIndex() {
+  if (transcriptItems) return transcriptItems;
+  if (!transcriptIndexPromise) {
+    transcriptIndexPromise = fetch("/api/transcripts")
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        transcriptItems = data.items || [];
+        renderChannelBar(transcriptItems);
+        return transcriptItems;
+      })
+      .catch((error) => {
+        transcriptIndexPromise = null;
+        throw error;
+      });
+  }
+  return transcriptIndexPromise;
+}
+
+/* ------------------------------------------------------------- channel bar */
+
+// Loudest signal first: the channel carrying the most transcripts leads, which
+// reads as a frequency index instead of an alphabetical list nobody scans.
+function renderChannelBar(items) {
+  const counts = new Map();
+  for (const item of items) {
+    counts.set(item.channel, (counts.get(item.channel) || 0) + 1);
+  }
+  const ordered = [...counts.keys()].sort(
+    (a, b) => counts.get(b) - counts.get(a) || a.localeCompare(b),
+  );
+
+  const chips = ordered.map((channel) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "channel-chip";
+    chip.dataset.channel = channel;
+    chip.textContent = channelLabel(channel);
+    chip.title = `${channel} · ${counts.get(channel)} 篇`;
+    return chip;
+  });
+
+  els.channelBar.replaceChildren(...chips);
+  els.channelBar.hidden = chips.length === 0;
+  updateChannelBar();
+}
+
+// The chip for whatever the pane is currently showing stays lit; with the pane
+// closed nothing is current, since the conversation is not inside a channel.
+function updateChannelBar() {
+  const active = panelLevel ? currentChannel : null;
+  for (const chip of els.channelBar.children) {
+    chip.setAttribute("aria-current", String(chip.dataset.channel === active));
+  }
+}
+
+/* ------------------------------------------------------------------ archive */
+
+function itemSearchText(item) {
+  // Title and episode only — not URI path or publication date.
+  return [item.canonical_title, item.source_title]
+    .filter(Boolean)
+    .join(" ")
+    .toLocaleLowerCase("zh-CN");
+}
+
+function renderArchiveHead() {
+  els.archiveTitle.textContent = channelLabel(currentChannel);
+}
+
+// "睡前消息588" under "睡前消息588" is the same words twice. When the source
+// title wraps the canonical one in brackets, that is what it always looks like:
+// the brackets hold the episode's own subject line, which is the useful half.
+function archiveRowTitle(item) {
+  const canonical = item.canonical_title || "";
+  const source = item.source_title || item.doc_id;
+  const wrapped = canonical && `【${canonical}】`;
+  if (wrapped && source.startsWith(wrapped)) {
+    return source.slice(wrapped.length).trim() || source;
+  }
+  return source;
+}
+
+function renderArchive(items = transcriptItems || []) {
+  const scoped = currentChannel
+    ? items.filter((item) => item.channel === currentChannel)
+    : [];
+  const query = els.archiveSearch.value.trim().toLocaleLowerCase("zh-CN");
+  const visible = query
+    ? scoped.filter((item) => itemSearchText(item).includes(query))
+    : scoped;
+  els.archiveGroups.replaceChildren();
+
+  // The vertical frequency line still marks the block as one channel's signal,
+  // now that no heading sits above it to do that job.
+  const section = document.createElement("section");
+  section.className = "archive-group";
+  const list = document.createElement("ol");
+  list.className = "archive-list";
+  for (const item of visible) {
+    const row = document.createElement("li");
+    const link = document.createElement("a");
+    link.href = transcriptPath(item.doc_id);
+    link.dataset.route = "";
+    const label = document.createElement("span");
+    label.className = "archive-item-title";
+    label.textContent = item.canonical_title || item.source_title || item.doc_id;
+    const source = document.createElement("span");
+    source.className = "archive-item-source";
+    source.textContent = archiveRowTitle(item);
+    link.append(label, source);
+    if (item.publication_date) {
+      const date = document.createElement("time");
+      date.dateTime = item.publication_date;
+      date.textContent = item.publication_date;
+      link.append(date);
+    }
+    row.appendChild(link);
+    list.appendChild(row);
+  }
+  section.appendChild(list);
+  els.archiveGroups.appendChild(section);
+
+  els.archiveState.hidden = visible.length > 0;
+  if (!visible.length) {
+    els.archiveState.textContent = query
+      ? "没有匹配的文稿。可尝试标题或期号。"
+      : "此栏目暂无文稿。";
+  }
+}
+
+/* --------------------------------------------------------------- panel view */
+
+// Squeezing the column rewraps the conversation. A reader who was following the
+// bottom of an answer would otherwise be left a few lines behind it, so they are
+// re-pinned once the column has settled.
+let paneSettleTimer = null;
+
+function keepChatAtBottom(wasAtBottom) {
+  clearTimeout(paneSettleTimer);
+  if (!wasAtBottom) return;
+  paneSettleTimer = setTimeout(() => {
+    paneSettleTimer = null;
+    scrollToEnd();
+  }, PANE_SLIDE_MS + 40);
+}
+
+function setView(view) {
+  const wasAtBottom = isNearBottom();
+  document.body.dataset.view = view;
+  const browse = view === "browse";
+  if (!browse) {
+    document.body.classList.remove("chat-open");
+    els.chatFab.setAttribute("aria-expanded", "false");
+  }
+  // A closed pane is clipped to zero width but still in the document, so it has
+  // to be taken out of the tab order and the accessibility tree by hand.
+  els.readingPane.toggleAttribute("inert", !browse);
+  if (!browse && els.readingPane.contains(document.activeElement)) {
+    els.appShell.focus();
+  }
+  syncChatPanelAccessibility();
+  keepChatAtBottom(wasAtBottom);
+}
+
+function setPanelLevel(level) {
+  panelLevel = level;
+  els.archiveView.hidden = level !== "archive";
+  els.readerView.hidden = level !== "reader";
+  updateReadingBar();
+  updateChannelBar();
+}
+
+// Back steps down one level: article -> its own channel's list -> every
+// channel. The top level has nothing above it, so the control is hidden there.
+function readingBackTarget() {
+  if (panelLevel !== "reader") return null;
+  const channel = currentArticle?.channel;
+  return channel
+    ? `/transcripts?channel=${encodeURIComponent(channel)}`
+    : "/";
+}
+
+function updateReadingBar() {
+  els.readingBack.hidden = !readingBackTarget();
+  if (panelLevel === "reader") {
+    els.readingBarLabel.textContent =
+      currentArticle?.canonical_title || "正在载入…";
+  } else if (panelLevel === "archive") {
+    els.readingBarLabel.textContent = channelLabel(currentChannel);
+  } else {
+    els.readingBarLabel.textContent = "";
+  }
+}
+
+async function showArchive(generation, channel) {
+  currentArticle = null;
+  currentChannel = channel;
+  setView("browse");
+  setPanelLevel("archive");
+  renderArchiveHead();
+  els.readingScroll.scrollTo({ top: 0 });
+  document.title = `${channelLabel(channel)} · 睡前消息知识库`;
+  els.archiveState.hidden = false;
+  els.archiveState.textContent = "正在接收文稿目录…";
+  try {
+    const items = await loadTranscriptIndex();
+    if (generation !== routeGeneration) return;
+    renderArchive(items);
+  } catch (error) {
+    if (generation !== routeGeneration) return;
+    console.error("Transcript index unavailable.", error);
+    els.archiveGroups.replaceChildren();
+    els.archiveState.hidden = false;
+    els.archiveState.textContent = "文稿目录暂时不可用，请稍后重试。";
+  }
+}
+
+function prepareReader(uri) {
+  currentArticle = null;
+  els.readerState.textContent = "正在接收文稿…";
+  els.readerTitle.textContent = "";
+  els.readerBody.replaceChildren();
+  // Re-trigger the page-in. The element is reused between articles, so the
+  // animation has to be dropped and reflowed back on to run again.
+  els.readerView.classList.remove("is-entering");
+  void els.readerView.offsetWidth;
+  els.readerView.classList.add("is-entering");
+}
+
+async function showReader(uri, generation) {
+  currentChannel = null;
+  setView("browse");
+  setPanelLevel("reader");
+  prepareReader(uri);
+  els.readingScroll.scrollTo({ top: 0 });
+  document.title = "文稿 · 睡前消息知识库";
+  try {
+    const response = await fetch(
+      `/api/transcripts/${uri.split("/").map(encodeURIComponent).join("/")}`,
+    );
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const article = await response.json();
+    if (generation !== routeGeneration) return;
+    currentArticle = article;
+    currentChannel = article.channel;
+    updateReadingBar();
+    updateChannelBar();
+    document.title = `${article.canonical_title || article.source_title} · 睡前消息知识库`;
+    els.readerTitle.textContent = article.source_title;
+    els.readerBody.innerHTML = article.body_html;
+    for (const link of els.readerBody.querySelectorAll("a")) {
+      const href = link.getAttribute("href") || "";
+      if (href.startsWith("/transcripts/")) {
+        link.dataset.route = "";
+      } else if (href.startsWith("#")) {
+        // Footnote refs / backrefs stay inside the reading pane.
+        link.classList.add("transcript-fragment-link");
+      } else if (href) {
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+      }
+    }
+    els.readerState.textContent = "";
+  } catch (error) {
+    if (generation !== routeGeneration) return;
+    console.error("Transcript unavailable.", error);
+    els.readerState.textContent = "这篇文稿暂时不可用，或已从上游删除。";
+    document.title = "文稿不可用 · 睡前消息知识库";
+  }
+}
+
+/* -------------------------------------------------------------- the router */
+
+// The landing surface: the conversation centred, no channel chosen. Also the
+// destination for a route that has nothing to show.
+function showChat() {
+  currentArticle = null;
+  currentChannel = null;
+  setView("chat");
+  setPanelLevel(null);
+  document.title = "睡前消息知识库";
+}
+
+async function renderRoute() {
+  const generation = ++routeGeneration;
+  const { pathname, search } = window.location;
+  const channel = new URLSearchParams(search).get("channel") || null;
+
+  // A channel is the whole of this route now; without one there is no page here.
+  if (pathname === "/transcripts" || pathname === "/transcripts/") {
+    if (channel) {
+      await showArchive(generation, channel);
+      return;
+    }
+    history.replaceState({}, "", "/");
+    showChat();
+    return;
+  }
+
+  if (pathname.startsWith("/transcripts/")) {
+    const raw = pathname.slice("/transcripts/".length);
+    let uri = "";
+    try {
+      uri = raw.split("/").map(decodeURIComponent).join("/");
+    } catch (error) {
+      console.error("Malformed transcript route.", error);
+    }
+    if (uri) {
+      await showReader(uri, generation);
+      return;
+    }
+    history.replaceState({}, "", "/");
+    showChat();
+    return;
+  }
+
+  if (pathname !== "/" && pathname !== "") {
+    history.replaceState({}, "", "/");
+  }
+  showChat();
+}
+
+// Every transcript link in the page — channel chips, archive rows, citations in
+// an answer, links inside an article — lands here. When the pane is open the
+// article is swapped in place and the conversation is left exactly as it was,
+// which is what makes the pane feel like a window rather than a navigation.
+function navigate(href) {
+  const url = new URL(href, window.location.origin);
+  if (url.origin !== window.location.origin) return;
+  const next = `${url.pathname}${url.search}`;
+  if (next === `${window.location.pathname}${window.location.search}`) return;
+  history.pushState({}, "", next);
+  renderRoute();
+}
+
+/* --------------------------------------------------------- chat pane state */
+
+function syncChatPanelAccessibility() {
+  const drawerClosed =
+    mobileDrawer.matches &&
+    document.body.dataset.view === "browse" &&
+    !document.body.classList.contains("chat-open");
+  els.chatPane.toggleAttribute("inert", drawerClosed);
+  if (drawerClosed) {
+    els.chatPane.setAttribute("aria-hidden", "true");
+  } else {
+    els.chatPane.removeAttribute("aria-hidden");
+  }
+}
+
+function openChatPanel() {
+  if (document.body.dataset.view === "chat") return;
+  document.body.classList.add("chat-open");
+  els.chatFab.setAttribute("aria-expanded", "true");
+  syncChatPanelAccessibility();
+  window.setTimeout(() => els.input.focus(), 0);
+}
+
+function closeChatPanel() {
+  document.body.classList.remove("chat-open");
+  els.chatFab.setAttribute("aria-expanded", "false");
+  syncChatPanelAccessibility();
+  if (mobileDrawer.matches && document.body.dataset.view === "browse") {
+    els.chatFab.focus();
+  }
+}
+
+els.archiveSearch.addEventListener("input", () => renderArchive());
+els.channelBar.addEventListener("click", (event) => {
+  const chip = event.target.closest(".channel-chip");
+  if (!chip) return;
+  const channel = chip.dataset.channel;
+  navigate(`/transcripts?channel=${encodeURIComponent(channel)}`);
+});
+els.readingClose.addEventListener("click", () => navigate("/"));
+
+// Fragment links (footnote ref <-> appendix) must move only #reading-scroll.
+// scrollIntoView() and bare hash navigation also scroll ancestor/viewport
+// containers; with a 100dvh locked shell that shoves the whole desk upward and
+// leaves a blank band of page background.
+function scrollReadingPaneTo(target) {
+  const scroller = els.readingScroll;
+  if (!scroller || !target) return;
+  // Measure against the scroller's padding box, then clamp so a short appendix
+  // near the end cannot overscroll and leave empty canvas below.
+  const offset =
+    target.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+  const pad = 16;
+  const maxTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+  const top = Math.min(maxTop, Math.max(0, scroller.scrollTop + offset - pad));
+  const smooth = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  scroller.scrollTo({ top, behavior: smooth ? "smooth" : "auto" });
+}
+
+els.readerBody.addEventListener("click", (event) => {
+  const link = event.target.closest("a.transcript-fragment-link, a[href^='#']");
+  if (!link || !els.readerBody.contains(link)) return;
+  const href = link.getAttribute("href") || "";
+  if (!href.startsWith("#") || href === "#") return;
+  let id = href.slice(1);
+  try {
+    id = decodeURIComponent(id);
+  } catch {
+    /* keep raw id */
+  }
+  const target =
+    els.readerBody.querySelector(`#${CSS.escape(id)}`) ||
+    els.readingScroll.querySelector(`#${CSS.escape(id)}`);
+  if (!target) return;
+  event.preventDefault();
+  event.stopPropagation();
+  // Keep :target styles without letting the browser scroll the document.
+  const next = `${location.pathname}${location.search}#${encodeURIComponent(id)}`;
+  if (`${location.pathname}${location.search}${location.hash}` !== next) {
+    history.replaceState(history.state, "", next);
+  }
+  scrollReadingPaneTo(target);
+});
+els.readingBack.addEventListener("click", () => {
+  const target = readingBackTarget();
+  if (target) navigate(target);
+});
+els.chatFab.addEventListener("click", openChatPanel);
+els.chatClose.addEventListener("click", closeChatPanel);
+mobileDrawer.addEventListener("change", syncChatPanelAccessibility);
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  if (document.body.classList.contains("chat-open")) {
+    closeChatPanel();
+    return;
+  }
+  // Escape also backs out of the reading pane, the way it closes a modal.
+  if (panelLevel) navigate("/");
+});
+document.addEventListener("click", (event) => {
+  if (event.defaultPrevented || event.button !== 0) return;
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  const link = event.target.closest('a[data-route], a[href^="/transcripts/"]');
+  if (!link) return;
+  event.preventDefault();
+  navigate(link.href);
+});
+
+window.addEventListener("popstate", renderRoute);
 
 /* -------------------------------------------------------------- conversation */
 
@@ -821,14 +1330,31 @@ async function loadVersion() {
 
 els.reshuffle.addEventListener("click", renderSampleQuestions);
 
-const initialDataPromise = Promise.all([loadSampleQuestions(), loadVersion()]);
+const initialDataPromise = Promise.all([
+  loadSampleQuestions(),
+  loadVersion(),
+  // The channel bar is part of every route, including the landing one, so the
+  // index is fetched up front. A failure only costs the bar.
+  loadTranscriptIndex().catch((error) => {
+    console.warn("Transcript index unavailable; the channel bar stays hidden.", error);
+  }),
+]);
+// Not awaited before the focus decision: every route sets data-view
+// synchronously, so the landing surface is already known.
+const routePromise = renderRoute();
+
 // Same reasoning as after a run: autofocus on a phone opens the keyboard over
 // the sample questions before the reader has seen them.
-if (!window.matchMedia("(pointer: coarse)").matches) els.input.focus();
+if (
+  document.body.dataset.view === "chat" &&
+  !window.matchMedia("(pointer: coarse)").matches
+) {
+  els.input.focus();
+}
 
 // Deep link: /?q=... opens straight into a query (shareable links).
 const deepLink = new URLSearchParams(location.search).get("q");
-if (deepLink) {
+if (deepLink && document.body.dataset.view === "chat") {
   await askQuestion(deepLink);
 }
-await initialDataPromise;
+await Promise.all([initialDataPromise, routePromise]);
