@@ -33,7 +33,6 @@
     "Microsoft YaHei", "Noto Sans SC", "Segoe UI", sans-serif;
   --font-mono: ui-monospace, "SF Mono", "Menlo", "Consolas", monospace;
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
-  --theme-fade: 200ms;
   --touch: 44px;
   --tabbar-h: calc(3.25rem + env(safe-area-inset-bottom, 0px));
   --mast-h: 3.25rem;
@@ -900,8 +899,10 @@ body {
   box-shadow: inset 0 0 0 1px var(--accent-2);
 }
 
-.send-arrow {
-  font-family: var(--font-mono);
+/* Send/stop icons are a mobile-only affordance; desktop reads the label. */
+.composer-send .icon-send,
+.composer-send .icon-stop {
+  display: none;
 }
 
 .composer-note {
@@ -941,28 +942,8 @@ body {
   border: 0;
 }
 
-/* Switching theme repaints the entire page at once, which is harsh — especially
-   the jump to light in a dark room. app.js adds this class for the length of the
-   swap only, so first paint stays instant and nothing animates during normal
-   use. Colour-bearing properties are listed explicitly rather than using `all`,
-   which would drag layout and transform into the transition. background-image is
-   so browsers interpolate between them. !important overrides the shorter
-   component transitions (buttons, links) for these few hundred milliseconds so
-   the whole page moves together. */
-.theme-fade,
-.theme-fade *,
-.theme-fade *::before,
-.theme-fade *::after {
-  transition: background-color var(--theme-fade) var(--ease),
-    border-color var(--theme-fade) var(--ease),
-    color var(--theme-fade) var(--ease),
-    fill var(--theme-fade) var(--ease),
-    box-shadow var(--theme-fade) var(--ease),
-    outline-color var(--theme-fade) var(--ease) !important;
-}
-
-/* Placed after .theme-fade so its !important wins: someone who asks for less
-   motion should not get a cross-fade either. */
+/* Placed after the component transitions so its !important wins: someone who
+   asks for less motion should not get animated chrome either. */
 @media (prefers-reduced-motion: reduce) {
 
   *,
@@ -1577,6 +1558,13 @@ body[data-view="browse"] .reading-scroll {
     opacity: 1;
   }
 
+  /* Mobile archive: no reading bar at all. There is nothing to close at the
+     list level — the bottom 对话 tab returns to chat — so the row would only
+     waste height. An open article still shows the bar (back + close). */
+  body[data-view="browse"][data-panel="archive"] .reading-bar {
+    display: none;
+  }
+
   body[data-view="browse"] .chat-pane {
     z-index: 1;
     visibility: hidden;
@@ -1645,7 +1633,24 @@ body[data-view="browse"] .reading-scroll {
   }
 
 
-  .composer-send .send-label {
+  .composer-send .composer-send-label {
+    display: none;
+  }
+
+  .composer-send .icon-send {
+    display: block;
+  }
+
+  .composer-send.is-stop .icon-send {
+    display: none;
+  }
+
+  .composer-send.is-stop .icon-stop {
+    display: block;
+  }
+
+  /* The desktop stop square is a ::before glyph; the SVG square replaces it. */
+  .composer-send.is-stop::before {
     display: none;
   }
 

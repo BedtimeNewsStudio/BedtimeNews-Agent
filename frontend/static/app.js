@@ -613,6 +613,10 @@ async function openArchiveTab() {
 
 function setPanelLevel(level) {
   panelLevel = level;
+  // Mirrored on <body> for CSS: mobile hides the reading bar entirely on the
+  // archive level (the bottom tabs are the way back) and only shows it —
+  // back + close — inside an article.
+  document.body.dataset.panel = level ?? "";
   els.archiveView.hidden = level !== "archive";
   els.readerView.hidden = level !== "reader";
   updateReadingBar();
@@ -1381,7 +1385,10 @@ async function askQuestion(rawQuestion) {
 // send button becomes the stop control for the run in flight.
 function setComposerBusy(isBusy) {
   els.send.classList.toggle("is-stop", isBusy);
-  els.send.textContent = isBusy ? "停止" : "发送";
+  // Only the label span is rewritten — the button also holds the mobile
+  // send/stop SVGs, which a blanket textContent assignment would wipe.
+  const label = els.send.querySelector(".composer-send-label");
+  if (label) label.textContent = isBusy ? "停止" : "发送";
   els.send.setAttribute("aria-label", isBusy ? "停止生成" : "发送问题");
 }
 
@@ -1441,29 +1448,10 @@ function updateThemeToggle() {
   themeToggle.setAttribute("title", label);
 }
 
-// Must match --theme-fade in styles.css, plus a margin: stripping the class
-// while the transition is still running cancels it and snaps the last few
-// percent, which is exactly the jolt this is meant to remove.
-const THEME_FADE_MS = 320 + 120;
-const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-let themeFadeTimer = null;
-
-// The cross-fade class lives only for the length of the swap. Leaving it on
-// permanently would make every hover and focus change inherit the long theme
-// transition, and putting it in the markup would animate the very first paint.
-function crossFadeTheme() {
-  if (reducedMotionQuery.matches) return;
-  const root = document.documentElement;
-  root.classList.add("theme-fade");
-  clearTimeout(themeFadeTimer);
-  themeFadeTimer = setTimeout(() => {
-    root.classList.remove("theme-fade");
-    themeFadeTimer = null;
-  }, THEME_FADE_MS);
-}
-
 function applyTheme(theme, preference) {
-  if (theme !== currentTheme()) crossFadeTheme();
+  // Instant swap — no cross-fade class. A transition on every element stalls
+  // for the length of a long transcript's style recalc, which read as the
+  // article frame lagging (or the toggle "failing") on reader pages.
   document.documentElement.dataset.theme = theme;
   document.documentElement.dataset.themePreference = preference;
   const meta = document.getElementById("theme-color-meta");
