@@ -92,7 +92,7 @@ rewritten and retried once before the generator returns a no-results response.
 
 ```json
 {
-  "answer": "根据[[睡前消息588]](https://bedtimenewsstudio.github.io/BedtimeNews-Transcripts/contents/ShuiQianXiaoXi/0501-0600/0588.html)...",
+  "answer": "根据[[睡前消息588]](/transcripts/ShuiQianXiaoXi/0501-0600/0588.md)...",
   "followups": ["独山县后来如何化解债务？"],
   "grounded": true
 }
@@ -102,7 +102,7 @@ rewritten and retried once before the generator returns a no-results response.
 
 ```plaintext
 data: {"type": "step", "step": "route", "content": "..."}
-data: {"type": "citations", "urls": {"ShuiQianXiaoXi/0501-0600/0588.md": {"title": "睡前消息588", "url": "https://bedtimenewsstudio.github.io/BedtimeNews-Transcripts/contents/ShuiQianXiaoXi/0501-0600/0588.html"}}}
+data: {"type": "citations", "urls": {"ShuiQianXiaoXi/0501-0600/0588.md": {"title": "睡前消息588", "url": "/transcripts/ShuiQianXiaoXi/0501-0600/0588.md"}}}
 data: {"type": "answer_chunk", "content": "根据"}
 data: {"type": "answer_chunk", "content": "睡前"}
 data: {"type": "answer_meta", "grounded": true}
@@ -291,4 +291,4 @@ at all; those fall back to showing the URI itself — an ugly label on a link th
 still works.
 
 Citation links point at the transcript site:
-`https://bedtimenewsstudio.github.io/BedtimeNews-Transcripts/contents/<URI without .md>.html`
+`/transcripts/<URI>` (in-app reader; source on GitHub at `blob/main/contents/<URI>`)

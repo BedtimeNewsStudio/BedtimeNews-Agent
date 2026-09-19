@@ -98,7 +98,7 @@ resultados.
 
 ```json
 {
-  "answer": "根据[[睡前消息588]](https://bedtimenewsstudio.github.io/BedtimeNews-Transcripts/contents/ShuiQianXiaoXi/0501-0600/0588.html)...",
+  "answer": "根据[[睡前消息588]](/transcripts/ShuiQianXiaoXi/0501-0600/0588.md)...",
   "followups": ["独山县后来如何化解债务？"],
   "grounded": true
 }
@@ -108,7 +108,7 @@ resultados.
 
 ```plaintext
 data: {"type": "step", "step": "route", "content": "..."}
-data: {"type": "citations", "urls": {"ShuiQianXiaoXi/0501-0600/0588.md": {"title": "睡前消息588", "url": "https://bedtimenewsstudio.github.io/BedtimeNews-Transcripts/contents/ShuiQianXiaoXi/0501-0600/0588.html"}}}
+data: {"type": "citations", "urls": {"ShuiQianXiaoXi/0501-0600/0588.md": {"title": "睡前消息588", "url": "/transcripts/ShuiQianXiaoXi/0501-0600/0588.md"}}}
 data: {"type": "answer_chunk", "content": "根据"}
 data: {"type": "answer_chunk", "content": "睡前"}
 data: {"type": "answer_meta", "grounded": true}
@@ -307,4 +307,4 @@ pueden derivar; en ese caso se muestra el propio URI: una etiqueta fea sobre un
 enlace que sigue funcionando.
 
 Los enlaces de las citas apuntan al sitio de transcripciones:
-`https://bedtimenewsstudio.github.io/BedtimeNews-Transcripts/contents/<URI sin .md>.html`
+`/transcripts/<URI>` (lector in-app; fuente en GitHub `blob/main/contents/<URI>`)

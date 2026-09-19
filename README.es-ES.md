@@ -8,7 +8,7 @@ Sistema agente RAG (Retrieval-Augmented Generation) para la base de conocimiento
 
 ## Descripción General
 
-Este sistema indexa transcripciones de videos de la [biblioteca de transcripciones de BedtimeNews](https://bedtimenewsstudio.github.io/BedtimeNews-Transcripts/) y permite búsqueda semántica con Q&A impulsado por LLM. Construido con LangGraph, proveedores de LLM/embedding conectables (DeepSeek para chat y los embeddings Qwen3 de SiliconFlow por defecto), y PostgreSQL + pgvector.
+Este sistema indexa transcripciones de videos de la [biblioteca de transcripciones de BedtimeNews](https://github.com/BedtimeNewsStudio/BedtimeNews-Transcripts) y permite búsqueda semántica con Q&A impulsado por LLM. Construido con LangGraph, proveedores de LLM/embedding conectables (DeepSeek para chat y los embeddings Qwen3 de SiliconFlow por defecto), y PostgreSQL + pgvector.
 
 **Características Principales:**
 

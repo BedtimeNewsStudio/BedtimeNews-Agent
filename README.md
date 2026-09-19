@@ -9,7 +9,7 @@
 
 ## 概述
 
-本系统对[睡前消息文稿库](https://bedtimenewsstudio.github.io/BedtimeNews-Transcripts/)的视频文稿进行索引，并通过LLM驱动的问答实现语义搜索。基于LangGraph、可插拔的 LLM/embedding 提供方（默认使用 DeepSeek 对话模型与 SiliconFlow 的 Qwen3 embedding）以及 PostgreSQL + pgvector 构建。
+本系统对[睡前消息文稿库](https://github.com/BedtimeNewsStudio/BedtimeNews-Transcripts)的视频文稿进行索引，并通过LLM驱动的问答实现语义搜索。基于LangGraph、可插拔的 LLM/embedding 提供方（默认使用 DeepSeek 对话模型与 SiliconFlow 的 Qwen3 embedding）以及 PostgreSQL + pgvector 构建。
 
 **核心功能：**
 

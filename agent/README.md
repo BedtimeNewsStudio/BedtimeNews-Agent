@@ -87,7 +87,7 @@
 
 ```json
 {
-  "answer": "根据[[睡前消息588]](https://bedtimenewsstudio.github.io/BedtimeNews-Transcripts/contents/ShuiQianXiaoXi/0501-0600/0588.html)...",
+  "answer": "根据[[睡前消息588]](/transcripts/ShuiQianXiaoXi/0501-0600/0588.md)...",
   "followups": ["独山县后来如何化解债务？"],
   "grounded": true
 }
@@ -97,7 +97,7 @@
 
 ```plaintext
 data: {"type": "step", "step": "route", "content": "..."}
-data: {"type": "citations", "urls": {"ShuiQianXiaoXi/0501-0600/0588.md": {"title": "睡前消息588", "url": "https://bedtimenewsstudio.github.io/BedtimeNews-Transcripts/contents/ShuiQianXiaoXi/0501-0600/0588.html"}}}
+data: {"type": "citations", "urls": {"ShuiQianXiaoXi/0501-0600/0588.md": {"title": "睡前消息588", "url": "/transcripts/ShuiQianXiaoXi/0501-0600/0588.md"}}}
 data: {"type": "answer_chunk", "content": "根据"}
 data: {"type": "answer_chunk", "content": "睡前"}
 data: {"type": "answer_meta", "grounded": true}
@@ -281,5 +281,5 @@ docker compose exec agent python -m src.eval_agent --limit 1
 通则推不出来的（`misc/` 特辑等 29 篇例外）最终退回显示 URI 本身——标签不好看，
 但链接依然正确可点。
 
-引用链接指向文稿站：
-`https://bedtimenewsstudio.github.io/BedtimeNews-Transcripts/contents/<URI 去掉 .md>.html`
+引用链接指向应用内阅读器：
+`/transcripts/<URI>`（应用内阅读；源文件见 GitHub `blob/main/contents/<URI>`）

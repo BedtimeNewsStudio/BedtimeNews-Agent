@@ -145,7 +145,7 @@ Frontend 代理 agent 的 `/chat` 端点。
 
 ```json
 {"type": "step", "step": "condense|route|rewrite|retrieve|grade|generate", "content": "…"}
-{"type": "citations", "urls": {"ShuiQianXiaoXi/0501-0600/0588.md": {"title": "睡前消息588", "url": "https://bedtimenewsstudio.github.io/BedtimeNews-Transcripts/contents/ShuiQianXiaoXi/0501-0600/0588.html"}}}
+{"type": "citations", "urls": {"ShuiQianXiaoXi/0501-0600/0588.md": {"title": "睡前消息588", "url": "/transcripts/ShuiQianXiaoXi/0501-0600/0588.md"}}}
 {"type": "answer_chunk", "content": "…"}
 {"type": "answer_final", "content": "…", "grounded": true}
 {"type": "answer_meta", "grounded": true}

@@ -14,7 +14,12 @@ BEDTIMENEWS_TRANSCRIPTS_REPO_URL = (
 
 
 def sync_repository() -> None:
-    """Get a local copy of the latest git repo content of BedtimeNews-Transcripts."""
+    """Get a local copy of the latest git repo content of BedtimeNews-Transcripts.
+
+    Uses fetch + hard reset rather than pull so a rewritten remote history
+    (force-push / squashed initial commit) still converges without failing
+    on non-fast-forward.
+    """
     if not (BEDTIMENEWS_TRANSCRIPTS_DIR / ".git").exists():
         logger.info(f"Cloning repository to {BEDTIMENEWS_TRANSCRIPTS_DIR}")
         success, output = _run_command(
@@ -29,21 +34,37 @@ def sync_repository() -> None:
         if not success:
             logger.error(f"Failed to clone: {output}")
             raise RuntimeError(f"Failed to clone repository: {output}")
-    else:
-        success, output = _run_command(
-            [
-                "git",
-                "-c",
-                f"safe.directory={BEDTIMENEWS_TRANSCRIPTS_DIR}",
-                "pull",
-                "origin",
-                "main",
-            ],
-            BEDTIMENEWS_TRANSCRIPTS_DIR,
-        )
-        if not success:
-            logger.error(f"Failed to pull: {output}")
-            raise RuntimeError(f"Failed to pull changes: {output}")
+        return
+
+    git = [
+        "git",
+        "-c",
+        f"safe.directory={BEDTIMENEWS_TRANSCRIPTS_DIR}",
+    ]
+    success, output = _run_command(
+        [*git, "fetch", "--prune", "origin", "main"],
+        BEDTIMENEWS_TRANSCRIPTS_DIR,
+    )
+    if not success:
+        logger.error(f"Failed to fetch: {output}")
+        raise RuntimeError(f"Failed to fetch changes: {output}")
+
+    success, output = _run_command(
+        [*git, "reset", "--hard", "origin/main"],
+        BEDTIMENEWS_TRANSCRIPTS_DIR,
+    )
+    if not success:
+        logger.error(f"Failed to reset to origin/main: {output}")
+        raise RuntimeError(f"Failed to reset repository: {output}")
+
+    # Drop leftover untracked files so the working tree matches remote exactly.
+    success, output = _run_command(
+        [*git, "clean", "-fd"],
+        BEDTIMENEWS_TRANSCRIPTS_DIR,
+    )
+    if not success:
+        logger.error(f"Failed to clean working tree: {output}")
+        raise RuntimeError(f"Failed to clean repository: {output}")
 
 
 def _run_command(cmd: list[str], cwd: Path | None = None) -> tuple[bool, str]:

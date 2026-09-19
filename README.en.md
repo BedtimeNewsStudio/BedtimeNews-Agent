@@ -10,7 +10,7 @@ search, retrieved-transcript context, and episode citations.
 
 ## Overview
 
-This system indexes video transcripts from the [BedtimeNews transcript library](https://bedtimenewsstudio.github.io/BedtimeNews-Transcripts/) and enables semantic search with LLM-powered Q&A. Built with LangGraph, pluggable LLM/embedding providers (DeepSeek for chat and SiliconFlow's Qwen3 embeddings by default), and PostgreSQL + pgvector.
+This system indexes video transcripts from the [BedtimeNews transcript library](https://github.com/BedtimeNewsStudio/BedtimeNews-Transcripts) and enables semantic search with LLM-powered Q&A. Built with LangGraph, pluggable LLM/embedding providers (DeepSeek for chat and SiliconFlow's Qwen3 embeddings by default), and PostgreSQL + pgvector.
 
 **Key Features:**
 
