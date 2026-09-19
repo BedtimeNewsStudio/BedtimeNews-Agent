@@ -1490,7 +1490,9 @@ async function loadVersion() {
     const { version } = await res.json();
     if (!version) return;
     const displayVersion = version.startsWith("v") ? version : `v${version}`;
-    els.version.textContent = `${displayVersion} · `;
+    // Standalone in the masthead now — no separator dot, that belonged to the
+    // old inline spot in the composer note.
+    els.version.textContent = displayVersion;
     els.version.hidden = false;
   } catch (err) {
     console.warn("Version metadata is unavailable; hiding the version label.", err);

@@ -63,6 +63,10 @@
 
 html {
   height: 100%;
+  /* pan-only: blocks browser pinch-zoom and double-tap zoom where the viewport
+     meta's user-scalable=no is ignored (iOS Safari). Scrolling is unaffected;
+     descendants can only narrow this, never widen it. */
+  touch-action: pan-x pan-y;
 }
 
 body {
@@ -123,6 +127,11 @@ body {
 
 .app-version {
   white-space: nowrap;
+  /* Moved out of .composer-note; keep the same small muted look it had there. */
+  font-family: var(--font-cjk);
+  font-size: 0.72rem;
+  letter-spacing: 0.01em;
+  color: var(--muted);
 }
 
 .masthead-brand:hover {
@@ -1645,9 +1654,10 @@ body[data-view="browse"] .reading-scroll {
   }
 
   .mobile-tab[aria-current="page"] {
-    color: var(--text);
+    /* Same green as the send button — the selected tab is the primary action. */
+    background: var(--accent);
+    color: var(--on-accent);
     font-weight: 700;
-    background: var(--surface);
   }
 
 
@@ -1709,6 +1719,12 @@ body[data-view="browse"] .reading-scroll {
 
   .log {
     gap: 1.4rem;
+  }
+
+  /* The lede's 16rem flex-basis leaves no room for 换一批 on a phone row;
+     let it shrink so title + lede + button share one line. */
+  .sample-lede {
+    flex-basis: auto;
   }
 
   .sample-group {

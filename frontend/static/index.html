@@ -11,6 +11,11 @@
   <script>
     // Set theme before first paint to avoid a flash.
     (function () {
+      // iOS Safari ignores user-scalable=no for pinch gestures; kill the
+      // gesture itself. touch-action: pan-x pan-y on <html> does the rest.
+      document.addEventListener("gesturestart", function (e) {
+        e.preventDefault();
+      });
       var root = document.documentElement;
       var systemTheme =
         !window.matchMedia || window.matchMedia("(prefers-color-scheme: dark)").matches
@@ -40,6 +45,7 @@
     <a class="masthead-brand" href="/" data-route aria-label="返回首页">
       <img class="brand-logo" src="/bedtimenews.webp" alt="睡前消息" />
       <span class="wordmark-cn">睡前消息知识库</span>
+      <span class="app-version" id="app-version" hidden></span>
     </a>
 
     <!-- Sections of the one archive, on the title's own line. Each channel is
@@ -113,7 +119,7 @@
             </svg>
           </button>
         </form>
-        <p class="composer-note"><span class="app-version" id="app-version" hidden></span>仅回答节目相关问题 · 刷新清空对话</p>
+        <p class="composer-note">仅回答节目相关问题 · 刷新清空对话</p>
       </footer>
     </section>
 
