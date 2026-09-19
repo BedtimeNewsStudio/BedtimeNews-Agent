@@ -1458,7 +1458,10 @@ body[data-view="browse"] .reading-scroll {
     display: none !important;
   }
 
-  /* Fixed two-row masthead on browse so archive↔article does not resize chrome. */
+  /* Fixed two-row masthead on browse so archive↔article does not resize chrome.
+     The base rule's 0.55rem block padding would offset the fixed rows (chat's
+     52px is border-box, rows are not), so browse zeroes it to keep the brand
+     row the same height as the chat landing. */
   body[data-view="browse"] .masthead {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
@@ -1470,6 +1473,8 @@ body[data-view="browse"] .reading-scroll {
     min-height: calc(var(--mast-h) + 2.5rem);
     height: calc(var(--mast-h) + 2.5rem);
     box-sizing: border-box;
+    padding-top: 0;
+    padding-bottom: 0;
   }
 
   body[data-view="browse"] .masthead-brand {
@@ -1518,6 +1523,12 @@ body[data-view="browse"] .reading-scroll {
   .chat-pane-head,
   .chat-close {
     display: none !important;
+  }
+
+  /* The tabbar is viewport-fixed; reserve its height on the flex container so
+     the panes (absolute within the shell) end above it instead of under it. */
+  body {
+    padding-bottom: var(--tabbar-h);
   }
 
   .app-shell {
@@ -1589,6 +1600,13 @@ body[data-view="browse"] .reading-scroll {
   }
 
   .mobile-tabbar {
+    /* Pinned to the viewport rather than flowing in the body column: after a
+       pinch-zoom the layout viewport can scroll, dragging an in-flow bar out
+       of view. Fixed keeps 对话/文稿 reachable at any zoom. */
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
     display: grid;
     grid-template-columns: 1fr 1fr;
     flex: 0 0 auto;
