@@ -349,6 +349,16 @@ const CHANNEL_LABELS = {
   ChanJingPoBiJi: "产经破壁机",
 };
 
+// Channel bar order is fixed left-to-right (2026-09-21): 睡前消息、参考信息、
+// 讲点黑话、高见、产经破壁机. Unknown channels sort after these, alphabetically.
+const CHANNEL_ORDER = [
+  "ShuiQianXiaoXi",
+  "CanKaoXinXi",
+  "JiangDianHeiHua",
+  "GaoJian",
+  "ChanJingPoBiJi",
+];
+
 let transcriptItems = null;
 let transcriptIndexPromise = null;
 let currentArticle = null;
@@ -397,9 +407,14 @@ function renderChannelBar(items) {
   for (const item of items) {
     counts.set(item.channel, (counts.get(item.channel) || 0) + 1);
   }
-  const ordered = [...counts.keys()].sort(
-    (a, b) => counts.get(b) - counts.get(a) || a.localeCompare(b),
-  );
+  const ordered = [...counts.keys()].sort((a, b) => {
+    const ia = CHANNEL_ORDER.indexOf(a);
+    const ib = CHANNEL_ORDER.indexOf(b);
+    if (ia !== -1 && ib !== -1) return ia - ib;
+    if (ia !== -1) return -1;
+    if (ib !== -1) return 1;
+    return a.localeCompare(b);
+  });
 
   const chips = ordered.map((channel) => {
     const chip = document.createElement("button");
