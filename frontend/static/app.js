@@ -54,6 +54,7 @@ const els = {
   readingScroll: document.getElementById("reading-scroll"),
   readingBarLabel: document.getElementById("reading-bar-label"),
   readingBack: document.getElementById("reading-back"),
+  readingDocBack: document.getElementById("reading-doc-back"),
   readingClose: document.getElementById("reading-close"),
   readingEdit: document.getElementById("reading-edit"),
   readingShare: document.getElementById("reading-share"),
@@ -369,6 +370,19 @@ let panelLevel = null;
 // Channel scope of the list, and of the article on screen while reading.
 let currentChannel = null;
 let routeGeneration = 0;
+
+// Doc-to-doc hop trail: pushed when an article's own body links to another
+// article while the pane is already showing one (a cross-reference jump, not
+// a fresh entry from the archive/chat). Lets "back" retrace hops instead of
+// always dropping to the channel list. Popped, not replayed — no redo stack.
+let docHistory = [];
+// Set right before navigate()-ing to a popped docHistory entry, so showReader
+// treats that transition as a pop instead of a new hop to push.
+let suppressDocHistoryPush = false;
+
+function docBackTarget() {
+  return docHistory.length ? docHistory[docHistory.length - 1] : null;
+}
 
 function transcriptPath(uri) {
   return `/transcripts/${uri.split("/").map(encodeURIComponent).join("/")}`;
@@ -766,6 +780,14 @@ function updateReadingBar() {
   els.readingBack.tabIndex = canGoBack ? 0 : -1;
   els.readingBack.setAttribute("aria-hidden", canGoBack ? "false" : "true");
 
+  const docBackTargetUri = panelLevel === "reader" ? docBackTarget() : null;
+  if (els.readingDocBack) {
+    els.readingDocBack.hidden = false;
+    els.readingDocBack.classList.toggle("is-slot-hidden", !docBackTargetUri);
+    els.readingDocBack.tabIndex = docBackTargetUri ? 0 : -1;
+    els.readingDocBack.setAttribute("aria-hidden", docBackTargetUri ? "false" : "true");
+  }
+
   const editUrl =
     panelLevel === "reader" ? githubEditUrl(currentArticle?.doc_id) : null;
   if (els.readingEdit) {
@@ -845,6 +867,18 @@ function prepareReader(uri) {
 }
 
 async function showReader(uri, generation) {
+  const previousLevel = panelLevel;
+  const previousDocId = currentArticle?.doc_id;
+  if (suppressDocHistoryPush) {
+    suppressDocHistoryPush = false;
+  } else if (previousLevel === "reader" && previousDocId && previousDocId !== uri) {
+    // Already reading something else: this is a cross-reference hop, not a
+    // fresh entry — remember where we came from.
+    docHistory.push(previousDocId);
+  } else if (previousLevel !== "reader") {
+    // Entering the reader from the archive/chat starts a new trail.
+    docHistory = [];
+  }
   currentChannel = null;
   setView("browse");
   setPanelLevel("reader");
@@ -1088,6 +1122,13 @@ els.readerBody.addEventListener("click", (event) => {
 els.readingBack.addEventListener("click", () => {
   const target = readingBackTarget();
   if (target) navigate(target);
+});
+els.readingDocBack?.addEventListener("click", () => {
+  const target = docBackTarget();
+  if (!target) return;
+  docHistory.pop();
+  suppressDocHistoryPush = true;
+  navigate(transcriptPath(target));
 });
 els.chatFab.addEventListener("click", openChatPanel);
 els.chatClose.addEventListener("click", closeChatPanel);
