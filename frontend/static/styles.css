@@ -1417,19 +1417,20 @@ body[data-view="browse"] .reading-scroll {
 .share-toast {
   position: fixed;
   left: 50%;
-  bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+  top: 50%;
   z-index: 60;
   margin: 0;
-  padding: 0.6rem 1rem;
+  padding: 1.1rem 1.8rem;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 14px;
   background: var(--surface);
   color: var(--text);
   font-family: var(--font-cjk);
-  font-size: 0.85rem;
-  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+  font-size: 1.15rem;
+  font-weight: 500;
+  box-shadow: 0 12px 36px rgb(0 0 0 / 0.24);
   opacity: 0;
-  transform: translate(-50%, 6px);
+  transform: translate(-50%, -50%) scale(0.96);
   transition:
     opacity 0.18s var(--ease),
     transform 0.18s var(--ease);
@@ -1438,13 +1439,13 @@ body[data-view="browse"] .reading-scroll {
 
 .share-toast.is-visible {
   opacity: 1;
-  transform: translate(-50%, 0);
+  transform: translate(-50%, -50%) scale(1);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .share-toast {
     transition: opacity 0.18s linear;
-    transform: translate(-50%, 0);
+    transform: translate(-50%, -50%);
   }
 }
 
