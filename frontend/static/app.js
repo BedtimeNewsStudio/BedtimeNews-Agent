@@ -56,6 +56,8 @@ const els = {
   readingBack: document.getElementById("reading-back"),
   readingClose: document.getElementById("reading-close"),
   readingEdit: document.getElementById("reading-edit"),
+  readingShare: document.getElementById("reading-share"),
+  shareToast: document.getElementById("share-toast"),
   readerView: document.getElementById("reader-view"),
   readerTitle: document.getElementById("reader-title"),
   readerBody: document.getElementById("reader-body"),
@@ -635,6 +637,7 @@ function setPanelLevel(level) {
   els.archiveView.hidden = level !== "archive";
   els.readerView.hidden = level !== "reader";
   updateReadingBar();
+  updateShareButton();
   updateChannelBar();
 }
 
@@ -661,6 +664,96 @@ function githubEditUrl(docId) {
       .map(encodeURIComponent)
       .join("/")
   );
+}
+
+// Mirrors _short_id_for() / _base58_encode() in server.py exactly: same
+// alphabet, same byte count, same left-pad. Computed client-side (rather
+// than read off the article payload) so it never depends on a network
+// round trip beyond the article fetch the reader already makes.
+const BASE58_ALPHABET =
+  "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+const SHORT_ID_LENGTH = 8;
+
+function base58Encode(bytes) {
+  let n = 0n;
+  for (const byte of bytes) n = (n << 8n) | BigInt(byte);
+  if (n === 0n) return BASE58_ALPHABET[0];
+  let out = "";
+  while (n > 0n) {
+    const remainder = Number(n % 58n);
+    out = BASE58_ALPHABET[remainder] + out;
+    n /= 58n;
+  }
+  return out;
+}
+
+async function shortIdFor(docId) {
+  const digestBuffer = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(docId),
+  );
+  const code = base58Encode(new Uint8Array(digestBuffer).slice(0, 6));
+  const padded = BASE58_ALPHABET[0].repeat(SHORT_ID_LENGTH) + code;
+  return padded.slice(-SHORT_ID_LENGTH);
+}
+
+async function shareTextFor(article) {
+  const title = article.source_title || article.canonical_title || "";
+  const shortId = await shortIdFor(article.doc_id);
+  return `${title} ${location.origin}/s/${shortId}`;
+}
+
+let shareToastTimer = null;
+
+function showShareToast(message) {
+  if (!els.shareToast) return;
+  els.shareToast.textContent = message;
+  els.shareToast.hidden = false;
+  // Reflow so re-triggering the class while it is still visible restarts
+  // the fade rather than being a no-op.
+  els.shareToast.classList.remove("is-visible");
+  void els.shareToast.offsetWidth;
+  els.shareToast.classList.add("is-visible");
+  if (shareToastTimer) clearTimeout(shareToastTimer);
+  shareToastTimer = setTimeout(() => {
+    els.shareToast.classList.remove("is-visible");
+    shareToastTimer = setTimeout(() => {
+      els.shareToast.hidden = true;
+    }, 200);
+  }, 1600);
+}
+
+async function updateShareButton() {
+  if (!els.readingShare) return;
+  if (panelLevel !== "reader" || !currentArticle?.doc_id) {
+    els.readingShare.hidden = false;
+    els.readingShare.classList.add("is-slot-hidden");
+    els.readingShare.setAttribute("aria-hidden", "true");
+    els.readingShare.tabIndex = -1;
+    els.readingShare.removeAttribute("data-share-text");
+    return;
+  }
+  const article = currentArticle;
+  const text = await shareTextFor(article);
+  // The reader may have navigated away while the hash was computing.
+  if (currentArticle !== article) return;
+  els.readingShare.hidden = false;
+  els.readingShare.classList.remove("is-slot-hidden");
+  els.readingShare.removeAttribute("aria-hidden");
+  els.readingShare.tabIndex = 0;
+  els.readingShare.dataset.shareText = text;
+}
+
+async function copyShareLink() {
+  const text = els.readingShare?.dataset.shareText;
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+    showShareToast("已复制");
+  } catch (error) {
+    console.error("Clipboard write failed.", error);
+    showShareToast("复制失败，请手动复制");
+  }
 }
 
 function updateReadingBar() {
@@ -737,6 +830,13 @@ function prepareReader(uri) {
     els.readingEdit.setAttribute("aria-hidden", "true");
     els.readingEdit.tabIndex = -1;
   }
+  if (els.readingShare) {
+    els.readingShare.hidden = false;
+    els.readingShare.classList.add("is-slot-hidden");
+    els.readingShare.setAttribute("aria-hidden", "true");
+    els.readingShare.tabIndex = -1;
+    els.readingShare.removeAttribute("data-share-text");
+  }
   // Re-trigger the page-in. The element is reused between articles, so the
   // animation has to be dropped and reflowed back on to run again.
   els.readerView.classList.remove("is-entering");
@@ -761,6 +861,7 @@ async function showReader(uri, generation) {
     currentArticle = article;
     currentChannel = article.channel;
     updateReadingBar();
+    updateShareButton();
     updateChannelBar();
     document.title = `${article.canonical_title || article.source_title} · 睡前消息知识库`;
     els.readerTitle.textContent = article.source_title || article.canonical_title || "";
@@ -907,6 +1008,9 @@ els.channelBar.addEventListener("click", (event) => {
   navigate(`/transcripts?channel=${encodeURIComponent(channel)}`);
 });
 els.readingClose.addEventListener("click", () => navigate("/"));
+els.readingShare?.addEventListener("click", () => {
+  copyShareLink();
+});
 
 els.tabChat?.addEventListener("click", (event) => {
   event.preventDefault();

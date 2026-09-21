@@ -1055,7 +1055,7 @@ body[data-view="browse"] .reading-scroll {
   min-height: calc(var(--touch) + 1.1rem);
   max-height: calc(var(--touch) + 1.1rem);
   display: grid;
-  grid-template-columns: var(--touch) minmax(0, 1fr) var(--touch) var(--touch);
+  grid-template-columns: var(--touch) minmax(0, 1fr) var(--touch) var(--touch) var(--touch);
   align-items: center;
   column-gap: 0.5rem;
   padding: 0 var(--reading-inline);
@@ -1081,12 +1081,16 @@ body[data-view="browse"] .reading-scroll {
   grid-column: 1;
 }
 
-.reading-bar .reading-edit {
+.reading-bar .reading-share {
   grid-column: 3;
 }
 
-.reading-bar .reading-close {
+.reading-bar .reading-edit {
   grid-column: 4;
+}
+
+.reading-bar .reading-close {
+  grid-column: 5;
 }
 
 /* Back / edit / close — same box as theme toggle. */
@@ -1410,6 +1414,40 @@ body[data-view="browse"] .reading-scroll {
   text-align: center;
 }
 
+.share-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+  z-index: 60;
+  margin: 0;
+  padding: 0.6rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-cjk);
+  font-size: 0.85rem;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+  opacity: 0;
+  transform: translate(-50%, 6px);
+  transition:
+    opacity 0.18s var(--ease),
+    transform 0.18s var(--ease);
+  pointer-events: none;
+}
+
+.share-toast.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .share-toast {
+    transition: opacity 0.18s linear;
+    transform: translate(-50%, 0);
+  }
+}
+
 .mobile-tabbar {
   display: none;
 }
@@ -1525,17 +1563,22 @@ body[data-view="browse"] .reading-scroll {
     box-sizing: border-box;
   }
 
-  /* Edit stays desktop-only; keep its grid slot empty on mobile via CSS. */
+  /* Edit stays desktop-only; keep its grid slot empty on mobile via CSS.
+     Share moves in to sit directly left of close. */
   .reading-bar {
-    grid-template-columns: var(--touch) minmax(0, 1fr) var(--touch);
+    grid-template-columns: var(--touch) minmax(0, 1fr) var(--touch) var(--touch);
   }
 
   .reading-bar .reading-edit {
     display: none !important;
   }
 
-  .reading-bar .reading-close {
+  .reading-bar .reading-share {
     grid-column: 3;
+  }
+
+  .reading-bar .reading-close {
+    grid-column: 4;
   }
 
   .chat-fab,

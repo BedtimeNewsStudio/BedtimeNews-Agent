@@ -196,6 +196,39 @@ def _validate_transcript_uri(doc_id: str) -> str:
     return path.as_posix()
 
 
+# Bitcoin/IPFS base58 alphabet: drops 0/O/I/l so short codes never mix up
+# visually similar characters when read aloud or retyped.
+_BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+_BASE58_SET = frozenset(_BASE58_ALPHABET)
+SHORT_ID_LENGTH = 8
+
+
+def _base58_encode(data: bytes) -> str:
+    n = int.from_bytes(data, "big")
+    if n == 0:
+        return _BASE58_ALPHABET[0]
+    digits = []
+    while n:
+        n, remainder = divmod(n, 58)
+        digits.append(_BASE58_ALPHABET[remainder])
+    return "".join(reversed(digits))
+
+
+def _short_id_for(doc_id: str) -> str:
+    """Deterministic short code for a doc_id: no lookup table to maintain,
+    no state that can drift from the source of truth. Derived purely from
+    the URI, so renaming a document's path also changes its short link."""
+    digest = hashlib.sha256(doc_id.encode()).digest()
+    code = _base58_encode(digest[:6])
+    if len(code) < SHORT_ID_LENGTH:
+        code = _BASE58_ALPHABET[0] * (SHORT_ID_LENGTH - len(code)) + code
+    return code[-SHORT_ID_LENGTH:]
+
+
+def _short_path(doc_id: str) -> str:
+    return f"/s/{_short_id_for(doc_id)}"
+
+
 def _etag_for_bytes(content: bytes) -> str:
     return f'"{hashlib.sha256(content).hexdigest()}"'
 
@@ -252,6 +285,34 @@ def _index_items(payload: dict) -> list[dict]:
     if not isinstance(items, list) or not all(isinstance(item, dict) for item in items):
         raise _UpstreamError(503, "文稿目录返回无效数据")
     return items
+
+
+_SHORT_ID_CACHE: dict[str, str] = {}
+
+
+async def _short_id_map(*, force_refresh: bool = False) -> dict[str, str]:
+    """short_id -> doc_id, rebuilt from the live transcript index.
+
+    There is no persisted mapping: short IDs are a pure function of doc_id
+    (see _short_id_for), so reversing one just means hashing every known
+    doc_id and matching. Kept in memory indefinitely rather than on a timer —
+    at this corpus size (~2000 docs) the whole map is a few hundred KB, so
+    the only reason to rebuild is a short_id the cached map doesn't have,
+    which a newly published document would trigger on its first lookup.
+    """
+    global _SHORT_ID_CACHE
+    if _SHORT_ID_CACHE and not force_refresh:
+        return _SHORT_ID_CACHE
+    items = _index_items(await _fetch_upstream_json(TRANSCRIPTS_ENDPOINT))
+    mapping: dict[str, str] = {}
+    for item in items:
+        try:
+            doc_id = _validate_transcript_uri(str(item.get("doc_id") or ""))
+        except ValueError:
+            continue
+        mapping[_short_id_for(doc_id)] = doc_id
+    _SHORT_ID_CACHE = mapping
+    return mapping
 
 
 def _display_title(item: dict) -> str:
@@ -705,6 +766,27 @@ async def sitemap_xml(request: Request) -> Response:
         media_type="application/xml",
         cache_control="public, max-age=300, must-revalidate",
     )
+
+
+@app.get("/s/{short_id}", include_in_schema=False)
+async def short_link(short_id: str) -> Response:
+    if len(short_id) != SHORT_ID_LENGTH or not _BASE58_SET.issuperset(short_id):
+        return PlainTextResponse("文稿不存在", status_code=404)
+    try:
+        mapping = await _short_id_map()
+        doc_id = mapping.get(short_id)
+        if doc_id is None:
+            # Not in the resident cache — could be a document published
+            # since the cache was built. Rebuild once before giving up.
+            mapping = await _short_id_map(force_refresh=True)
+            doc_id = mapping.get(short_id)
+    except _UpstreamError:
+        return PlainTextResponse("文稿服务暂时不可用", status_code=503)
+    if doc_id is None:
+        return PlainTextResponse("文稿不存在", status_code=404)
+    # 302, not 301: a renamed doc_id changes its short_id, so an old short
+    # link should be free to start 404ing rather than stick around cached.
+    return RedirectResponse(url=_transcript_path(doc_id), status_code=302)
 
 
 @app.get("/transcripts", include_in_schema=False)

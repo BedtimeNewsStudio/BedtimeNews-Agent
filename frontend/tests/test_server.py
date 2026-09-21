@@ -35,11 +35,13 @@ class _FakeUpstreamClient:
 @pytest.fixture
 def client():
     test_client = TestClient(server.app)
+    server._SHORT_ID_CACHE = {}
     try:
         yield test_client
     finally:
         test_client.close()
         server._client = None
+        server._SHORT_ID_CACHE = {}
 
 
 def _upstream_response(status_code, content=b""):
@@ -438,3 +440,58 @@ def test_sitemap_does_not_return_partial_success_on_bad_upstream(client):
 
     assert response.status_code == 503
     assert "temporarily unavailable" in response.text
+
+
+def test_short_link_redirects_to_the_matching_transcript(client):
+    doc_id = "ShuiQianXiaoXi/0001-0100/0001.md"
+    items = [_index_item(doc_id, "【睡前消息1】测试", "2025-01-01")]
+    server._client = _FakeJsonClient(_json_upstream(200, {"items": items}))
+
+    response = client.get(f"/s/{server._short_id_for(doc_id)}", follow_redirects=False)
+
+    assert response.status_code == 302
+    assert (
+        response.headers["location"] == "/transcripts/ShuiQianXiaoXi/0001-0100/0001.md"
+    )
+
+
+def test_short_link_is_deterministic_and_uses_the_restricted_alphabet(client):
+    short_id = server._short_id_for("ShuiQianXiaoXi/0001-0100/0001.md")
+
+    assert short_id == server._short_id_for("ShuiQianXiaoXi/0001-0100/0001.md")
+    assert len(short_id) == server.SHORT_ID_LENGTH
+    assert set(short_id) <= server._BASE58_SET
+    assert not set(short_id) & {"0", "O", "I", "l"}
+
+
+def test_short_link_rejects_malformed_ids_without_querying_upstream(client):
+    fake = _FakeJsonClient(_json_upstream(200, {"items": []}))
+    server._client = fake
+
+    too_short = client.get("/s/abc", follow_redirects=False)
+    bad_char = client.get("/s/0OIl1234", follow_redirects=False)
+
+    assert too_short.status_code == 404
+    assert bad_char.status_code == 404
+    assert fake.calls == []
+
+
+def test_short_link_retries_once_on_a_cache_miss_then_404s(client):
+    fake = _FakeJsonClient(_json_upstream(200, {"items": []}))
+    server._client = fake
+
+    response = client.get("/s/11111111", follow_redirects=False)
+
+    assert response.status_code == 404
+    assert len(fake.calls) == 2
+
+
+def test_short_link_returns_503_when_upstream_is_down(client):
+    server._client = _FakeJsonClient(error=httpx.ConnectError("offline"))
+
+    response = client.get(
+        f"/s/{server._short_id_for('ShuiQianXiaoXi/0001-0100/0001.md')}",
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 503
