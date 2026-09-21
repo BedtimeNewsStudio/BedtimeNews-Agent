@@ -8,6 +8,7 @@ not an automated test.
 
 Usage:
     # Score the labelled set and append the run to eval_results/retriever.json
+# (repo) or /var/log/agent/eval_results/retriever.json (container)
     docker compose run --rm --build \
       --volume ./agent/eval_results:/app/eval_results \
       agent python -m src.eval_retriever --labelled
@@ -50,7 +51,23 @@ from .models import RetrieveRequest
 from .retriever import retriever
 
 LABELLED_QUERIES_FILE = Path(__file__).with_name("eval_retriever_labels.json")
-DEFAULT_RESULTS_FILE = Path(__file__).parents[1] / "eval_results" / "retriever.json"
+
+
+def _default_results_file() -> Path:
+    """Local runs write into the repo; the container falls back to the log volume.
+
+    /app is read-only for the unprivileged container user, so the repo-relative
+    path is only used when it can actually be created.
+    """
+    repo_path = Path(__file__).parents[1] / "eval_results" / "retriever.json"
+    try:
+        repo_path.parent.mkdir(parents=True, exist_ok=True)
+        return repo_path
+    except OSError:
+        return Path("/var/log/agent/eval_results/retriever.json")
+
+
+DEFAULT_RESULTS_FILE = _default_results_file()
 
 
 def main():

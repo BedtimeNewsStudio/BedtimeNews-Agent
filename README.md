@@ -11,7 +11,7 @@
 ## 概述
 
 文稿原文与智能系统分属两个仓库：文稿原文在
-[睡前消息文稿库（BedtimeNews-Transcripts）](https://github.com/BedtimeNewsStudio/BedtimeNews-Transcripts)中维护；本仓库（BedtimeNews-Agent）索引这些文稿，并运行同时提供聊天问答与站内文稿阅读的网站——索引到的文稿直接作为站内内容供浏览，回答中的引用也跳转到应用内阅读器。基于 LangGraph、可插拔的 LLM/embedding 提供方（默认使用 DeepSeek 对话模型与 SiliconFlow 的 Qwen3 embedding）以及 PostgreSQL + pgvector 构建。
+[睡前消息文稿库（BedtimeNews-Transcripts）](https://github.com/BedtimeNewsStudio/BedtimeNews-Transcripts)中维护；本仓库（BedtimeNews-Agent）索引这些文稿，并运行同时提供聊天问答与站内文稿阅读的网站——索引到的文稿直接作为站内内容供浏览，回答中的引用也跳转到应用内阅读器。基于 LangGraph、任意 OpenAI-compatible 的对话/嵌入端点（默认模板使用 DeepSeek 对话模型与 SiliconFlow 的 Qwen3 embedding）以及 PostgreSQL + pgvector 构建。
 
 **核心功能：**
 
@@ -21,36 +21,6 @@
 - 将检索文稿作为回答上下文，并提供 Markdown 引用与引用修复
 - 自动化文档索引与增量更新
 - 网页界面：聊天提问 + 站内浏览/阅读文稿（引用直接跳转到应用内阅读器）
-
-## 内容覆盖
-
-本系统索引来自 [BedtimeNews-Transcripts](https://github.com/BedtimeNewsStudio/BedtimeNews-Transcripts) 的视频文稿，涵盖五个栏目：
-
-**节目目录：**
-
-| 栏目目录           | 节目名称   | 主讲           | 内容       |
-| ------------------ | ---------- | -------------- | ---------- |
-| `ShuiQianXiaoXi/`  | 睡前消息   | 马前卒（督工） | 主栏目     |
-| `CanKaoXinXi/`     | 参考信息   | 小黛每日口播   | 每日资讯   |
-| `ChanJingPoBiJi/`  | 产经破壁机 | 产经组         | 产业与商业 |
-| `JiangDianHeiHua/` | 讲点黑话   | 黑岛（老会计） | 历史与人物 |
-| `GaoJian/`         | 高见       | 高流           | 专题长文   |
-
-每篇文稿只有 `## 正文` 部分会被索引；`## 附录`（事实订正、核对记录）和
-`**发布日期**` 元数据行不进入检索。
-
-**主题分类：**
-
-1. **国内经济与产业** - 经济政策、产业发展、房地产、地方政府债务、城市发展
-2. **科技创新** - 人工智能、芯片、半导体、自动驾驶、航天、工程技术
-3. **跨境电商与出海** - SHEIN、TikTok、中国制造优势、全球市场
-4. **企业治理与监管** - 企业丑闻、审计、金融监管、食品安全、税收监管
-5. **国际关系与地缘政治** - 中美关系、俄乌冲突、中东局势、朝鲜半岛、印太地区
-6. **社会民生** - 教育、医疗、人口问题、社会福利、城市治理
-7. **加密货币与金融科技** - 比特币、区块链、去中心化金融、数字资产
-8. **人口与社会政策** - 人口危机、社会化抚养、教育体系、社会福利改革
-9. **基础设施与工程** - 铁路建设、能源基础设施、城市发展、公用事业
-10. **法律与司法事务** - 企业纠纷、刑事司法、消费者权益保护、监管框架
 
 ## 架构
 
@@ -64,6 +34,9 @@
 - **[Indexer](indexer/README.md)**：自动化文档 embedding 流水线
 - **Database**：PostgreSQL + pgvector 扩展的向量数据库
 
+索引范围：每篇文稿仅 `## 正文` 进入检索；`## 附录`（事实订正、核对记录）与
+`**发布日期**` 元数据行不索引。
+
 整个服务栈仅提供纯 HTTP（8080 端口），不做 TLS。公网暴露与 TLS 终止由本仓库之外的工作处理。
 
 ## 快速开始
@@ -71,7 +44,8 @@
 ### 前置要求
 
 - Docker
-- 所选提供方的 API 密钥（默认：对话用 `DEEPSEEK_API_KEY`，embedding 用 `SILICONFLOW_API_KEY`）
+- 生成与嵌入端点的 API 密钥——填入 `config.yml`（任意 OpenAI-compatible 供应商；
+  模板默认以 DeepSeek 对话、SiliconFlow Qwen3 embedding 为例）
 
 ### 安装步骤
 

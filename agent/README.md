@@ -196,10 +196,10 @@ embedding:
 
 **检索设置**：
 
-- `match_count`：默认 30（`RETRIEVAL_MATCH_COUNT`），增大可提高召回
-- `match_threshold`：默认 0.4（`MATCH_THRESHOLD`），增大可提高精确率
+- `match_count`：默认 30（`config.yml` 的 `retrieval_match_count`），增大可提高召回
+- `match_threshold`：默认 0.4（`config.yml` 的 `match_threshold`），增大可提高精确率
   （但结果更少）
-- `top_k`：默认 15（`RETRIEVAL_TOP_K`），送入评分的最大去重 chunk 数
+- `top_k`：默认 15（`config.yml` 的 `retrieval_top_k`），送入评分的最大去重 chunk 数
 - 查询改写重试目前在 `create_initial_state()` 中固定为一次，不通过
   环境变量配置
 

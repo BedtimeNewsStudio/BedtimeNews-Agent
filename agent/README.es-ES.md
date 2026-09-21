@@ -182,14 +182,10 @@ docker compose exec agent python -m src.eval_retriever --random 20
 
 ### Selección de Modelos
 
-El chat y los embeddings se configuran de forma independiente mediante
-`LLM_PROVIDER` y `EMBEDDING_PROVIDER`. Los nombres de los modelos se leen de
-variables de entorno con prefijo de proveedor, así que las claves dependen de
-los proveedores que elijas. Con los valores por defecto
-(`LLM_PROVIDER=deepseek`, `EMBEDDING_PROVIDER=siliconflow`). Cada grupo
-"endpoint compatible con OpenAI + modelo + clave" se configura bajo
-`generation` / `embedding` en `config.yml` (independiente del proveedor:
-DeepSeek, SiliconFlow, OpenAI o una pasarela propia solo cambian tres líneas):
+El chat y los embeddings son cada un grupo «endpoint compatible con OpenAI +
+modelo + clave», configurados de forma independiente bajo `generation` /
+`embedding` en `config.yml` (independiente del proveedor: DeepSeek,
+SiliconFlow, OpenAI o una pasarela propia solo cambian tres líneas):
 
 ```yaml
 generation:
@@ -217,11 +213,11 @@ embedding:
 
 **Ajustes de Recuperación:**
 
-- `match_count`: Por defecto 30 (`RETRIEVAL_MATCH_COUNT`), aumenta para mejor
+- `match_count`: Por defecto 30 (`retrieval_match_count` en `config.yml`), aumenta para mejor
   recall
-- `match_threshold`: Por defecto 0.4 (`MATCH_THRESHOLD`), aumenta para mayor
+- `match_threshold`: Por defecto 0.4 (`match_threshold` en `config.yml`), aumenta para mayor
   precisión (pero menos resultados)
-- `top_k`: Por defecto 15 (`RETRIEVAL_TOP_K`), máximo de chunks únicos
+- `top_k`: Por defecto 15 (`retrieval_top_k` en `config.yml`), máximo de chunks únicos
   enviados a calificación
 - El reintento de refinamiento de consultas está fijado actualmente a un solo
   reintento en `create_initial_state()`; no se configura mediante una variable

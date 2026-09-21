@@ -91,7 +91,7 @@
   <rect class="node" x="688" y="435" width="230" height="110" rx="16"/>
   <text class="num" x="803" y="463">06</text>
   <text class="label" x="803" y="499">Embed</text>
-  <text class="sub" x="803" y="528">batched provider API</text>
+  <text class="sub" x="803" y="528">batched embedding API</text>
 
   <rect class="node database" x="993" y="435" width="250" height="110" rx="16"/>
   <text class="num" x="1118" y="463">07</text>

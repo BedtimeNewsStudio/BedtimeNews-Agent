@@ -17,7 +17,7 @@ source transcripts are maintained in
 while this repo (BedtimeNews-Agent) indexes them and runs a website that serves
 both LLM-powered Q&A and in-app transcript reading — the indexed transcripts are
 served as in-app content, and citations in answers jump straight to the in-app
-reader. Built with LangGraph, pluggable LLM/embedding providers (DeepSeek for chat and SiliconFlow's Qwen3 embeddings by default), and PostgreSQL + pgvector.
+reader. Built with LangGraph, any OpenAI-compatible chat/embedding endpoints (the default template uses DeepSeek for chat and SiliconFlow's Qwen3 embeddings), and PostgreSQL + pgvector.
 
 **Key Features:**
 
@@ -29,38 +29,6 @@ reader. Built with LangGraph, pluggable LLM/embedding providers (DeepSeek for ch
 - Automated document indexing with incremental updates
 - Web interface: chat Q&A plus in-app transcript browsing/reading (citations
   jump straight to the in-app reader)
-
-## Content Coverage
-
-The system indexes video transcripts from [BedtimeNews-Transcripts](https://github.com/BedtimeNewsStudio/BedtimeNews-Transcripts)
-across five programs:
-
-**Program Catalog:**
-
-| Directory          | Name       | Host           | Content               |
-| ------------------ | ---------- | -------------- | --------------------- |
-| `ShuiQianXiaoXi/`  | 睡前消息   | 马前卒（督工） | Main program          |
-| `CanKaoXinXi/`     | 参考信息   | 小黛           | Daily news briefing   |
-| `ChanJingPoBiJi/`  | 产经破壁机 | 产经组         | Industry and business |
-| `JiangDianHeiHua/` | 讲点黑话   | 黑岛（老会计） | History and people    |
-| `GaoJian/`         | 高见       | 高流           | Long-form features    |
-
-Only each transcript's `## 正文` (body) section is indexed; the `## 附录`
-(appendix — fact corrections and verification notes) and the `**发布日期**`
-metadata line are excluded from retrieval.
-
-**Topic Categories:**
-
-1. **Domestic Economy & Industry** - Economic policy, industrial development, real estate, local government debt, urban development
-2. **Technology & Innovation** - AI, chips, semiconductors, autonomous vehicles, aerospace, engineering
-3. **Cross-border E-commerce & Global Expansion** - SHEIN, TikTok, Chinese manufacturing advantages, global markets
-4. **Corporate Governance & Regulation** - Corporate scandals, auditing, financial supervision, food safety, tax regulation
-5. **International Relations & Geopolitics** - US-China relations, Russia-Ukraine conflict, Middle East, Korean Peninsula, Indo-Pacific
-6. **Social Issues & Civil Life** - Education, healthcare, demographics, social welfare, urban governance
-7. **Cryptocurrency & Fintech** - Bitcoin, blockchain, decentralized finance, digital assets
-8. **Population & Social Policy** - Population crisis, socialized childcare, education system, social welfare reform
-9. **Infrastructure & Engineering** - Railway construction, energy infrastructure, urban development, public utilities
-10. **Law & Judicial Affairs** - Corporate disputes, criminal justice, consumer protection, regulatory frameworks
 
 ## Architecture
 
@@ -75,6 +43,10 @@ metadata line are excluded from retrieval.
 - **[Indexer](indexer/README.en.md)**: Automated document embedding pipeline
 - **Database**: PostgreSQL with pgvector extension as vector database
 
+Indexing scope: only each transcript's `## 正文` (body) section is indexed; the
+`## 附录` (appendix — fact corrections and verification notes) and the
+`**发布日期**` metadata line are excluded from retrieval.
+
 The stack serves plain HTTP on port 8080 — no TLS. Public exposure and TLS
 termination are handled outside this repo.
 
@@ -83,7 +55,9 @@ termination are handled outside this repo.
 ### Prerequisites
 
 - Docker
-- API keys for your chosen providers (by default: `DEEPSEEK_API_KEY` for chat and `SILICONFLOW_API_KEY` for embeddings)
+- API keys for the generation and embedding endpoints — filled into
+  `config.yml` (any OpenAI-compatible vendor; the default template uses
+  DeepSeek for chat and SiliconFlow Qwen3 embeddings as the example)
 
 ### Setup
 

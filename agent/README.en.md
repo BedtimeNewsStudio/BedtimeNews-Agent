@@ -204,9 +204,9 @@ embedding:
 
 **Retrieval Settings**:
 
-- `match_count`: Default 30 (`RETRIEVAL_MATCH_COUNT`), increase for better recall
-- `match_threshold`: Default 0.4 (`MATCH_THRESHOLD`), increase for higher precision (but fewer results)
-- `top_k`: Default 15 (`RETRIEVAL_TOP_K`), maximum unique chunks sent to grading
+- `match_count`: Default 30 (`retrieval_match_count` in `config.yml`), increase for better recall
+- `match_threshold`: Default 0.4 (`match_threshold` in `config.yml`), increase for higher precision (but fewer results)
+- `top_k`: Default 15 (`retrieval_top_k` in `config.yml`), maximum unique chunks sent to grading
 - Query refinement is currently fixed to one retry in `create_initial_state()`;
   it is not configured through an environment variable
 

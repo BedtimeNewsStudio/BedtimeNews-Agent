@@ -1,105 +1,106 @@
 {
   "schema_version": 1,
+  "note": "Labels use doc_ids from BedtimeNews-Transcripts contents/ paths as of 2026-09-21 (post 58-episode ChanJing backfill). Regenerated from the current proofread corpus.",
   "queries": [
     {
       "category": "local_debt",
-      "query": "独山县的债务总额是多少？利息水平如何？",
-      "doc_id": "main/101-200/140"
+      "query": "独山县那400亿债务后来怎么样了？那些烂尾的博物馆和奇葩建筑有人管吗？",
+      "doc_id": "ShuiQianXiaoXi/0101-0200/0140.md"
     },
     {
-      "category": "local_debt",
-      "query": "独山县有哪些标志性的政绩工程？",
-      "doc_id": "main/101-200/140"
+      "category": "drug_procurement",
+      "query": "集采药到底能不能吃？阿司匹林的检测实验说明了什么问题？",
+      "doc_id": "ShuiQianXiaoXi/0801-0900/0857.md"
     },
     {
-      "category": "population",
-      "query": "什么是社会化抚养？具体包括哪些内容？",
-      "doc_id": "main/201-300/267"
+      "category": "education_standardization",
+      "query": "学校里的开塞露都能畅销，标准化管理把学生和老师变成了什么样？",
+      "doc_id": "ShuiQianXiaoXi/0901-1000/0966.md"
     },
     {
-      "category": "population",
-      "query": "社会化抚养需要多少教育经费？钱从哪里来？",
-      "doc_id": "main/201-300/267"
+      "category": "international_politics",
+      "query": "南非的排外骚乱和祖马、MK党的排外政治有什么关系？",
+      "doc_id": "ShuiQianXiaoXi/1001-1100/1075.md"
     },
     {
-      "category": "population",
-      "query": "取消寒暑假和搞暑托班相比，哪个更合理？",
-      "doc_id": "main/201-300/296"
+      "category": "pension_finance",
+      "query": "银行为什么拼命拉着老百姓开个人养老金账户？",
+      "doc_id": "CanKaoXinXi/0301-0400/0393.md"
     },
     {
-      "category": "education",
-      "query": "衡水中学的作息时间是怎样安排的？",
-      "doc_id": "main/901-1000/966"
+      "category": "health_insurance",
+      "query": "居民医保的参保人数为什么连续七年下降？",
+      "doc_id": "CanKaoXinXi/0601-0700/0652.md"
     },
     {
-      "category": "education",
-      "query": "衡水模式的军事化管理具体有哪些措施？",
-      "doc_id": "main/901-1000/966"
+      "category": "housing_policy",
+      "query": "住建部的好房子标准从哪些方面提高了住房品质？",
+      "doc_id": "CanKaoXinXi/0601-0700/0653.md"
     },
     {
-      "category": "education",
-      "query": "衡水中学如何管理老师？老师违规会受到什么处罚？",
-      "doc_id": "main/901-1000/966"
+      "category": "county_industry",
+      "query": "江苏灌云的情趣内衣产业是怎么从雷丛瑞的淘宝店做起来的？",
+      "doc_id": "ChanJingPoBiJi/2026-04-24.md"
     },
     {
-      "category": "education",
-      "query": "山河四省指的是哪四个省？",
-      "doc_id": "main/501-600/545"
+      "category": "consumer_trends",
+      "query": "东海县的水晶是怎么从矿石生意变成年轻人的情绪生意的？",
+      "doc_id": "ChanJingPoBiJi/2026-05-06.md"
     },
     {
-      "category": "traditional_medicine",
-      "query": "世界卫生组织真的推荐连花清瘟吗？",
-      "doc_id": "main/401-500/417"
+      "category": "advanced_materials",
+      "query": "造LNG运输船用的殷瓦钢为什么难造？中国是怎么突破的？",
+      "doc_id": "ChanJingPoBiJi/2026-03-31.md"
     },
     {
-      "category": "traditional_medicine",
-      "query": "贾振华发表连花清瘟论文时隐瞒了什么利益关系？",
-      "doc_id": "main/201-300/288"
+      "category": "ai_infrastructure",
+      "query": "AI背后的token为什么跑到西北小城去生产？",
+      "doc_id": "ChanJingPoBiJi/2026-04-15.md"
     },
     {
-      "category": "traditional_medicine",
-      "query": "连花清瘟研究有没有进行双盲实验？",
-      "doc_id": "main/201-300/288"
+      "category": "ai_industry",
+      "query": "DeepSeek为什么被称为大模型行业的安卓时刻？",
+      "doc_id": "ChanJingPoBiJi/2025-03-16.md"
     },
     {
-      "category": "russia_ukraine",
-      "query": "俄罗斯的战略突袭为什么失败了？",
-      "doc_id": "main/401-500/409"
+      "category": "real_estate_policy",
+      "query": "中国放开1.0容积率和美式别墅有什么关系？",
+      "doc_id": "ChanJingPoBiJi/2024-09-15.md"
     },
     {
-      "category": "russia_ukraine",
-      "query": "泽连斯基坚持留在基辅有什么意义？",
-      "doc_id": "main/501-600/555"
+      "category": "local_industry",
+      "query": "北京亦庄是怎么从普通开发区变成产业资本平台的？",
+      "doc_id": "ChanJingPoBiJi/2025-11-24.md"
     },
     {
-      "category": "russia_ukraine",
-      "query": "星链在俄乌战争中发挥了什么作用？",
-      "doc_id": "main/501-600/555"
-    },
-    {
-      "category": "zhengwei",
-      "query": "王文银声称拥有多少海外铜矿储备？",
-      "doc_id": "main/501-600/504"
-    },
-    {
-      "category": "zhengwei",
-      "query": "正威集团的'旋转门'模式是什么意思？",
-      "doc_id": "main/501-600/517"
-    },
-    {
-      "category": "technology_engineering",
-      "query": "天龙三号试车为什么会发生事故？",
-      "doc_id": "opinion/19"
-    },
-    {
-      "category": "ai_chip",
-      "query": "DeepSeek为什么被称为大模型的'安卓时刻'？",
-      "doc_id": "business/83"
+      "category": "aerospace",
+      "query": "天龙三号火箭的试车为什么会发生事故？",
+      "doc_id": "GaoJian/0001-0100/0019.md"
     },
     {
       "category": "corporate_governance",
-      "query": "波音百年毁于会计：企业治理出了什么问题？",
-      "doc_id": "commercial/48"
+      "query": "波音这家百年企业是怎么毁在会计手里的？",
+      "doc_id": "JiangDianHeiHua/0001-0100/0048.md"
+    },
+    {
+      "category": "media_accuracy",
+      "query": "世卫组织的报告是怎么被媒体标题歪曲的？",
+      "doc_id": "ShuiQianXiaoXi/0401-0500/0417.md"
+    },
+    {
+      "category": "regional_economy",
+      "query": "重庆的经济总量追上广州了吗？经济普查为什么会调增数据？",
+      "doc_id": "CanKaoXinXi/0401-0500/0416.md"
+    },
+    {
+      "category": "robotics",
+      "query": "天津凭什么说机器人的大脑自己全能造？",
+      "doc_id": "ChanJingPoBiJi/2026-06-01.md"
+    },
+    {
+      "category": "pharma_industry",
+      "query": "中国制药四十年是怎么从仿制药走过来的？向美军学招标对药品集采有什么启发？",
+      "doc_id": "ShuiQianXiaoXi/0201-0300/0226.md"
     }
   ]
 }

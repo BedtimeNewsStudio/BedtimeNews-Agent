@@ -428,7 +428,7 @@ docker compose exec indexer ls -la data/BedtimeNews-Transcripts/
 
 **Embedding API errors:**
 
-- Check the embedding provider's API key (e.g. `SILICONFLOW_API_KEY`) in your environment
+- Check `embedding.api_key` in `config.yml`
 - Verify rate limits not exceeded
 - Check API usage in the provider's dashboard
 - `expected N dimensions, not M`: the model's output dimension doesn't match the

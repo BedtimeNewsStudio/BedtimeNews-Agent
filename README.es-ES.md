@@ -19,7 +19,7 @@ mientras que este repositorio (BedtimeNews-Agent) las indexa y opera un sitio
 web que sirve tanto Q&A impulsado por LLM como lectura de transcripciones dentro
 de la aplicación — las transcripciones indexadas se ofrecen como contenido del
 propio sitio, y las citas de las respuestas saltan directamente al lector
-integrado. Construido con LangGraph, proveedores de LLM/embedding conectables
+integrado. Construido con LangGraph, endpoints de chat/embedding compatibles con OpenAI
 (DeepSeek para chat y los embeddings Qwen3 de SiliconFlow por defecto), y
 PostgreSQL + pgvector.
 
@@ -33,38 +33,6 @@ PostgreSQL + pgvector.
 - Interfaz web: chat de preguntas y respuestas más navegación y lectura de
   transcripciones dentro del sitio (las citas saltan directamente al lector
   integrado)
-
-## Cobertura de Contenido
-
-El sistema indexa transcripciones de videos de [BedtimeNews-Transcripts](https://github.com/BedtimeNewsStudio/BedtimeNews-Transcripts)
-en cinco programas:
-
-**Catálogo de Programas:**
-
-| Directorio         | Nombre     | Presentador    | Contenido              |
-| ------------------ | ---------- | -------------- | ---------------------- |
-| `ShuiQianXiaoXi/`  | 睡前消息   | 马前卒（督工） | Programa principal     |
-| `CanKaoXinXi/`     | 参考信息   | 小黛           | Noticias diarias       |
-| `ChanJingPoBiJi/`  | 产经破壁机 | 产经组         | Industria y negocios   |
-| `JiangDianHeiHua/` | 讲点黑话   | 黑岛（老会计） | Historia y personajes  |
-| `GaoJian/`         | 高见       | 高流           | Artículos monográficos |
-
-Solo se indexa la sección `## 正文` (cuerpo) de cada transcripción; el `## 附录`
-(apéndice: correcciones y notas de verificación) y la línea de metadatos
-`**发布日期**` quedan fuera de la recuperación.
-
-**Categorías de Temas:**
-
-1. **Economía e Industria Doméstica** - Política económica, desarrollo industrial, bienes raíces, deuda de gobiernos locales, desarrollo urbano
-2. **Tecnología e Innovación** - IA, chips, semiconductores, vehículos autónomos, aeroespacial, ingeniería
-3. **Comercio Electrónico Transfronterizo y Expansión Global** - SHEIN, TikTok, ventajas de la manufactura china, mercados globales
-4. **Gobernanza Corporativa y Regulación** - Escándalos corporativos, auditoría, supervisión financiera, seguridad alimentaria, regulación fiscal
-5. **Relaciones Internacionales y Geopolítica** - Relaciones EE.UU.-China, conflicto Rusia-Ucrania, Oriente Medio, Península Coreana, Indo-Pacífico
-6. **Problemas Sociales y Vida Civil** - Educación, salud, demografía, bienestar social, gobernanza urbana
-7. **Criptomonedas y Finanzas Tecnológicas** - Bitcoin, blockchain, finanzas descentralizadas, activos digitales
-8. **Población y Políticas Sociales** - Crisis poblacional, cuidado infantil socializado, sistema educativo, reforma de bienestar social
-9. **Infraestructura e Ingeniería** - Construcción ferroviaria, infraestructura energética, desarrollo urbano, servicios públicos
-10. **Derecho y Asuntos Judiciales** - Disputas corporativas, justicia penal, protección del consumidor, marcos regulatorios
 
 ## Arquitectura
 
@@ -85,7 +53,9 @@ terminación TLS se gestionan fuera de este repositorio.
 ### Requisitos Previos
 
 - Docker
-- Claves API para tus proveedores elegidos (por defecto: `DEEPSEEK_API_KEY` para chat y `SILICONFLOW_API_KEY` para embeddings)
+- Claves API para los endpoints de generación y embeddings — se rellenan en
+  `config.yml` (cualquier proveedor compatible con OpenAI; la plantilla por
+  defecto usa DeepSeek para chat y Qwen3 embeddings de SiliconFlow como ejemplo)
 
 ### Configuración
 

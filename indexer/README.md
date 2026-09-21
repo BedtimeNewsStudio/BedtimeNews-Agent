@@ -416,7 +416,7 @@ docker compose exec indexer ls -la data/BedtimeNews-Transcripts/
 
 **Embedding API 报错：**
 
-- 检查环境中的 embedding 提供方 API 密钥（如 `SILICONFLOW_API_KEY`）
+- 检查 `config.yml` 中的 `embedding.api_key`
 - 确认未超出速率限制
 - 在提供方控制台查看 API 用量
 - `expected N dimensions, not M`：模型输出维度与 `embedding halfvec(N)`
