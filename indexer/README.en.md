@@ -71,7 +71,9 @@ include:
   # 讲点黑话
   - "JiangDianHeiHua/*/*.md"
 
-  # 产经破壁机
+  # 产经破壁机 (date-named since 2026-09; files sit at the section root)
+  - "ChanJingPoBiJi/*.md"
+  # 产经破壁机 (legacy numbered issues and misc/ specials, two-level paths)
   - "ChanJingPoBiJi/*/*.md"
 
 # Exclude patterns (processed after include)

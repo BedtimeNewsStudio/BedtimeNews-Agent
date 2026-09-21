@@ -8,6 +8,7 @@ required_uris:
   - GaoJian/0001-0100/0012.md
   - JiangDianHeiHua/0001-0100/0005.md
   - ChanJingPoBiJi/misc/biz-001.md
+  - ChanJingPoBiJi/2026-06-03.md
 
 include:
   - ShuiQianXiaoXi/0001-0100/0013.5.md
@@ -17,6 +18,7 @@ include:
   - GaoJian/0001-0100/0012.md
   - JiangDianHeiHua/0001-0100/0005.md
   - ChanJingPoBiJi/misc/biz-001.md
+  - ChanJingPoBiJi/2026-06-03.md
 
 exclude: []
 

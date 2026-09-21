@@ -19,6 +19,10 @@ include:
   - JiangDianHeiHua/*/*.md
 
   # 产经破壁机
+  # 2026-09 起该栏目改用发布日期命名，文稿直接位于栏目根目录。
+  - ChanJingPoBiJi/*.md
+
+  # 编号期（历史路径）与 misc/ 特辑仍为两级路径。
   - ChanJingPoBiJi/*/*.md
 
 # Exclude patterns (processed after include)

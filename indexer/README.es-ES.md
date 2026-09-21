@@ -75,7 +75,9 @@ include:
   # 讲点黑话
   - "JiangDianHeiHua/*/*.md"
 
-  # 产经破壁机
+  # 产经破壁机 (con fecha desde 2026-09; archivos en la raíz de la sección)
+  - "ChanJingPoBiJi/*.md"
+  # 产经破壁机 (números heredados y especiales misc/, rutas de dos niveles)
   - "ChanJingPoBiJi/*/*.md"
 
 # Patrones de exclusión (procesados después de la inclusión)

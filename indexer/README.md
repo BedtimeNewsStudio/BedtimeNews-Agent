@@ -67,7 +67,9 @@ include:
   # 讲点黑话
   - "JiangDianHeiHua/*/*.md"
 
-  # 产经破壁机
+  # 产经破壁机（2026-09 起按发布日期命名，文稿位于栏目根目录）
+  - "ChanJingPoBiJi/*.md"
+  # 产经破壁机（历史编号期与 misc/ 特辑，两级路径）
   - "ChanJingPoBiJi/*/*.md"
 
 # 排除规则（在包含之后处理）
