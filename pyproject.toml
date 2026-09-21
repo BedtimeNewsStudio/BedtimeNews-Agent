@@ -14,7 +14,7 @@
 
 [project]
 name = "bedtimenews"
-version = "0.3.3"
+version = "0.3.4"
 requires-python = ">=3.12"
 dependencies = [
     "bedtimenews-agent",
