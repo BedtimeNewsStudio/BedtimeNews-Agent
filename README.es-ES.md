@@ -98,19 +98,25 @@ terminación TLS se gestionan fuera de este repositorio.
 
 2. **Configurar el entorno**
 
-   Copia [`.env.example`](.env.example) a `.env` y configura:
+   Copia [`config.example.yml`](config.example.yml) a `config.yml` y configura:
+
+   ```bash
+   cp config.example.yml config.yml
+   # Edita config.yml — rellena los grupos generation / embedding
+   # (api_key + base_url + model; cualquier proveedor compatible con OpenAI)
+   ```
+
+   También copia `.env.example` a `.env` (cableado de despliegue: puertos,
+   tag de imagen, credenciales de postgres, `EMBEDDING_DIM` — solo esto sigue
+   yendo por variables de entorno):
 
    ```bash
    cp .env.example .env
-   # Editar .env 
    ```
 
-   > **Las claves API se leen del entorno del shell, no desde `.env`.** `.env` contiene configuración no secreta (selección de proveedor/modelo, puertos, configuración de BD); exporta tus secretos en el shell en su lugar, e.g.:
-   >
-   > ```bash
-   > export DEEPSEEK_API_KEY=...      # proveedor de chat
-   > export SILICONFLOW_API_KEY=...   # proveedor de embeddings
-   > ```
+   > **Prioridad: variables de entorno > `config.yml`** (claves anidadas con
+   > doble guion bajo, p.ej. `GENERATION__API_KEY`). Las claves y la config de
+   > aplicación viven en `config.yml`; ya no hace falta exportar claves.
 
 3. **Iniciar servicios**
 
@@ -162,7 +168,7 @@ Las versiones etiquetadas publican imágenes multi-arquitectura preconstruidas (
 Para desplegar una versión publicada, fija una versión con `IMAGE_TAG` en `.env` (por defecto `latest`) y descarga:
 
 ```bash
-IMAGE_TAG=0.1.0   # en .env, o dejar como latest
+# en .env: IMAGE_TAG=0.1.0
 docker compose pull
 docker compose up -d
 ```
@@ -238,8 +244,10 @@ BedtimeNews-Agent/
 ├── storage/            # Scripts de inicialización de base de datos
 │   └── postgres/
 ├── docker-compose.yml  # Orquestación de servicios
-├── .env                # Configuración del entorno (no en git)
-├── .env.example        # Plantilla de configuración del entorno
+├── config.yml          # Config de aplicación y claves (no en git, copiada del ejemplo)
+├── config.example.yml  # Plantilla de config de aplicación
+├── .env                # Cableado de despliegue (no en git, copiado de .env.example)
+├── .env.example        # Plantilla de cableado
 ├── THIRD_PARTY_NOTICES.md  # Licencias de componentes de terceros
 ├── README.md           # README predeterminado (中文)
 ├── README.en.md        # README en inglés

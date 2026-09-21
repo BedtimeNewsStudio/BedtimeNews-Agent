@@ -96,21 +96,25 @@ termination are handled outside this repo.
 
 2. **Configure environment**
 
-   Copy [`.env.example`](.env.example) to `.env` and configure:
+   Copy [`config.example.yml`](config.example.yml) to `config.yml` and configure:
+
+   ```bash
+   cp config.example.yml config.yml
+   # Edit config.yml — fill in the generation / embedding endpoint groups
+   # (api_key + base_url + model; any OpenAI-compatible vendor)
+   ```
+
+   Also copy `.env.example` to `.env` (deployment wiring: ports, image tag,
+   postgres credentials, `EMBEDDING_DIM` — only these still ride on
+   environment variables):
 
    ```bash
    cp .env.example .env
-   # Edit .env 
    ```
 
-   > **API keys are read from the shell environment, not from `.env`.** `.env`
-   > holds non-secret config (provider/model selection, ports, DB settings);
-   > export your secrets in the shell instead, e.g.:
-   >
-   > ```bash
-   > export DEEPSEEK_API_KEY=...      # chat provider
-   > export SILICONFLOW_API_KEY=...   # embedding provider
-   > ```
+   > **Precedence: real environment variables > `config.yml`** (nested keys use
+   > double underscores, e.g. `GENERATION__API_KEY`). Keys and app config live
+   > in `config.yml`; there is no need to export keys anymore.
 
 3. **Start services**
 
@@ -166,7 +170,7 @@ To deploy a published release, pin a version with `IMAGE_TAG` in `.env` (default
 `latest`) and pull:
 
 ```bash
-IMAGE_TAG=0.1.0   # in .env, or leave as latest
+# in .env: IMAGE_TAG=0.1.0
 docker compose pull
 docker compose up -d
 ```
@@ -249,8 +253,10 @@ BedtimeNews-Agent/
 ├── storage/            # Database initialization scripts
 │   └── postgres/
 ├── docker-compose.yml  # Service orchestration
-├── .env                # Environment configuration (not in git)
-├── .env.example        # Environment configuration template
+├── config.yml          # App + secrets config (not in git, copied from the example)
+├── config.example.yml  # App config template
+├── .env                # Deployment wiring (not in git, copied from .env.example)
+├── .env.example        # Deployment wiring template
 ├── THIRD_PARTY_NOTICES.md  # Third-party component licenses
 ├── README.md           # Project README (中文, default)
 ├── README.en.md        # English README (this file)

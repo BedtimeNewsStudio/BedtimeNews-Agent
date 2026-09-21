@@ -1,17 +1,17 @@
-"""Embedding generation using provider abstraction."""
+"""Embedding generation against the configured OpenAI-compatible endpoint."""
 
 import logging
 
 import tiktoken
+from openai import OpenAI as OpenAIClient
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from .providers import get_provider
 from .settings import settings
 
 logger = logging.getLogger(__name__)
 
-# Initialize embedding provider (module-level singleton)
-_provider = get_provider(settings.embedding_provider)
+# Module-level client singleton, pointed at the embedding endpoint from config.yml
+_client = OpenAIClient(**settings.embedding.client_kwargs())
 
 # Conservative per-input token limit for the embedding API
 MAX_TOKENS_PER_INPUT = 8191
@@ -22,7 +22,7 @@ def generate_embeddings(texts: list[str]) -> list[list[float]]:
     if not texts:
         return []
 
-    model = settings.embedding_model
+    model = settings.embedding.model
     batch_size = settings.embedding_batch_size
 
     # Validate and split oversized texts
@@ -171,4 +171,5 @@ def _merge_split_embeddings(
 )
 def _generate_batch(texts: list[str]) -> list[list[float]]:
     """Generate embeddings for a batch with retry logic."""
-    return _provider.generate_embeddings(texts)
+    response = _client.embeddings.create(input=texts, model=settings.embedding.model)
+    return [item.embedding for item in response.data]

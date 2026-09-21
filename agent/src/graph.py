@@ -68,12 +68,12 @@ from urllib.parse import quote
 
 from langchain_core.documents import Document
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.graph.state import CompiledStateGraph
 
 from .models import RetrieveRequest
-from .providers import get_provider
 from .retriever import retriever
 from .settings import settings
 from .uri_mapping import derive_title
@@ -81,20 +81,25 @@ from .vector_db import fetch_chunk_texts
 
 logger = logging.getLogger(__name__)
 
-# Initialize provider (module-level singleton)
-_provider = get_provider()
-
-# Cached LLM instances — created once and reused across all requests
-_fast_llm = _provider.get_chat_model(model=settings.fast_model, temperature=0)
-_generation_llm = _provider.get_chat_model(
-    model=settings.generation_model,
+# Cached LLM instances — created once and reused across all requests.
+# All three point at the generation endpoint (OpenAI-compatible; the vendor is
+# whatever config.yml points at).
+_fast_llm = ChatOpenAI(
+    model=settings.generation.fast_model or settings.generation.model,
+    temperature=0,
+    **settings.generation.client_kwargs("generation"),
+)
+_generation_llm = ChatOpenAI(
+    model=settings.generation.model,
     temperature=0.3,
     reasoning_effort="low",
+    **settings.generation.client_kwargs("generation"),
 )
-_direct_llm = _provider.get_chat_model(
-    model=settings.generation_model,
+_direct_llm = ChatOpenAI(
+    model=settings.generation.model,
     temperature=0.7,
     reasoning_effort="low",
+    **settings.generation.client_kwargs("generation"),
 )
 
 _GRADING_SYSTEM_PROMPT = """You are a document relevance grader.

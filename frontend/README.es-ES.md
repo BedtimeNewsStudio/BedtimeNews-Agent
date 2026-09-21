@@ -200,7 +200,7 @@ aplicación `/transcripts/…` (no GitHub Pages).
 
 ## Solución de Problemas
 
-**Puerto 8080 en uso:** establece `FRONTEND_PORT` en `.env` a otro puerto del
+**Puerto 8080 en uso:** establece `frontend_port` en `config.yml` a otro puerto del
 host y recrea el servicio (`docker compose up -d web`).
 
 **No se puede conectar al backend:**

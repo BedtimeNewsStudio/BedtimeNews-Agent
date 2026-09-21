@@ -82,22 +82,27 @@
    cd BedtimeNews-Agent
    ```
 
-2. **配置环境变量**
+2. **配置 `config.yml`**
 
-   复制[`.env.example`](.env.example)到`.env`并配置：
+   复制[`config.example.yml`](config.example.yml)为 `config.yml` 并填写（已被
+   `.gitignore`，不会入库）：
+
+   ```bash
+   cp config.example.yml config.yml
+   # 编辑 config.yml —— 填入 generation / embedding 两组端点：
+   # api_key + base_url + model（任意 OpenAI-compatible 供应商，如
+   # DeepSeek、SiliconFlow、OpenAI 或自建网关）
+   ```
+
+   同时复制 `.env.example` 为 `.env`（部署布线：端口、镜像 tag、postgres 凭据、
+   `EMBEDDING_DIM` 等，仅这些内容仍走环境变量）：
 
    ```bash
    cp .env.example .env
-   # 编辑 .env
    ```
 
-   > **API 密钥从 shell 环境变量读取，而非 `.env` 文件。** `.env` 仅保存非敏感配置
-   > （提供方/模型选择、端口、数据库设置）；请在 shell 中导出密钥，例如：
-   >
-   > ```bash
-   > export DEEPSEEK_API_KEY=...      # 对话提供方
-   > export SILICONFLOW_API_KEY=...   # embedding 提供方
-   > ```
+   > **优先级：进程环境变量 > `config.yml`**（嵌套键用双下划线，如
+   > `GENERATION__API_KEY`）。密钥等应用配置以 `config.yml` 为准，不再需要导出密钥。
 
 3. **启动服务**
 
@@ -151,7 +156,7 @@ uv run pytest --cov
 再拉取镜像：
 
 ```bash
-IMAGE_TAG=0.1.0   # 写在 .env 中，或保持 latest
+# .env 中： IMAGE_TAG=0.1.0
 docker compose pull
 docker compose up -d
 ```
@@ -232,8 +237,10 @@ BedtimeNews-Agent/
 ├── storage/            # 数据库初始化脚本
 │   └── postgres/
 ├── docker-compose.yml  # 服务编排
-├── .env                # 环境配置（不在 git 中）
-├── .env.example        # 环境配置模板
+├── config.yml          # 应用与密钥配置（不在 git 中，由 example 复制）
+├── config.example.yml  # 应用配置模板
+├── .env                # 部署布线配置（不在 git 中，由 .env.example 复制）
+├── .env.example        # 部署布线模板
 ├── THIRD_PARTY_NOTICES.md  # 第三方组件许可证
 ├── README.md           # 默认自述文件（中文，本文件）
 ├── README.en.md        # 英文版自述文件

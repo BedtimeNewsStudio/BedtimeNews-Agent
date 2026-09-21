@@ -170,7 +170,7 @@ Frontend 代理 agent 的 `/chat` 端点。
 
 ## 故障排查
 
-**8080 端口被占用：** 在 `.env` 中把 `FRONTEND_PORT` 设为其它宿主机端口，
+**8080 端口被占用：** 在 `config.yml` 中把 `frontend_port` 设为其它宿主机端口，
 并重建服务（`docker compose up -d web`）。
 
 **无法连接后端：**

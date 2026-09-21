@@ -30,17 +30,12 @@ markdown 文件、生成 embedding，并存入 PostgreSQL + pgvector。
 
 ### Cron 调度
 
-在 `.env` 中设置：
+在 `config.yml` 中设置：
 
-```bash
-# 每小时（默认）
-INDEXER_CRON_SCHEDULE="0 * * * *"
-
-# 每 30 分钟
-INDEXER_CRON_SCHEDULE="*/30 * * * *"
-
-# 每天凌晨 2 点
-INDEXER_CRON_SCHEDULE="0 2 * * *"
+```yaml
+indexer_cron_schedule: "0 * * * *"      # 每小时（默认）
+# indexer_cron_schedule: "*/30 * * * *" # 每 30 分钟
+# indexer_cron_schedule: "0 2 * * *"    # 每天凌晨 2 点
 ```
 
 ### 本地小样本模式
@@ -200,7 +195,7 @@ LEFT JOIN 这张表，把引用渲染成标准化标题而不是原始 URI。每
 
 ## 更换 Embedding 模型
 
-在 `.env` 中更换 `EMBEDDING_PROVIDER` / `*_EMBEDDING_MODEL` **不是**
+在 `config.yml` 中更换 `embedding.model`（及其端点）**不是**
 即插即用的替换。必须对整个语料库重新 embedding，原因：
 
 - 不同模型的向量**不可比较**，即使维度相同——因此更换模型总是需要
@@ -221,7 +216,7 @@ LEFT JOIN 这张表，把引用渲染成标准化标题而不是原始 URI。每
 # 1. 停止服务
 docker compose down
 
-# 2. 编辑 .env：设置新的 EMBEDDING_PROVIDER / *_EMBEDDING_MODEL（及 API 密钥）。
+# 2. 编辑 config.yml：更新 embedding 组（model / base_url / api_key）。
 
 # 3. 查出新模型的输出维度（提供方文档），记为 N。
 
@@ -431,7 +426,7 @@ docker compose exec indexer ls -la data/BedtimeNews-Transcripts/
 **数据库连接失败：**
 
 - 确认 postgres 在运行：`docker compose ps postgres`
-- 检查 `.env` 中的凭据
+- 检查 `config.yml` 中的凭据
 - 测试连接：`docker compose exec indexer python -m src.debugger test`
 
 **调度器未运行：**

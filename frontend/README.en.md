@@ -182,7 +182,7 @@ paths (not GitHub Pages).
 
 ## Troubleshooting
 
-**Port 8080 in use:** set `FRONTEND_PORT` in `.env` to another host port and
+**Port 8080 in use:** set `frontend_port` in `config.yml` to another host port and
 recreate the service (`docker compose up -d web`).
 
 **Cannot connect to backend:**
