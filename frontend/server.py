@@ -352,6 +352,10 @@ def _render_archive_groups(items: list[dict], channel: str) -> str:
     return f'<section class="archive-group"><ol class="archive-list">{"".join(rows)}</ol></section>'
 
 
+SITE_LOGO_WIDTH = 128
+SITE_LOGO_HEIGHT = 128
+
+
 def _seo_head(
     *,
     title: str,
@@ -359,8 +363,10 @@ def _seo_head(
     canonical_url: str,
     og_type: str,
     article: dict | None = None,
+    extra_json_ld: list[dict] | None = None,
     noindex: bool = False,
 ) -> str:
+    image_url = _absolute_url("/bedtimenews.webp")
     tags = []
     if noindex:
         tags.append('<meta name="robots" content="noindex" />')
@@ -373,7 +379,14 @@ def _seo_head(
             f'<meta property="og:type" content="{escape(og_type, quote=True)}" />',
             f'<meta property="og:url" content="{escape(canonical_url, quote=True)}" />',
             '<meta property="og:locale" content="zh_CN" />',
-            f'<meta property="og:image" content="{escape(_absolute_url("/bedtimenews.webp"), quote=True)}" />',
+            f'<meta property="og:image" content="{escape(image_url, quote=True)}" />',
+            '<meta property="og:image:type" content="image/webp" />',
+            f'<meta property="og:image:width" content="{SITE_LOGO_WIDTH}" />',
+            f'<meta property="og:image:height" content="{SITE_LOGO_HEIGHT}" />',
+            '<meta name="twitter:card" content="summary" />',
+            f'<meta name="twitter:title" content="{escape(title, quote=True)}" />',
+            f'<meta name="twitter:description" content="{escape(description, quote=True)}" />',
+            f'<meta name="twitter:image" content="{escape(image_url, quote=True)}" />',
         ]
     )
     if article:
@@ -390,7 +403,29 @@ def _seo_head(
             + _safe_json_script(article["json_ld"])
             + "</script>"
         )
+    for extra in extra_json_ld or []:
+        tags.append(
+            '<script type="application/ld+json">'
+            + _safe_json_script(extra)
+            + "</script>"
+        )
     return "\n  ".join(tags)
+
+
+def _breadcrumb_json_ld(*crumbs: tuple[str, str]) -> dict:
+    return {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+            {
+                "@type": "ListItem",
+                "position": position,
+                "name": name,
+                "item": _absolute_url(path),
+            }
+            for position, (name, path) in enumerate(crumbs, start=1)
+        ],
+    }
 
 
 def _render_shell(
@@ -411,6 +446,7 @@ def _render_shell(
     reader_state: str = "",
     reader_visible: bool = False,
     article: dict | None = None,
+    extra_json_ld: list[dict] | None = None,
     noindex: bool = False,
 ) -> str:
     canonical_url = _absolute_url(canonical_path)
@@ -423,6 +459,7 @@ def _render_shell(
             canonical_url=canonical_url,
             og_type=og_type,
             article=article,
+            extra_json_ld=extra_json_ld,
             noindex=noindex,
         ),
         "__BODY_VIEW__": escape(body_view, quote=True),
@@ -618,10 +655,19 @@ async def transcript_detail(doc_id: str, request: Request) -> Response:
 
 @app.get("/", include_in_schema=False)
 async def home(request: Request) -> Response:
+    website_json_ld = {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": SITE_NAME,
+        "description": SITE_DESCRIPTION,
+        "url": _absolute_url("/"),
+        "inLanguage": "zh-CN",
+    }
     html = _render_shell(
         title=SITE_NAME,
         description=SITE_DESCRIPTION,
         canonical_path="/",
+        extra_json_ld=[website_json_ld],
     )
     return _generated_response(request, html, media_type="text/html")
 
@@ -696,6 +742,7 @@ async def transcript_archive(
     channel_title = CHANNEL_LABELS[selected]
     page_title = f"{channel_title}文稿 · {SITE_NAME}"
     description = f"浏览{channel_title}栏目全部 {len(scoped)} 篇文稿，按北京时间发布日期倒序排列。"
+    breadcrumb = _breadcrumb_json_ld(("首页", "/"), (channel_title, canonical_path))
     html = _render_shell(
         title=page_title,
         description=description,
@@ -706,6 +753,7 @@ async def transcript_archive(
         archive_title=channel_title,
         archive_groups=groups,
         archive_visible=True,
+        extra_json_ld=[breadcrumb],
     )
     return _generated_response(request, html, media_type="text/html")
 
@@ -771,6 +819,13 @@ async def transcript_page(doc_id: str, request: Request) -> Response:
     }
     channel = str(article.get("channel") or "")
     active_channel = channel if channel in CHANNEL_LABELS else None
+    breadcrumb_crumbs = [("首页", "/")]
+    if active_channel:
+        breadcrumb_crumbs.append(
+            (CHANNEL_LABELS[active_channel], _channel_path(active_channel))
+        )
+    breadcrumb_crumbs.append((display_title, canonical_path))
+    breadcrumb = _breadcrumb_json_ld(*breadcrumb_crumbs)
     html = _render_shell(
         title=f"{display_title} · {SITE_NAME}",
         description=description,
@@ -784,6 +839,7 @@ async def transcript_page(doc_id: str, request: Request) -> Response:
         reader_body=article["body_html"],
         reader_visible=True,
         article=article_metadata,
+        extra_json_ld=[breadcrumb],
     )
     return _generated_response(request, html, media_type="text/html")
 

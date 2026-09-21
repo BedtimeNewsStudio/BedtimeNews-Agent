@@ -207,6 +207,13 @@ def test_root_is_server_rendered_with_crawlable_channel_links(client):
     assert '<script type="module" src="/app.js"></script>' in response.text
     assert "__PAGE_" not in response.text
     assert "etag" in response.headers
+    assert '<meta name="twitter:card" content="summary" />' in response.text
+    assert '<meta property="og:image:width" content="128" />' in response.text
+    match = re.search(
+        r'<script type="application/ld\+json">(.*?)</script>', response.text, re.S
+    )
+    assert match is not None
+    assert json.loads(match.group(1))["@type"] == "WebSite"
 
 
 def test_index_html_redirects_to_canonical_root(client):
@@ -247,6 +254,16 @@ def test_channel_archive_is_server_rendered_and_sorted(client):
     )
     assert "【高见1】其它栏目" not in response.text
     assert 'href="/transcripts/ShuiQianXiaoXi/0001-0100/0002.md"' in response.text
+    match = re.search(
+        r'<script type="application/ld\+json">(.*?)</script>', response.text, re.S
+    )
+    assert match is not None
+    breadcrumb = json.loads(match.group(1))
+    assert breadcrumb["@type"] == "BreadcrumbList"
+    assert [item["name"] for item in breadcrumb["itemListElement"]] == [
+        "首页",
+        "睡前消息",
+    ]
 
 
 def test_transcript_page_contains_raw_ssr_body_and_safe_metadata(client):
@@ -265,15 +282,22 @@ def test_transcript_page_contains_raw_ssr_body_and_safe_metadata(client):
         '<link rel="canonical" href="https://bedtime.blog/transcripts/ShuiQianXiaoXi/0501-0600/0588.md"'
         in response.text
     )
-    match = re.search(
+    matches = re.findall(
         r'<script type="application/ld\+json">(.*?)</script>', response.text, re.S
     )
-    assert match is not None
-    assert "</script>" not in match.group(1)
-    structured = json.loads(match.group(1))
-    assert structured["@type"] == "Article"
-    assert structured["headline"] == hostile_title
-    assert structured["datePublished"] == "2025-02-03"
+    assert len(matches) == 2
+    for raw in matches:
+        assert "</script>" not in raw
+    structured_by_type = {json.loads(raw)["@type"]: json.loads(raw) for raw in matches}
+    article = structured_by_type["Article"]
+    assert article["headline"] == hostile_title
+    assert article["datePublished"] == "2025-02-03"
+    breadcrumb = structured_by_type["BreadcrumbList"]
+    assert [item["name"] for item in breadcrumb["itemListElement"]] == [
+        "首页",
+        "睡前消息",
+        hostile_title,
+    ]
     assert response.headers["cache-control"] == "no-cache"
     assert response.headers["x-content-type-options"] == "nosniff"
     assert "frame-src 'none'" in response.headers["content-security-policy"]
