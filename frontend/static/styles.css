@@ -279,6 +279,7 @@ body {
   min-height: 2rem;
   padding: 0.35rem 0.65rem;
   cursor: pointer;
+  text-decoration: none;
 }
 
 .channel-chip:hover,
@@ -1400,6 +1401,15 @@ body[data-view="browse"] .reading-scroll {
 }
 
 /* Desktop only: channel chips live in the masthead. */
+.noscript-note {
+  margin: 0;
+  padding: 0.55rem 1rem;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.82rem;
+  text-align: center;
+}
+
 .mobile-tabbar {
   display: none;
 }
@@ -1646,6 +1656,7 @@ body[data-view="browse"] .reading-scroll {
     letter-spacing: 0.12em;
     cursor: pointer;
     padding: 0.85rem 0.5rem;
+    text-decoration: none;
   }
 
   /* Vertical split between the two halves — reads as two tappable regions. */

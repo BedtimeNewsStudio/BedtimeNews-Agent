@@ -417,8 +417,8 @@ function renderChannelBar(items) {
   });
 
   const chips = ordered.map((channel) => {
-    const chip = document.createElement("button");
-    chip.type = "button";
+    const chip = document.createElement("a");
+    chip.href = `/transcripts?channel=${encodeURIComponent(channel)}`;
     chip.className = "channel-chip";
     chip.dataset.channel = channel;
     chip.textContent = channelLabel(channel);
@@ -720,10 +720,16 @@ async function showArchive(generation, channel) {
 }
 
 function prepareReader(uri) {
+  const preservesServerRender =
+    document.body.dataset.ssrDocId === uri && Boolean(els.readerBody.innerHTML.trim());
   currentArticle = null;
-  els.readerState.textContent = "正在接收文稿…";
-  els.readerTitle.textContent = "";
-  els.readerBody.replaceChildren();
+  if (!preservesServerRender) {
+    els.readerState.textContent = "正在接收文稿…";
+    els.readerTitle.textContent = "";
+    els.readerBody.replaceChildren();
+  } else {
+    els.readerState.textContent = "";
+  }
   if (els.readingEdit) {
     els.readingEdit.hidden = false;
     els.readingEdit.classList.add("is-slot-hidden");
@@ -759,6 +765,7 @@ async function showReader(uri, generation) {
     document.title = `${article.canonical_title || article.source_title} · 睡前消息知识库`;
     els.readerTitle.textContent = article.source_title || article.canonical_title || "";
     els.readerBody.innerHTML = article.body_html;
+    delete document.body.dataset.ssrDocId;
     for (const link of els.readerBody.querySelectorAll("a")) {
       const href = link.getAttribute("href") || "";
       if (href.startsWith("/transcripts/")) {
@@ -890,6 +897,7 @@ els.archiveSearch.addEventListener("input", () => renderArchive());
 els.channelBar.addEventListener("click", (event) => {
   const chip = event.target.closest(".channel-chip");
   if (!chip) return;
+  event.preventDefault();
   const channel = chip.dataset.channel;
   try {
     sessionStorage.setItem("archive-channel", channel);
@@ -900,8 +908,12 @@ els.channelBar.addEventListener("click", (event) => {
 });
 els.readingClose.addEventListener("click", () => navigate("/"));
 
-els.tabChat?.addEventListener("click", () => navigate("/"));
-els.tabArchive?.addEventListener("click", () => {
+els.tabChat?.addEventListener("click", (event) => {
+  event.preventDefault();
+  navigate("/");
+});
+els.tabArchive?.addEventListener("click", (event) => {
+  event.preventDefault();
   openArchiveTab();
 });
 mobileDrawer.addEventListener("change", () => {

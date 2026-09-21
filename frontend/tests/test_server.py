@@ -1,4 +1,6 @@
 import json
+import re
+import xml.etree.ElementTree as ET
 
 import httpx
 import pytest
@@ -120,12 +122,15 @@ def test_gzip_compresses_static_text_but_not_event_stream(client):
 
 
 class _FakeJsonClient:
-    def __init__(self, response):
+    def __init__(self, response=None, error=None):
         self.response = response
+        self.error = error
         self.calls = []
 
     async def get(self, url, **kwargs):
         self.calls.append((url, kwargs))
+        if self.error:
+            raise self.error
         return self.response
 
 
@@ -165,11 +170,247 @@ def test_transcript_detail_percent_encodes_upstream_uri(client):
     assert upstream.calls[0][0].endswith("/%E6%A0%8F%E7%9B%AE/%E4%B8%80%E6%9C%9F.md")
 
 
-def test_transcript_deep_links_return_spa_and_security_headers(client):
+def _article_payload(**overrides):
+    payload = {
+        "doc_id": "ShuiQianXiaoXi/0501-0600/0588.md",
+        "canonical_title": "睡前消息588",
+        "source_title": "【睡前消息588】测试文稿",
+        "channel": "ShuiQianXiaoXi",
+        "publication_date": "2025-02-03",
+        "updated_at": "2026-09-21T04:50:37+00:00",
+        "body_html": "<p>这是已经清洗的<strong>正文内容</strong>。</p>",
+    }
+    payload.update(overrides)
+    return payload
+
+
+def _index_item(doc_id, title, date, channel="ShuiQianXiaoXi"):
+    return {
+        "doc_id": doc_id,
+        "canonical_title": title.split("】", 1)[0].removeprefix("【"),
+        "source_title": title,
+        "channel": channel,
+        "publication_date": date,
+        "source_hash": "hash",
+        "updated_at": f"{date}T12:00:00+00:00",
+    }
+
+
+def test_root_is_server_rendered_with_crawlable_channel_links(client):
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert '<link rel="canonical" href="https://bedtime.blog/"' in response.text
+    assert '<meta property="og:type" content="website"' in response.text
+    assert response.text.count('class="channel-chip"') == 5
+    assert 'href="/transcripts?channel=ShuiQianXiaoXi"' in response.text
+    assert '<script type="module" src="/app.js"></script>' in response.text
+    assert "__PAGE_" not in response.text
+    assert "etag" in response.headers
+
+
+def test_index_html_redirects_to_canonical_root(client):
+    response = client.get("/index.html", follow_redirects=False)
+
+    assert response.status_code == 308
+    assert response.headers["location"] == "/"
+
+
+def test_channel_archive_is_server_rendered_and_sorted(client):
+    items = [
+        _index_item(
+            "ShuiQianXiaoXi/0001-0100/0001.md",
+            "【睡前消息1】旧文稿",
+            "2025-01-01",
+        ),
+        _index_item(
+            "ShuiQianXiaoXi/0001-0100/0002.md",
+            "【睡前消息2】新文稿",
+            "2026-01-01",
+        ),
+        _index_item(
+            "GaoJian/0001-0100/0001.md", "【高见1】其它栏目", "2026-02-01", "GaoJian"
+        ),
+    ]
+    server._client = _FakeJsonClient(_json_upstream(200, {"items": items}))
+
+    response = client.get("/transcripts?channel=ShuiQianXiaoXi")
+
+    assert response.status_code == 200
+    assert "睡前消息文稿 · 睡前消息知识库" in response.text
+    assert (
+        '<link rel="canonical" href="https://bedtime.blog/transcripts?channel=ShuiQianXiaoXi"'
+        in response.text
+    )
+    assert response.text.index("【睡前消息2】新文稿") < response.text.index(
+        "【睡前消息1】旧文稿"
+    )
+    assert "【高见1】其它栏目" not in response.text
+    assert 'href="/transcripts/ShuiQianXiaoXi/0001-0100/0002.md"' in response.text
+
+
+def test_transcript_page_contains_raw_ssr_body_and_safe_metadata(client):
+    hostile_title = '题目</title><script>alert("x")</script>'
+    article = _article_payload(source_title=hostile_title)
+    server._client = _FakeJsonClient(_json_upstream(200, article))
+
     response = client.get("/transcripts/ShuiQianXiaoXi/0501-0600/0588.md")
 
     assert response.status_code == 200
-    assert "睡前消息知识库" in response.text
+    assert article["body_html"] in response.text
+    assert hostile_title not in response.text
+    assert "题目&lt;/title&gt;&lt;script&gt;" in response.text
+    assert '<meta property="og:type" content="article"' in response.text
+    assert (
+        '<link rel="canonical" href="https://bedtime.blog/transcripts/ShuiQianXiaoXi/0501-0600/0588.md"'
+        in response.text
+    )
+    match = re.search(
+        r'<script type="application/ld\+json">(.*?)</script>', response.text, re.S
+    )
+    assert match is not None
+    assert "</script>" not in match.group(1)
+    structured = json.loads(match.group(1))
+    assert structured["@type"] == "Article"
+    assert structured["headline"] == hostile_title
+    assert structured["datePublished"] == "2025-02-03"
     assert response.headers["cache-control"] == "no-cache"
     assert response.headers["x-content-type-options"] == "nosniff"
     assert "frame-src 'none'" in response.headers["content-security-policy"]
+
+
+def test_transcript_html_supports_etag_revalidation(client):
+    server._client = _FakeJsonClient(_json_upstream(200, _article_payload()))
+    first = client.get("/transcripts/ShuiQianXiaoXi/0501-0600/0588.md")
+
+    second = client.get(
+        "/transcripts/ShuiQianXiaoXi/0501-0600/0588.md",
+        headers={"If-None-Match": first.headers["etag"]},
+    )
+
+    assert second.status_code == 304
+    assert second.headers["etag"] == first.headers["etag"]
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/transcripts/not-markdown.txt",
+        "/transcripts/a/%2E%2E/b.md",
+        "/transcripts/a/%5Cb.md",
+        "/transcripts/a//b.md",
+    ],
+)
+def test_malformed_transcript_routes_are_real_404s(client, path):
+    response = client.get(path)
+
+    assert response.status_code == 404
+    assert '<meta name="robots" content="noindex"' in response.text
+
+
+def test_missing_transcript_is_a_real_404(client):
+    server._client = _FakeJsonClient(_json_upstream(404, {"detail": "not found"}))
+
+    response = client.get("/transcripts/ShuiQianXiaoXi/0001-0100/0001.md")
+
+    assert response.status_code == 404
+    assert '<meta name="robots" content="noindex"' in response.text
+    assert "这篇文稿不存在" in response.text
+
+
+def test_invalid_or_missing_channel_does_not_create_soft_200(client):
+    redirect = client.get("/transcripts", follow_redirects=False)
+    unknown = client.get("/transcripts?channel=Unknown")
+    duplicate = client.get("/transcripts?channel=ShuiQianXiaoXi&channel=GaoJian")
+
+    assert redirect.status_code == 308
+    assert redirect.headers["location"] == "/"
+    assert unknown.status_code == duplicate.status_code == 404
+    assert "noindex" in unknown.text
+
+
+def test_upstream_timeout_returns_controlled_503_page(client):
+    server._client = _FakeJsonClient(error=httpx.ReadTimeout("timed out"))
+
+    response = client.get("/transcripts/ShuiQianXiaoXi/0001-0100/0001.md")
+
+    assert response.status_code == 503
+    assert '<meta name="robots" content="noindex"' in response.text
+    assert "文稿服务暂时不可用" in response.text
+
+
+def test_robots_txt_advertises_sitemap_and_revalidates(client):
+    first = client.get("/robots.txt")
+
+    assert first.status_code == 200
+    assert first.headers["content-type"].startswith("text/plain")
+    assert first.text == (
+        "User-agent: *\nAllow: /\nSitemap: https://bedtime.blog/sitemap.xml\n"
+    )
+    second = client.get("/robots.txt", headers={"If-None-Match": first.headers["etag"]})
+    assert second.status_code == 304
+
+
+def test_sitemap_contains_root_channels_articles_and_lastmods(client):
+    items = [
+        _index_item(
+            "ShuiQianXiaoXi/0001-0100/0001.md",
+            "【睡前消息1】测试",
+            "2025-01-01",
+        ),
+        _index_item(
+            "产经/一期.md",
+            "【产经破壁机2026-06-02】测试",
+            "2026-06-02",
+            "ChanJingPoBiJi",
+        ),
+    ]
+    fake = _FakeJsonClient(_json_upstream(200, {"items": items}))
+    server._client = fake
+
+    response = client.get("/sitemap.xml")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/xml")
+    root = ET.fromstring(response.content)
+    namespace = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
+    locations = [element.text for element in root.findall("sm:url/sm:loc", namespace)]
+    assert locations == [
+        "https://bedtime.blog/",
+        "https://bedtime.blog/transcripts?channel=ShuiQianXiaoXi",
+        "https://bedtime.blog/transcripts?channel=ChanJingPoBiJi",
+        "https://bedtime.blog/transcripts/ShuiQianXiaoXi/0001-0100/0001.md",
+        "https://bedtime.blog/transcripts/%E4%BA%A7%E7%BB%8F/%E4%B8%80%E6%9C%9F.md",
+    ]
+    assert len(root.findall("sm:url/sm:lastmod", namespace)) == len(locations)
+    assert len(fake.calls) == 1
+
+
+def test_sitemap_emits_full_current_scale_without_detail_fetches(client):
+    items = [
+        _index_item(
+            f"ShuiQianXiaoXi/0001-2000/{number:04d}.md",
+            f"【睡前消息{number}】测试",
+            "2026-01-01",
+        )
+        for number in range(1, 1838)
+    ]
+    fake = _FakeJsonClient(_json_upstream(200, {"items": items}))
+    server._client = fake
+
+    response = client.get("/sitemap.xml")
+
+    assert response.status_code == 200
+    root = ET.fromstring(response.content)
+    namespace = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
+    assert len(root.findall("sm:url", namespace)) == 1839  # root + channel + docs
+    assert len(fake.calls) == 1
+
+
+def test_sitemap_does_not_return_partial_success_on_bad_upstream(client):
+    server._client = _FakeJsonClient(error=httpx.ConnectError("offline"))
+
+    response = client.get("/sitemap.xml")
+
+    assert response.status_code == 503
+    assert "temporarily unavailable" in response.text

@@ -5,8 +5,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#212121" id="theme-color-meta" />
-  <title>睡前消息知识库</title>
-  <meta name="description" content="在同一处阅读睡前消息文稿，并随时向知识库 Agent 提问。" />
+  <title>__PAGE_TITLE__</title>
+  <meta name="description" content="__PAGE_DESCRIPTION__" />
+  <!--SSR_HEAD-->
   <link rel="icon" type="image/webp" href="/bedtimenews.webp" />
   <script>
     // Set theme before first paint to avoid a flash.
@@ -38,7 +39,7 @@
   <link rel="stylesheet" href="/styles.css" />
 </head>
 
-<body data-view="chat">
+<body data-view="__BODY_VIEW__" data-panel="__BODY_PANEL__" data-ssr-doc-id="__SSR_DOC_ID__" data-ssr-channel="__SSR_CHANNEL__">
   <a class="skip-link" href="#app-shell">跳到主要内容</a>
 
   <header class="masthead">
@@ -48,10 +49,9 @@
       <span class="app-version" id="app-version" hidden></span>
     </a>
 
-    <!-- Sections of the one archive, on the title's own line. Each channel is
-         its own page, so there is no "everything" entry. Built by app.js from
-         the transcript index; hidden until that arrives. -->
-    <nav class="channel-bar" id="channel-bar" aria-label="栏目" hidden></nav>
+    <!-- Server-rendered as real links; app.js enriches titles/counts and keeps
+         navigation inside the SPA once JavaScript is available. -->
+    <nav class="channel-bar" id="channel-bar" aria-label="栏目">__CHANNEL_NAV__</nav>
 
     <div class="masthead-right">
       <nav class="masthead-links" aria-label="外部链接">
@@ -126,7 +126,7 @@
     <!-- The archive and the reader share one pane: a window the chat pushes
          open rather than a page it navigates away to. Collapsed to zero width
          and inert while closed; app.js drives the rest. -->
-    <aside class="reading-pane" id="reading-pane" aria-label="文稿" inert>
+    <aside class="reading-pane" id="reading-pane" aria-label="文稿" __READING_INERT__>
       <header class="reading-bar">
         <button class="reading-back is-slot-hidden" id="reading-back" type="button" aria-label="返回文稿列表" title="返回文稿列表" tabindex="-1" aria-hidden="true">
           <svg class="icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
@@ -148,22 +148,22 @@
       </header>
       <div class="reading-scroll" id="reading-scroll">
         <div class="content-pane">
-          <section class="archive-view" id="archive-view" hidden aria-labelledby="archive-title">
+          <section class="archive-view" id="archive-view" __ARCHIVE_HIDDEN__ aria-labelledby="archive-title">
             <header class="archive-head">
-              <h1 id="archive-title"></h1>
+              <h1 id="archive-title">__ARCHIVE_TITLE__</h1>
               <input class="archive-search" id="archive-search" type="search" placeholder="输入标题或期号"
                 aria-label="输入标题或期号" autocomplete="off" />
             </header>
-            <div class="archive-groups" id="archive-groups"></div>
-            <p class="archive-state" id="archive-state" role="status">正在接收文稿目录…</p>
+            <div class="archive-groups" id="archive-groups">__ARCHIVE_GROUPS__</div>
+            <p class="archive-state" id="archive-state" role="status" __ARCHIVE_STATE_HIDDEN__>__ARCHIVE_STATE__</p>
           </section>
 
-          <article class="reader-view" id="reader-view" hidden>
+          <article class="reader-view" id="reader-view" __READER_HIDDEN__>
             <header class="reader-head">
-              <h1 id="reader-title"></h1>
+              <h1 id="reader-title">__READER_TITLE__</h1>
             </header>
-            <div class="reader-body" id="reader-body"></div>
-            <p class="reader-state" id="reader-state" role="status"></p>
+            <div class="reader-body" id="reader-body">__READER_BODY__</div>
+            <p class="reader-state" id="reader-state" role="status">__READER_STATE__</p>
           </article>
         </div>
       </div>
@@ -175,12 +175,12 @@
   <!-- Mobile primary nav: auto layout ≤900px. Chat and archive are full-screen
        modes, not a side drawer. -->
   <nav class="mobile-tabbar" id="mobile-tabbar" aria-label="主导航">
-    <button type="button" class="mobile-tab" id="tab-chat" data-tab="chat" aria-current="page">
+    <a href="/" class="mobile-tab" id="tab-chat" data-tab="chat" aria-current="page">
       对话
-    </button>
-    <button type="button" class="mobile-tab" id="tab-archive" data-tab="archive">
+    </a>
+    <a href="/transcripts?channel=ShuiQianXiaoXi" class="mobile-tab" id="tab-archive" data-tab="archive">
       文稿
-    </button>
+    </a>
   </nav>
 
   <template id="tpl-query">
@@ -216,6 +216,9 @@
     </article>
   </template>
 
+  <noscript>
+    <p class="noscript-note">文稿目录与正文无需 JavaScript 即可阅读；知识库 Agent 对话需要启用 JavaScript。</p>
+  </noscript>
   <script type="module" src="/app.js"></script>
 </body>
 
