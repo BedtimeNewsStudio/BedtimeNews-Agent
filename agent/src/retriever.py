@@ -25,8 +25,12 @@ class _Retriever:
 
     def __init__(self) -> None:
         # Embeddings may use a different endpoint than chat (settings.embedding).
+        # check_embedding_ctx_length=False sends the raw text instead of
+        # tiktoken token ids — required for non-OpenAI embedding models, which
+        # would embed a meaningless token-id sequence otherwise.
         self._embeddings = OpenAIEmbeddings(
             model=settings.embedding.model,
+            check_embedding_ctx_length=False,
             **settings.embedding.client_kwargs("embedding"),
         )
         self._result_cache = LRUCache(capacity=1000)
