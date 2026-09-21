@@ -11,11 +11,7 @@ services:
       # embedding column. Runs only on first init of an empty data volume.
       - ./storage/postgres/init.sh:/docker-entrypoint-initdb.d/init.sh
     healthcheck:
-      test: [
-          "CMD-SHELL",
-          "pg_isready -U ${POSTGRES_USER:-postgres_user} -d
-          ${POSTGRES_DB:-postgres_db}",
-        ]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres_user} -d ${POSTGRES_DB:-postgres_db}" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -35,11 +31,13 @@ services:
       context: ./indexer
       dockerfile: Dockerfile
     container_name: bedtimenews-indexer
-    env_file: .env
     environment:
-      # Read from the host shell environment (not stored in .env)
-      - SILICONFLOW_API_KEY
+      # App settings come from config.yml (mounted read-only below); the
+      # environment only relocates the file and wires deployment paths.
+      CONFIG_YAML: /run/config/config.yml
+      INDEX_CONFIG_FILE: /app/index_config.yml
     volumes:
+      - ./config.yml:/run/config/config.yml:ro
       - ${INDEXER_DATA_DIR:-./indexer/data}:/data
       - bedtimenews_indexer_logs:/var/log/indexer
     depends_on:
@@ -55,12 +53,15 @@ services:
       context: ./agent
       dockerfile: Dockerfile
     container_name: bedtimenews-agent
-    env_file: .env
     environment:
-      # Read from the host shell environment (not stored in .env)
-      - DEEPSEEK_API_KEY
-      - SILICONFLOW_API_KEY
+      CONFIG_YAML: /run/config/config.yml
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB:-postgres_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
     volumes:
+      - ./config.yml:/run/config/config.yml:ro
       - bedtimenews_agent_logs:/var/log/agent
     depends_on:
       postgres:
@@ -81,7 +82,9 @@ services:
       # Shown in the masthead. IMAGE_TAG is what actually got deployed, so it
       # beats whatever version the source tree happens to declare.
       - APP_VERSION=${IMAGE_TAG:-}
-    env_file: .env
+      - AGENT_BACKEND_HOST=agent
+      - AGENT_BACKEND_PORT=8000
+      - PUBLIC_BASE_URL=https://bedtime.blog
     ports:
       - "${FRONTEND_PORT:-8080}:8080"
     depends_on:

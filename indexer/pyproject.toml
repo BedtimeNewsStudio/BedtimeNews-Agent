@@ -14,7 +14,7 @@ dependencies = [
     "tenacity>=9.1.4",
     # Config
     "PyYAML>=6.0.3",
-    "pydantic-settings>=2.15.0",
+    "pydantic-settings[yaml]>=2.15.0",
     "markdown-it-py>=4.0.0",
     "mdit-py-plugins>=0.5.0",
     "bleach>=6.3.0",

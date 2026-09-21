@@ -186,25 +186,28 @@ El chat y los embeddings se configuran de forma independiente mediante
 `LLM_PROVIDER` y `EMBEDDING_PROVIDER`. Los nombres de los modelos se leen de
 variables de entorno con prefijo de proveedor, así que las claves dependen de
 los proveedores que elijas. Con los valores por defecto
-(`LLM_PROVIDER=deepseek`, `EMBEDDING_PROVIDER=siliconflow`), configura en
-`.env`:
+(`LLM_PROVIDER=deepseek`, `EMBEDDING_PROVIDER=siliconflow`). Cada grupo
+"endpoint compatible con OpenAI + modelo + clave" se configura bajo
+`generation` / `embedding` en `config.yml` (independiente del proveedor:
+DeepSeek, SiliconFlow, OpenAI o una pasarela propia solo cambian tres líneas):
 
-```bash
-# Modelo rápido (enrutamiento, reescritura de consultas, calificación)
-DEEPSEEK_FAST_MODEL=deepseek-v4-flash
+```yaml
+generation:
+  api_key: "..."
+  base_url: "https://api.deepseek.com"
+  model: "deepseek-v4-flash"        # modelo de generación (respuesta final)
+  fast_model: "deepseek-v4-flash"   # modelo rápido (enrutamiento, calificación)
 
-# Modelo de generación (respuesta final)
-DEEPSEEK_GENERATION_MODEL=deepseek-v4-flash
-
-# Modelo de embeddings
-SILICONFLOW_EMBEDDING_MODEL=Qwen/Qwen3-Embedding-4B
+embedding:
+  api_key: "..."
+  base_url: "https://api.siliconflow.com/v1"
+  model: "Qwen/Qwen3-Embedding-4B"
 ```
 
 **Notas:**
 
-- Para usar OpenAI en su lugar, establece `LLM_PROVIDER=openai` /
-  `EMBEDDING_PROVIDER=openai` y proporciona `OPENAI_FAST_MODEL`,
-  `OPENAI_GENERATION_MODEL`, `OPENAI_EMBEDDING_MODEL` (más `OPENAI_API_KEY`).
+- Cambiar de proveedor (OpenAI, una pasarela propia, ...) solo cambia los
+  valores de `base_url` / `model` / `api_key` — sin cambios de código.
 - **Las dimensiones de los embeddings deben coincidir con la columna de la
   base de datos.** La columna `embedding halfvec(N)` se dimensiona desde
   `EMBEDDING_DIM` (`.env`, por defecto `2560` para

@@ -33,7 +33,7 @@ Added and body-modified files are loaded and embedded before one transaction rep
 
 ### Cron Schedule
 
-Set in `.env`:
+Set in `config.yml`:
 
 ```bash
 # Every hour (default)
@@ -208,7 +208,7 @@ Existing v0.2 volumes must apply `storage/postgres/migrations/001_body_hashes.sq
 
 ## Changing the Embedding Model
 
-Changing `EMBEDDING_PROVIDER` / `*_EMBEDDING_MODEL` in `.env` is **not** a drop-in
+Changing `embedding.model` (and its endpoint) in `config.yml` is **not** a drop-in
 swap. You must re-embed the entire corpus, because:
 
 - Vectors from different models are **not comparable**, even at the same dimension
@@ -229,7 +229,7 @@ swap. You must re-embed the entire corpus, because:
 # 1. Stop services
 docker compose down
 
-# 2. Edit .env: set the new EMBEDDING_PROVIDER / *_EMBEDDING_MODEL (and API key).
+# 2. Edit config.yml: update the embedding group (model / base_url / api_key).
 
 # 3. Look up the new model's output dimension (provider docs), call it N.
 
@@ -438,7 +438,7 @@ docker compose exec indexer ls -la data/BedtimeNews-Transcripts/
 **Database connection failed:**
 
 - Ensure postgres is running: `docker compose ps postgres`
-- Check credentials in `.env`
+- Check credentials in `config.yml`
 - Test connection: `docker compose exec indexer python -m src.debugger test`
 
 **Scheduler not running:**

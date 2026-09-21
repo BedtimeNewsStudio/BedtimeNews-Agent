@@ -32,7 +32,7 @@ async def lifespan(_app: FastAPI):
     """Manage application lifespan."""
     logger.info("Starting up")
     logger.info(
-        f"Using models: FAST={settings.fast_model}, GENERATION={settings.generation_model}"
+        f"Using models: FAST={settings.generation.fast_model or settings.generation.model}, GENERATION={settings.generation.model}"
     )
     yield
     logger.info("Shutting down")

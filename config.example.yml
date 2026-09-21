@@ -1,0 +1,52 @@
+# ============================================================================
+# BedtimeNews-Agent application configuration (config.yml)
+#
+# Usage: copy this file to config.yml and fill it in.
+#
+#   cp config.example.yml config.yml
+#   $EDITOR config.yml
+#
+# config.yml is gitignored and must never be committed.
+# Precedence: process environment variables > this file (nested keys join with
+# a double underscore in env vars, e.g. GENERATION__API_KEY).
+#
+# This file holds ONLY what the app containers read themselves. Docker
+# deployment wiring (ports, image tag, postgres credentials, EMBEDDING_DIM,
+# data dirs, ...) lives in .env instead — see its template .env.example.
+# The two files are intentionally disjoint.
+#
+# Model endpoints are vendor-agnostic: generation / embedding are each one
+# "OpenAI-compatible endpoint + model + key" group. DeepSeek, SiliconFlow,
+# OpenAI or a self-hosted vLLM/OneAPI gateway differ only in those values.
+# ============================================================================
+
+# -- Generation model (chat) ------------------------------------------------
+generation:
+  api_key: "" # required
+  base_url: "https://api.deepseek.com" # DeepSeek; SiliconFlow: https://api.siliconflow.com/v1
+  model: "deepseek-v4-flash" # answer generation
+  fast_model: "deepseek-v4-flash" # cheap calls (routing, grading); empty -> model
+
+# -- Embedding model ---------------------------------------------------------
+# Changing the embedding model is NOT a simple config edit.
+# Each embedding model emits a fixed vector dimension (EMBEDDING_DIM in .env),
+# which sizes the `embedding halfvec(N)` column in the DB schema. The model's
+# output size and the column must match, or inserts fail with
+# "expected N dimensions, not M". Also note: switching models requires
+# RE-EMBEDDING the whole corpus even when the dimension is unchanged — vectors
+# from different models are not comparable.
+# See the "Changing the embedding model" runbook in indexer/README.md.
+embedding:
+  api_key: "" # required
+  base_url: "https://api.siliconflow.com/v1"
+  model: "Qwen/Qwen3-Embedding-4B"
+
+# Embedding batch size (applies to all providers)
+embedding_batch_size: 20
+
+# -- Agent retrieval ----------------------------------------------------------
+match_threshold: 0.4 # similarity threshold (0.0-1.0, higher = stricter)
+retrieval_match_count: 30
+retrieval_top_k: 15
+grading_parallel_threshold: 30
+grading_excerpt_chars: 350

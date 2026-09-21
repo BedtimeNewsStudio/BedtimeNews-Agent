@@ -4,20 +4,15 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, cast
 
+from langchain_openai import OpenAIEmbeddings
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from .cache import LRUCache, hash_query
 from .models import ChunkResult, RetrieveRequest, RetrieveResponse
-from .providers import get_provider
 from .settings import settings
 from .vector_db import search_similar_chunks
 
 logger = logging.getLogger(__name__)
-
-
-# Initialize embedding provider (module-level singleton).
-# Embeddings may use a different backend than chat (settings.embedding_provider).
-_embedding_provider = get_provider(settings.embedding_provider)
 
 
 class _Retriever:
@@ -29,8 +24,10 @@ class _Retriever:
     """
 
     def __init__(self) -> None:
-        self._embeddings = _embedding_provider.get_embeddings_model(
-            model=settings.embedding_model
+        # Embeddings may use a different endpoint than chat (settings.embedding).
+        self._embeddings = OpenAIEmbeddings(
+            model=settings.embedding.model,
+            **settings.embedding.client_kwargs("embedding"),
         )
         self._result_cache = LRUCache(capacity=1000)
 

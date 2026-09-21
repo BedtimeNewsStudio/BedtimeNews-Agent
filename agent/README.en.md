@@ -174,27 +174,28 @@ docker compose exec agent python -m src.eval_retriever --random 20
 
 ### Model Selection
 
-Chat and embeddings are configured independently via `LLM_PROVIDER` and
-`EMBEDDING_PROVIDER`. Model names are read from provider-prefixed env vars, so
-the keys depend on the providers you pick. With the defaults
-(`LLM_PROVIDER=deepseek`, `EMBEDDING_PROVIDER=siliconflow`), configure in `.env`:
+Chat and embeddings are each one "OpenAI-compatible endpoint + model + key"
+group, configured under `generation` / `embedding` in `config.yml` (vendor
+agnostic — DeepSeek, SiliconFlow, OpenAI or a self-hosted gateway differ only
+in three lines):
 
-```bash
-# Fast model (routing, query rewrite, grading)
-DEEPSEEK_FAST_MODEL=deepseek-v4-flash
+```yaml
+generation:
+  api_key: "..."
+  base_url: "https://api.deepseek.com"
+  model: "deepseek-v4-flash"        # generation model (final answer)
+  fast_model: "deepseek-v4-flash"   # fast model (routing, query rewrite, grading)
 
-# Generation model (final answer)
-DEEPSEEK_GENERATION_MODEL=deepseek-v4-flash
-
-# Embedding model
-SILICONFLOW_EMBEDDING_MODEL=Qwen/Qwen3-Embedding-4B
+embedding:
+  api_key: "..."
+  base_url: "https://api.siliconflow.com/v1"
+  model: "Qwen/Qwen3-Embedding-4B"
 ```
 
 **Notes:**
 
-- To use OpenAI instead, set `LLM_PROVIDER=openai` / `EMBEDDING_PROVIDER=openai`
-  and provide `OPENAI_FAST_MODEL`, `OPENAI_GENERATION_MODEL`,
-  `OPENAI_EMBEDDING_MODEL` (plus `OPENAI_API_KEY`).
+- Switching vendors (OpenAI, a self-hosted gateway, ...) only changes the
+  `base_url` / `model` / `api_key` values — no code changes needed.
 - **Embedding dimensions must match the database column.** The `embedding
   halfvec(N)` column is sized from `EMBEDDING_DIM` (`.env`, default `2560` for
   `Qwen/Qwen3-Embedding-4B`). Switching to a model with a different dimension

@@ -167,28 +167,27 @@ docker compose exec agent python -m src.eval_retriever --random 20
 
 ### 模型选择
 
-对话与 embedding 通过 `LLM_PROVIDER` 与 `EMBEDDING_PROVIDER` 独立配置。
-模型名从带提供方前缀的环境变量读取，因此键名取决于所选的提供方。使用
-默认值（`LLM_PROVIDER=deepseek`、`EMBEDDING_PROVIDER=siliconflow`）时，
-在 `.env` 中配置：
+对话与 embedding 各自是一组「OpenAI-compatible 端点 + 模型 + 密钥」，在
+`config.yml` 的 `generation` / `embedding` 下独立配置（供应商不限——
+DeepSeek、SiliconFlow、OpenAI 或自建网关只是三行取值不同）：
 
-```bash
-# 快速模型（路由、查询改写、评分）
-DEEPSEEK_FAST_MODEL=deepseek-v4-flash
+```yaml
+generation:
+  api_key: "..."
+  base_url: "https://api.deepseek.com"
+  model: "deepseek-v4-flash"        # 生成模型（最终回答）
+  fast_model: "deepseek-v4-flash"   # 快速模型（路由、查询改写、评分）
 
-# 生成模型（最终回答）
-DEEPSEEK_GENERATION_MODEL=deepseek-v4-flash
-
-# Embedding 模型
-SILICONFLOW_EMBEDDING_MODEL=Qwen/Qwen3-Embedding-4B
+embedding:
+  api_key: "..."
+  base_url: "https://api.siliconflow.com/v1"
+  model: "Qwen/Qwen3-Embedding-4B"
 ```
 
 **说明：**
 
-- 改用 OpenAI 时，设置 `LLM_PROVIDER=openai` /
-  `EMBEDDING_PROVIDER=openai`，并提供 `OPENAI_FAST_MODEL`、
-  `OPENAI_GENERATION_MODEL`、`OPENAI_EMBEDDING_MODEL`（以及
-  `OPENAI_API_KEY`）。
+- 改用其它供应商（OpenAI、自建网关等）只改 `base_url` / `model` /
+  `api_key` 三行的取值，代码不需要任何变更。
 - **Embedding 维度必须与数据库列匹配。** `embedding halfvec(N)` 列的 N
   取自 `EMBEDDING_DIM`（`.env`，默认 `2560`，对应
   `Qwen/Qwen3-Embedding-4B`）。切换到维度不同的模型需要变更 schema 并

@@ -37,17 +37,12 @@ Los archivos añadidos o con el cuerpo modificado se fragmentan e incrustan ante
 
 ### Programación Cron
 
-Establece en `.env`:
+Establece en `config.yml`:
 
-```bash
-# Cada hora (por defecto)
-INDEXER_CRON_SCHEDULE="0 * * * *"
-
-# Cada 30 minutos
-INDEXER_CRON_SCHEDULE="*/30 * * * *"
-
-# Diario a las 2 AM
-INDEXER_CRON_SCHEDULE="0 2 * * *"
+```yaml
+indexer_cron_schedule: "0 * * * *"    # Cada hora (por defecto)
+# indexer_cron_schedule: "*/30 * * * *"  # Cada 30 minutos
+# indexer_cron_schedule: "0 2 * * *"     # Diario a las 2 AM
 ```
 
 ### Modo de muestra local
@@ -167,7 +162,7 @@ El indexador gestiona cuatro tablas en el esquema `rag`:
 - `text`: Contenido del chunk
 - `word_count`: Número de palabras
 - `embedding`: Vector `halfvec(N)` — `N` proviene de `EMBEDDING_DIM`
-  (`.env`), aplicado por `storage/postgres/init.sh` en la primera
+  (`config.yml`), aplicado por `storage/postgres/init.sh` en la primera
   inicialización de la BD, y **debe igualar la dimensión de salida del modelo
   de embeddings** (por defecto `2560` para `Qwen/Qwen3-Embedding-4B`). Consulta
   [Cambiar el Modelo de Embedding](#cambiar-el-modelo-de-embedding). El
@@ -216,7 +211,7 @@ Los volúmenes v0.2 existentes deben aplicar `storage/postgres/migrations/001_bo
 
 ## Cambiar el Modelo de Embedding
 
-Cambiar `EMBEDDING_PROVIDER` / `*_EMBEDDING_MODEL` en `.env` **no** es un
+Cambiar `embedding.model` (y su endpoint) en `config.yml` **no** es un
 reemplazo directo. Debes re-incrustar todo el corpus, porque:
 
 - Los vectores de modelos diferentes **no son comparables**, incluso con la
@@ -238,7 +233,7 @@ reemplazo directo. Debes re-incrustar todo el corpus, porque:
 # 1. Detener servicios
 docker compose down
 
-# 2. Editar .env: establece el nuevo EMBEDDING_PROVIDER / *_EMBEDDING_MODEL (y clave API).
+# 2. Edita config.yml: actualiza el grupo embedding (model / base_url / api_key).
 
 # 3. Busca la dimensión de salida del nuevo modelo (docs del proveedor), llámala N.
 
@@ -460,7 +455,7 @@ docker compose exec indexer ls -la data/BedtimeNews-Transcripts/
 **Conexión a la base de datos fallida:**
 
 - Asegúrate de que postgres esté en ejecución: `docker compose ps postgres`
-- Comprueba las credenciales en `.env`
+- Comprueba las credenciales en `config.yml`
 - Prueba la conexión: `docker compose exec indexer python -m src.debugger test`
 
 **El planificador no se ejecuta:**

@@ -85,7 +85,7 @@ dependencies = [
     { name = "langgraph" },
     { name = "psycopg2-binary" },
     { name = "pydantic" },
-    { name = "pydantic-settings" },
+    { name = "pydantic-settings", extra = ["yaml"] },
     { name = "tenacity" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -98,7 +98,7 @@ requires-dist = [
     { name = "langgraph", specifier = ">=0.2.0" },
     { name = "psycopg2-binary", specifier = ">=2.9.11" },
     { name = "pydantic", specifier = ">=2.13.5" },
-    { name = "pydantic-settings", specifier = ">=2.10.1" },
+    { name = "pydantic-settings", extras = ["yaml"], specifier = ">=2.10.1" },
     { name = "tenacity", specifier = ">=9.1.4" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.52.4" },
 ]
@@ -131,7 +131,7 @@ dependencies = [
     { name = "mdit-py-plugins" },
     { name = "openai" },
     { name = "psycopg2-binary" },
-    { name = "pydantic-settings" },
+    { name = "pydantic-settings", extra = ["yaml"] },
     { name = "pyyaml" },
     { name = "tenacity" },
     { name = "tiktoken" },
@@ -145,7 +145,7 @@ requires-dist = [
     { name = "mdit-py-plugins", specifier = ">=0.5.0" },
     { name = "openai", specifier = ">=3.8.0" },
     { name = "psycopg2-binary", specifier = ">=2.9.12" },
-    { name = "pydantic-settings", specifier = ">=2.15.0" },
+    { name = "pydantic-settings", extras = ["yaml"], specifier = ">=2.15.0" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "tenacity", specifier = ">=9.1.4" },
     { name = "tiktoken", specifier = ">=0.13.0" },
@@ -1013,6 +1013,11 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/68/ca/31c57507b13119d7d3cfa1576dad2911a4861e3be07b579395f4e9d393f9/pydantic_settings-2.15.0.tar.gz", hash = "sha256:694b793e84f766ba76a90ebdefc01d0a9a045dab0382bee70393da93712ad117", size = 261253, upload-time = "2026-08-07T09:24:57.419Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/30/a4/2bffa9f8e804325a09867f0e9d30795c80ea9f8d62560bd1b6ad6220eb2f/pydantic_settings-2.15.0-py3-none-any.whl", hash = "sha256:0ba092c291c94baceb5eff768aa0d56400a457585bc0175925a5a5510303da42", size = 69413, upload-time = "2026-08-07T09:24:55.839Z" },
+]
+
+[package.optional-dependencies]
+yaml = [
+    { name = "pyyaml" },
 ]
 
 [[package]]
