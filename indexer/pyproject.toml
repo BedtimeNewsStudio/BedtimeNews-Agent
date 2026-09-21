@@ -1,6 +1,6 @@
 [project]
 name = "bedtimenews-indexer"
-version = "0.3.1"
+version = "0.3.2"
 description = "Index pipeline for Bedtime News"
 requires-python = ">=3.12"
 dependencies = [
