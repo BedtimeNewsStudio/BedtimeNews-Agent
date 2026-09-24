@@ -17,7 +17,7 @@ def collect_stats(chunks: list[Chunk]) -> dict[str, Any]:
     Returns:
         Dictionary with statistics
     """
-    embedding_model = settings.embedding_model
+    embedding_model = settings.embedding.model
     batch_size = settings.embedding_batch_size
 
     try:
