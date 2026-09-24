@@ -194,7 +194,7 @@ without touching the transcript.
 - `file_path`: transcript URI
 - `source_hash`: SHA-256 of the complete raw Markdown source
 - `body_hash`: SHA-256 of the exact normalized body represented by chunks/vectors
-- `body_normalization_version`: forces re-indexing after an intentional normalizer change
+- `body_normalization_version`: forces re-indexing after an intentional normalizer or chunker change
 - `indexed_at`: last successful body indexing time
 - `source_observed_at`: last accepted source-only or body update
 

@@ -9,10 +9,11 @@ from .paths import CONTENTS_DIR
 
 logger = logging.getLogger(__name__)
 
-# Increment this whenever the normalized text passed to chunking changes. Rows
-# written by an older version are deliberately re-indexed even if the source
-# bytes are unchanged.
-BODY_NORMALIZATION_VERSION = 1
+# Increment this whenever the normalized text passed to chunking, or the way it
+# is chunked, changes. Rows written by an older version are deliberately
+# re-indexed even if the source bytes are unchanged.
+#   2: overlap no longer carried across section headings; min chunk size 200 -> 50
+BODY_NORMALIZATION_VERSION = 2
 
 # Every transcript is laid out as a `# 标题` line, a `**发布日期**` line, then
 # exactly one `## 正文` section followed by exactly one `## 附录` section (verified

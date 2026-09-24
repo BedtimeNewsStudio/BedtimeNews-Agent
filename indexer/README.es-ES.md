@@ -197,7 +197,7 @@ transcripción.
 - `file_path`: URI de la transcripción
 - `source_hash`: SHA-256 del Markdown fuente completo
 - `body_hash`: SHA-256 del cuerpo normalizado representado por chunks/vectores
-- `body_normalization_version`: fuerza una reindexación al cambiar el normalizador
+- `body_normalization_version`: fuerza una reindexación al cambiar el normalizador o el fragmentador
 - `indexed_at`: última indexación correcta del cuerpo
 - `source_observed_at`: última actualización aceptada de la fuente
 

@@ -140,3 +140,25 @@ class TestChunkDocument:
         assert [c.chunk_index for c in chunks] == list(range(len(chunks)))
         # every retained chunk meets the minimum
         assert all(c.word_count >= 1 for c in chunks)
+
+    def test_overlap_never_crosses_a_section_heading(self):
+        # Each heading is a separate news item; the tail of one must not open the
+        # next, or the second chunk carries text about an unrelated topic.
+        text = "## 流浪狗\n\n" + "狗" * 60 + "\n\n## 宁德时代\n\n" + "电" * 60
+        chunks = chunk_document(_doc(text), min_chunk_size=1, overlap_size=20)
+        assert [c.heading for c in chunks] == ["流浪狗", "宁德时代"]
+        assert "狗" not in chunks[1].text
+
+    def test_overlap_is_kept_within_a_section(self):
+        paras = ["甲乙丙丁戊", "己庚辛壬癸", "子丑寅卯辰", "巳午未申酉"]
+        text = "## 话题\n\n" + "\n\n".join(paras)
+        chunks = chunk_document(
+            _doc(text),
+            target_chunk_size=12,
+            max_chunk_size=12,
+            min_chunk_size=1,
+            overlap_size=3,
+        )
+        assert len(chunks) > 1
+        # The second chunk opens with the tail of the first.
+        assert chunks[1].text.split("\n\n")[0] == chunks[0].text.split("\n\n")[-1]

@@ -181,7 +181,7 @@ LEFT JOIN 这张表，把引用渲染成标准化标题而不是原始 URI。每
 - `file_path`：文稿 URI
 - `source_hash`：完整原始 Markdown 的 SHA256
 - `body_hash`：当前 chunk/向量所代表的规范化正文 SHA256
-- `body_normalization_version`：正文规范化逻辑版本，版本变化会强制重建
+- `body_normalization_version`：正文规范化与切块逻辑版本，版本变化会强制重建
 - `indexed_at`：正文最后成功索引时间
 - `source_observed_at`：最后接受源文件变化的时间
 

@@ -15,17 +15,26 @@ def chunk_document(
     document: Document,
     target_chunk_size: int = 1000,
     max_chunk_size: int = 2500,
-    min_chunk_size: int = 200,
+    min_chunk_size: int = 50,
     overlap_size: int = 150,
 ) -> list[Chunk]:
     """Chunk a document into smaller pieces with overlap.
+
+    Overlap is carried only between chunks of the same section, never across a
+    heading. Sections are separate topics in most transcripts: 参考信息 covers
+    several unrelated news items per episode, one per heading. Carrying the tail
+    of one into the next would open, say, a battery-industry chunk with a
+    paragraph about stray dogs, diluting its embedding and handing the unrelated
+    text to the answer generator.
 
     Args:
         document: Document to chunk
         target_chunk_size: Target chunk size in words
         max_chunk_size: Maximum allowed chunk size in words
-        min_chunk_size: Minimum chunk size in words
-        overlap_size: Number of words to overlap between chunks
+        min_chunk_size: Minimum chunk size in words. Below 50 a section is
+            almost always a bare heading or the show's opening greeting, while
+            sections of 50-199 words are short but genuine points.
+        overlap_size: Number of words to overlap between chunks of one section
 
     Returns:
         List of Chunk objects
@@ -34,12 +43,10 @@ def chunk_document(
 
     all_chunks = []
     chunk_index = 0
-    previous_overlap = ""
 
     for section in sections:
         section_chunks = _chunk_section(
             section,
-            previous_overlap,
             target_chunk_size,
             max_chunk_size,
             overlap_size,
@@ -60,11 +67,6 @@ def chunk_document(
                 )
                 all_chunks.append(chunk)
                 chunk_index += 1
-
-        # Extract overlap from last chunk for next section
-        if section_chunks:
-            last_chunk_text = section_chunks[-1]["text"]
-            previous_overlap = _extract_last_words(last_chunk_text, overlap_size)
 
     return all_chunks
 
@@ -143,7 +145,6 @@ def _extract_headings(text: str) -> list[tuple[int, int, str]]:
 
 def _chunk_section(
     section: dict[str, Any],
-    previous_overlap: str,
     target_chunk_size: int,
     max_chunk_size: int,
     overlap_size: int,
@@ -152,7 +153,6 @@ def _chunk_section(
 
     Args:
         section: Section dictionary from _split_into_sections
-        previous_overlap: Overlap text from previous chunk
         target_chunk_size: Target size in words
         max_chunk_size: Maximum size in words
         overlap_size: Overlap size in words
@@ -164,16 +164,12 @@ def _chunk_section(
     word_count = count_words(content)
 
     chunks = []
-    overlap_text = previous_overlap
 
     # If section is small enough, return as single chunk
     if word_count <= max_chunk_size:
-        chunk_text = (
-            (overlap_text + "\n\n" + content).strip() if overlap_text else content
-        )
         chunks.append(
             {
-                "text": chunk_text,
+                "text": content,
                 "heading": section["heading"],
             }
         )
@@ -184,11 +180,6 @@ def _chunk_section(
 
     current_chunk = []
     current_size = 0
-
-    # Start first chunk with overlap from previous section
-    if overlap_text:
-        current_chunk.append(overlap_text)
-        current_size = count_words(overlap_text)
 
     for para in paragraphs:
         para_size = count_words(para)
