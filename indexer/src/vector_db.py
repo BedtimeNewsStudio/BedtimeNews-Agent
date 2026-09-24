@@ -294,26 +294,6 @@ def clear_all_chunks() -> None:
 
 
 @retry_on_transient_error()
-def delete_chunks(doc_id: str) -> int:
-    with _Connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM rag.document_chunks WHERE doc_id = %s;", (doc_id,))
-        return cursor.rowcount
-
-
-@retry_on_transient_error()
-def insert_chunks(
-    chunks: list[Chunk],
-    embeddings: list[list[float]] | None = None,
-    batch_size: int = 100,
-) -> int:
-    """Insert chunks in one transaction (primarily for utilities/tests)."""
-    _validate_chunk_inputs(chunks, embeddings)
-    with _Connection() as conn:
-        return _insert_chunks_cursor(conn.cursor(), chunks, embeddings, batch_size)
-
-
-@retry_on_transient_error()
 def replace_document_index(
     *,
     file_path: str,
@@ -408,57 +388,9 @@ def upsert_document_titles(titles: dict[str, str], batch_size: int = 500) -> int
 
 
 @retry_on_transient_error()
-def delete_document(doc_id: str) -> int:
-    with _Connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM rag.documents WHERE doc_id = %s;", (doc_id,))
-        return cursor.rowcount
-
-
-@retry_on_transient_error()
 def clear_document_titles() -> None:
     with _Connection() as conn:
         conn.cursor().execute("DELETE FROM rag.documents;")
-
-
-@retry_on_transient_error()
-def update_indexing_history(
-    file_path: str,
-    source_hash: str,
-    body_hash: str,
-    body_normalization_version: int,
-) -> None:
-    """Upsert a successfully indexed file's explicit fingerprints."""
-    with _Connection() as conn:
-        _upsert_history_cursor(
-            conn.cursor(),
-            file_path,
-            source_hash,
-            body_hash,
-            body_normalization_version,
-            reindexed=True,
-        )
-
-
-@retry_on_transient_error()
-def delete_indexing_history(file_path: str) -> None:
-    with _Connection() as conn:
-        conn.cursor().execute(
-            "DELETE FROM rag.indexing_history WHERE file_path = %s;", (file_path,)
-        )
-
-
-@retry_on_transient_error()
-def log_file_action(
-    file_path: str,
-    action_type: str,
-    source_hash: str | None = None,
-    body_hash: str | None = None,
-) -> None:
-    with _Connection() as conn:
-        _log_action_cursor(
-            conn.cursor(), file_path, action_type, source_hash, body_hash
-        )
 
 
 @retry_on_transient_error()
@@ -604,21 +536,17 @@ def sync_transcript_titles(titles: dict[str, str], batch_size: int = 500) -> Non
     """Refresh canonical titles without re-rendering or touching embeddings."""
     if not titles:
         return
-    rows = [(title, doc_id) for doc_id, title in titles.items()]
+    rows = [(title, doc_id, title) for doc_id, title in titles.items()]
     query = """
         UPDATE rag.transcripts
         SET canonical_title = %s,
-            updated_at = CASE
-                WHEN canonical_title IS DISTINCT FROM %s THEN CURRENT_TIMESTAMP
-                ELSE updated_at
-            END
-        WHERE doc_id = %s;
+            updated_at = CURRENT_TIMESTAMP
+        WHERE doc_id = %s AND canonical_title IS DISTINCT FROM %s;
     """
-    expanded = [(title, title, doc_id) for title, doc_id in rows]
     with _Connection() as conn:
         cursor = conn.cursor()
-        for start in range(0, len(expanded), batch_size):
-            execute_batch(cursor, query, expanded[start : start + batch_size])
+        for start in range(0, len(rows), batch_size):
+            execute_batch(cursor, query, rows[start : start + batch_size])
 
 
 @retry_on_transient_error()

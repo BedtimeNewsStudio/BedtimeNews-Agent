@@ -17,9 +17,9 @@ import argparse
 import logging
 import shutil
 import sys
-from pathlib import Path
 
 from .paths import BEDTIMENEWS_TRANSCRIPTS_DIR
+from .scheduler import LOG_FILE
 from .vector_db import (
     clear_all_chunks,
     clear_document_titles,
@@ -105,8 +105,6 @@ def _cmd_inspect(file_path: str):
     """Inspect a specific file's chunks."""
     logger.info(f"Inspecting: {file_path}")
 
-    doc_id = file_path
-
     history = get_indexing_history(file_path)
     if history:
         logger.info(f"  Source hash:   {history['source_hash']}")
@@ -115,7 +113,7 @@ def _cmd_inspect(file_path: str):
         logger.info(f"  Indexed at:    {history['indexed_at']}")
         logger.info(f"  Source seen:   {history['source_observed_at']}")
 
-    chunks = get_file_chunks(doc_id)
+    chunks = get_file_chunks(file_path)
     if chunks:
         logger.info(f"  Chunks: {len(chunks)}")
         for chunk in chunks[:10]:
@@ -134,14 +132,12 @@ def _cmd_inspect(file_path: str):
 def _cmd_logs(lines: int | None = None, show_all: bool = False):
     """Display scheduled pipeline run logs."""
 
-    log_file = Path("/var/log/indexer/cron.log")
+    log_file = LOG_FILE
     if not log_file.exists():
         logger.info(
             "No scheduler logs yet. The file is created when the indexer starts."
         )
-        logger.info(
-            "Schedule: Check INDEXER_CRON_SCHEDULE in the container environment"
-        )
+        logger.info("Schedule: see indexer_cron_schedule in config.yml")
         return
 
     logger.info(f"Scheduler logs from: {log_file}")
@@ -235,7 +231,10 @@ def main():
     )
     logs_parser.add_argument("--all", action="store_true", help="Show all log lines")
 
-    clear_parser = subparsers.add_parser("clear", help="Clear all chunks (DANGEROUS)")
+    clear_parser = subparsers.add_parser(
+        "clear",
+        help="Wipe all RAG tables and the cloned transcript repo (DANGEROUS)",
+    )
     clear_parser.add_argument(
         "--force", action="store_true", help="Skip confirmation prompt"
     )
@@ -253,7 +252,7 @@ def main():
         elif args.command == "stats":
             _cmd_stats()
         elif args.command == "history":
-            _cmd_history(args.file if hasattr(args, "file") else None)
+            _cmd_history(args.file)
         elif args.command == "recent":
             _cmd_recent(args.limit)
         elif args.command == "inspect":

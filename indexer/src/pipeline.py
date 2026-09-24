@@ -2,7 +2,7 @@
 
 import logging
 
-from .change_detector import ChangeSet, detect_changes, get_doc_id
+from .change_detector import ChangeSet, detect_changes
 from .chunker import chunk_document
 from .embeddings import generate_embeddings
 from .file_scanner import scan_files
@@ -144,7 +144,7 @@ def process_deletions(deleted_files: set[str]) -> None:
         return
     logger.info(f"Processing {len(deleted_files)} deleted files")
     for uri in sorted(deleted_files):
-        delete_indexed_document(uri, get_doc_id(uri))
+        delete_indexed_document(uri, uri)
 
 
 def process_content_changes(changes: ChangeSet) -> list[Chunk]:
@@ -171,7 +171,7 @@ def process_content_changes(changes: ChangeSet) -> list[Chunk]:
 
         replace_document_index(
             file_path=uri,
-            doc_id=get_doc_id(uri),
+            doc_id=uri,
             chunks=chunks,
             embeddings=embeddings,
             source_hash=source.source_hash,

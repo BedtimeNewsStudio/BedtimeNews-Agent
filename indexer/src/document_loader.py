@@ -13,7 +13,8 @@ logger = logging.getLogger(__name__)
 # is chunked, changes. Rows written by an older version are deliberately
 # re-indexed even if the source bytes are unchanged.
 #   2: overlap no longer carried across section headings; min chunk size 200 -> 50
-BODY_NORMALIZATION_VERSION = 2
+#   3: text before a body's first sub-heading is no longer dropped
+BODY_NORMALIZATION_VERSION = 3
 
 # Every transcript is laid out as a `# 标题` line, a `**发布日期**` line, then
 # exactly one `## 正文` section followed by exactly one `## 附录` section (verified
@@ -59,11 +60,6 @@ def load_indexable_source(
         body_hash=hashlib.sha256(text.encode("utf-8")).hexdigest(),
         body_normalization_version=BODY_NORMALIZATION_VERSION,
     )
-
-
-def load_document(uri: str) -> Document:
-    """Load one transcript by URI, returning its normalized 正文 only."""
-    return load_indexable_source(uri).document
 
 
 def extract_body(content: str, uri: str = "") -> str:

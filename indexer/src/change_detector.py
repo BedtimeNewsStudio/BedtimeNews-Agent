@@ -81,18 +81,3 @@ def detect_changes(current_files: set[str]) -> ChangeSet:
             changes.source_only.add(uri)
 
     return changes
-
-
-def calculate_source_hash(uri: str) -> str:
-    """Return the SHA-256 of the complete raw Markdown source."""
-    return hashlib.sha256((CONTENTS_DIR / uri).read_bytes()).hexdigest()
-
-
-def calculate_body_hash(uri: str) -> str:
-    """Return the SHA-256 of the exact normalized body sent to chunking."""
-    return load_indexable_source(uri).body_hash
-
-
-def get_doc_id(md_file: str) -> str:
-    """Return the URI verbatim; the URI is the document ID."""
-    return md_file

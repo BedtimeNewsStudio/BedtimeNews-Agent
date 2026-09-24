@@ -96,27 +96,27 @@ def _split_into_sections(text: str) -> list[dict[str, Any]]:
         text: Markdown text
 
     Returns:
-        List of section dictionaries with keys: heading, level, content
+        List of section dictionaries with keys: heading, content. Text before
+        the first heading (most episodes open with several minutes of speech
+        before any sub-heading) becomes a leading section with heading None.
     """
     headings = _extract_headings(text)
 
     if not headings:
-        # No headings found, treat entire text as one section
-        return [{"heading": None, "level": 0, "content": text}]
+        return [{"heading": None, "content": text}]
 
     sections = []
 
-    for i, (pos, level, heading_text) in enumerate(headings):
-        # Determine section content
-        start_pos = pos
-        end_pos = headings[i + 1][0] if i + 1 < len(headings) else len(text)
-        content = text[start_pos:end_pos].strip()
+    preamble = text[: headings[0][0]].strip()
+    if preamble:
+        sections.append({"heading": None, "content": preamble})
 
+    for i, (pos, _level, heading_text) in enumerate(headings):
+        end_pos = headings[i + 1][0] if i + 1 < len(headings) else len(text)
         sections.append(
             {
                 "heading": heading_text,
-                "level": level,
-                "content": content,
+                "content": text[pos:end_pos].strip(),
             }
         )
 

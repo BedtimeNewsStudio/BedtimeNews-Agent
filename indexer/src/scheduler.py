@@ -38,7 +38,7 @@ def run_scheduler(run_pipeline: Callable[[], None]) -> None:
 
     try:
         schedule = croniter(cron_schedule, datetime.now().astimezone())
-    except (KeyError, TypeError, ValueError):
+    except KeyError, TypeError, ValueError:
         logger.exception("Invalid cron schedule: %s", cron_schedule)
         sys.exit(1)
 

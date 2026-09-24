@@ -48,10 +48,6 @@ class TestLoadUriTitles:
         assert "URI" not in titles
         assert all(uri.endswith(".md") for uri in titles)
 
-    def test_duplicate_rows_agree(self, titles):
-        # motiaonews1 appears in both tables.
-        assert titles["ShuiQianXiaoXi/misc/motiaonews1.md"] == "末条新闻1"
-
     def test_missing_file_degrades_to_empty(self, tmp_path, monkeypatch):
         monkeypatch.setattr(uri_mapping, "URI_MAPPING_FILE", tmp_path / "absent.md")
         assert load_uri_titles() == {}

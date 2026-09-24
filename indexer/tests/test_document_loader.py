@@ -5,7 +5,7 @@ from src import document_loader
 from src.document_loader import (
     clean_text,
     extract_body,
-    load_document,
+    load_indexable_source,
     uri_to_slug,
 )
 
@@ -98,7 +98,7 @@ class TestLoadDocument:
         path.parent.mkdir(parents=True)
         path.write_text(TRANSCRIPT, encoding="utf-8")
 
-        doc = load_document(uri)
+        doc = load_indexable_source(uri).document
 
         # doc_id is the URI verbatim, .md included.
         assert doc.doc_id == uri

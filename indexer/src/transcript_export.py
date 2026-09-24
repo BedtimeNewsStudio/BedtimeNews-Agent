@@ -11,7 +11,6 @@ from markdown_it import MarkdownIt
 from markdown_it.renderer import RendererHTML
 from mdit_py_plugins.footnote import footnote_plugin
 
-from .document_loader import APPENDIX_HEADING, BODY_HEADING
 from .models import TranscriptProjection
 
 # Bump whenever reader HTML shape changes so stale projections re-render without
@@ -222,8 +221,6 @@ def project_transcript(
 
 
 __all__ = [
-    "APPENDIX_HEADING",
-    "BODY_HEADING",
     "TRANSCRIPT_PROJECTION_VERSION",
     "project_transcript",
 ]

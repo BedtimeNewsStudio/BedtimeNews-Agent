@@ -51,15 +51,21 @@ class TestSplitIntoSections:
         sections = _split_into_sections("plain text without headings")
         assert len(sections) == 1
         assert sections[0]["heading"] is None
-        assert sections[0]["level"] == 0
 
-    def test_records_heading_and_level_per_section(self):
+    def test_records_heading_per_section(self):
         sections = _split_into_sections("# A\n## B\n# C")
-        assert [(s["heading"], s["level"]) for s in sections] == [
-            ("A", 1),
-            ("B", 2),
-            ("C", 1),
+        assert [s["heading"] for s in sections] == ["A", "B", "C"]
+
+    def test_text_before_first_heading_is_kept(self):
+        sections = _split_into_sections("开场白\n\n## 第一题\n内容")
+        assert [(s["heading"], s["content"]) for s in sections] == [
+            (None, "开场白"),
+            ("第一题", "## 第一题\n内容"),
         ]
+
+    def test_blank_preamble_adds_no_section(self):
+        sections = _split_into_sections("\n\n## A\nalpha")
+        assert [s["heading"] for s in sections] == ["A"]
 
     def test_section_content_spans_to_next_heading(self):
         sections = _split_into_sections("# A\nalpha\n# B\nbeta")
@@ -148,6 +154,12 @@ class TestChunkDocument:
         chunks = chunk_document(_doc(text), min_chunk_size=1, overlap_size=20)
         assert [c.heading for c in chunks] == ["流浪狗", "宁德时代"]
         assert "狗" not in chunks[1].text
+
+    def test_preamble_before_first_heading_is_chunked(self):
+        text = "开" * 60 + "\n\n## 话题\n\n" + "题" * 60
+        chunks = chunk_document(_doc(text), min_chunk_size=1)
+        assert [c.heading for c in chunks] == [None, "话题"]
+        assert chunks[0].text == "开" * 60
 
     def test_overlap_is_kept_within_a_section(self):
         paras = ["甲乙丙丁戊", "己庚辛壬癸", "子丑寅卯辰", "巳午未申酉"]

@@ -1,5 +1,6 @@
 """Statistics collection for chunks."""
 
+from collections import Counter
 from typing import Any
 
 import tiktoken
@@ -28,17 +29,16 @@ def collect_stats(chunks: list[Chunk]) -> dict[str, Any]:
     total_chunks = len(chunks)
     total_tokens = 0
     chunk_token_counts = []
-    doc_ids_set = set()
+    chunks_per_doc: Counter[str] = Counter()
 
     for chunk in chunks:
-        text = chunk.text
-        tokens = len(encoding.encode(text))
+        tokens = len(encoding.encode(chunk.text))
         total_tokens += tokens
         chunk_token_counts.append(tokens)
-        doc_ids_set.add(chunk.doc_id)
+        chunks_per_doc[chunk.doc_id] += 1
 
     stats = {
-        "total_documents": len(doc_ids_set),
+        "total_documents": len(chunks_per_doc),
         "total_chunks": total_chunks,
         "total_tokens": total_tokens,
         "avg_tokens_per_chunk": (
@@ -47,7 +47,11 @@ def collect_stats(chunks: list[Chunk]) -> dict[str, Any]:
         "min_tokens": min(chunk_token_counts) if chunk_token_counts else 0,
         "max_tokens": max(chunk_token_counts) if chunk_token_counts else 0,
         "embedding_model": embedding_model,
-        "estimated_api_calls": (total_chunks + batch_size - 1) // batch_size,
+        # The pipeline embeds each document separately, so batches never span
+        # documents.
+        "estimated_api_calls": sum(
+            -(-count // batch_size) for count in chunks_per_doc.values()
+        ),
     }
 
     return stats

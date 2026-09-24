@@ -3,12 +3,7 @@
 import hashlib
 
 from src import change_detector, document_loader
-from src.change_detector import (
-    calculate_body_hash,
-    calculate_source_hash,
-    detect_changes,
-    get_doc_id,
-)
+from src.change_detector import detect_changes
 from src.document_loader import BODY_NORMALIZATION_VERSION, clean_text, extract_body
 
 
@@ -37,12 +32,6 @@ def _set_contents_dir(monkeypatch, root):
     monkeypatch.setattr(document_loader, "CONTENTS_DIR", root)
 
 
-class TestGetDocId:
-    def test_uri_is_the_doc_id_verbatim(self):
-        uri = "ShuiQianXiaoXi/0001-0100/0013.5.md"
-        assert get_doc_id(uri) == uri
-
-
 class TestDetectChanges:
     def test_classifies_all_change_kinds(self, tmp_path, monkeypatch):
         _set_contents_dir(monkeypatch, tmp_path)
@@ -53,8 +42,7 @@ class TestDetectChanges:
         source_only_body = source_only_old["body_hash"]
         _write_source(tmp_path, "body.md", _transcript(body="新的正文内容"))
         legacy = _write_source(tmp_path, "legacy.md", _transcript())
-        added = _write_source(tmp_path, "added.md", _transcript())
-        assert added  # fixture documents its fingerprints for readability
+        _write_source(tmp_path, "added.md", _transcript())
 
         histories = {
             "same.md": same,
@@ -126,15 +114,11 @@ class TestHashes:
 
         source = document_loader.load_indexable_source(uri)
 
+        assert source.source_hash == hashlib.sha256(text.encode("utf-8")).hexdigest()
         assert (
-            calculate_source_hash(uri)
-            == hashlib.sha256(text.encode("utf-8")).hexdigest()
-        )
-        assert (
-            calculate_body_hash(uri)
+            source.body_hash
             == hashlib.sha256(source.document.text.encode("utf-8")).hexdigest()
         )
-        assert source.body_hash == calculate_body_hash(uri)
 
     def test_non_body_edits_change_source_but_not_body(self, tmp_path, monkeypatch):
         _set_contents_dir(monkeypatch, tmp_path)
