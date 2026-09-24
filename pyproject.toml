@@ -44,7 +44,7 @@ bedtimenews-indexer = { workspace = true }
 bedtimenews-frontend = { workspace = true }
 
 [tool.ruff]
-target-version = "py312"
+target-version = "py314"
 line-length = 88
 extend-exclude = [".venv", "storage"]
 

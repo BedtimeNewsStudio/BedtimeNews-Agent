@@ -4,7 +4,7 @@
 #
 # ⚠️  The embedding column dimension comes from EMBEDDING_DIM (.env), and MUST
 # match the output dimension of the configured embedding model
-# (EMBEDDING_PROVIDER / *_EMBEDDING_MODEL). Mismatch => inserts fail with
+# (embedding.model in config.yml). Mismatch => inserts fail with
 # "expected N dimensions, not M".
 #
 # This script runs ONLY when Postgres initializes an EMPTY data volume

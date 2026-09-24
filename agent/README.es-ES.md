@@ -121,6 +121,22 @@ El flujo también puede contener `answer_final` cuando el post-procesamiento
 modificó la respuesta transmitida, `error` en caso de fallo, y comentarios de
 latido `: ping` durante las etapas silenciosas del pipeline.
 
+### GET /transcripts
+
+Índice de navegación del lector construido desde `rag.transcripts`:
+`{"items": [{doc_id, canonical_title, source_title, channel, publication_date, source_hash, updated_at}, ...]}`,
+ordenado por programa y, dentro de cada uno, por `publication_date` de más
+reciente a más antigua. Las respuestas llevan `ETag` (`Cache-Control: no-cache`)
+y responden a `If-None-Match` con `304`. `503` si la base de datos no está
+disponible.
+
+### GET /transcripts/{doc_id}
+
+Una transcripción renderizada por su URI exacta (p. ej.
+`/transcripts/ShuiQianXiaoXi/0501-0600/0588.md`): los mismos campos más
+`body_html`. Solo se aceptan URIs relativas canónicas `.md`; cualquier otra
+entrada o una URI desconocida devuelve `404`. Mismo comportamiento `ETag`/`304`.
+
 ## Evaluación
 
 Estos son arneses de evaluación manuales (acceden a una base de datos/LLM
@@ -238,6 +254,7 @@ agent/src/
 ├── vector_db.py       # Operaciones de base de datos
 ├── models.py          # Modelos Pydantic
 ├── settings.py        # Configuración
+├── uri_mapping.py     # Título de cita de respaldo a partir de la URI
 ├── eval_agent.py      # Arnés de evaluación manual del pipeline
 ├── eval_retriever.py  # Arnés de evaluación manual de recuperación
 └── eval_queries.py    # Categorías y ejemplos de consultas de evaluación

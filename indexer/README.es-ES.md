@@ -23,7 +23,11 @@ configuración.
   `.md`) es su identificador
 - **Títulos normalizados**: se analiza el `URI映射.md` de origen y se escribe la
   correspondencia URI → título en `rag.documents`
-- **Fragmentación inteligente**: Fragmentación semántica consciente de Markdown
+- **Fragmentación inteligente**: Fragmentación semántica consciente de Markdown,
+  una sección por subtítulo dentro de `## 正文` (el texto previo al primer
+  subtítulo forma su propia sección); el solapamiento solo se mantiene dentro de
+  una sección, nunca cruza un encabezado, y se descartan los chunks de menos de
+  50 palabras
 - **Embeddings por lotes**: Uso eficiente de la API de embeddings por lotes
 - **Monitoreo**: Depurador y estadísticas integrados
 
@@ -47,7 +51,7 @@ indexer_cron_schedule: "0 * * * *"    # Cada hora (por defecto)
 
 ### Modo de muestra local
 
-`index_config.sample.yml` selecciona siete transcripciones deterministas. Solo se admite con `INDEXER_SCOPE=sample`, `INDEX_CONFIG_FILE=/app/index_config.sample.yml`, almacenamiento aislado y un `POSTGRES_DB` terminado en `_local`; el indexador rechaza cualquier otro destino. `docker-compose.sample.yml` aporta las sobreescrituras de servicios.
+`index_config.sample.yml` selecciona ocho transcripciones deterministas. Solo se admite con `INDEXER_SCOPE=sample`, `INDEX_CONFIG_FILE=/app/index_config.sample.yml`, almacenamiento aislado y un `POSTGRES_DB` terminado en `_local`; el indexador rechaza cualquier otro destino. `docker-compose.sample.yml` aporta las sobreescrituras de servicios.
 
 ### Filtros de Documentos
 
@@ -149,7 +153,7 @@ docker compose exec indexer python -m src.debugger clear
 
 ## Esquema de Base de Datos
 
-El indexador gestiona cuatro tablas en el esquema `rag`:
+El indexador gestiona cinco tablas en el esquema `rag`:
 
 **`rag.document_chunks`**: Almacena chunks con embeddings
 
@@ -162,7 +166,7 @@ El indexador gestiona cuatro tablas en el esquema `rag`:
 - `text`: Contenido del chunk
 - `word_count`: Número de palabras
 - `embedding`: Vector `halfvec(N)` — `N` proviene de `EMBEDDING_DIM`
-  (`config.yml`), aplicado por `storage/postgres/init.sh` en la primera
+  (`.env`), aplicado por `storage/postgres/init.sh` en la primera
   inicialización de la BD, y **debe igualar la dimensión de salida del modelo
   de embeddings** (por defecto `2560` para `Qwen/Qwen3-Embedding-4B`). Consulta
   [Cambiar el Modelo de Embedding](#cambiar-el-modelo-de-embedding). El
@@ -201,13 +205,26 @@ transcripción.
 - `indexed_at`: última indexación correcta del cuerpo
 - `source_observed_at`: última actualización aceptada de la fuente
 
+**`rag.transcripts`**: transcripciones renderizadas para el lector integrado
+
+- `doc_id`: URI de la transcripción (clave primaria)
+- `canonical_title` / `source_title`: título normalizado y el título `# ` propio de la transcripción
+- `channel`, `publication_date`: nombre del programa y valor de `**发布日期**`
+- `body_html`: la página renderizada que sirve la API `/transcripts` del agente
+- `source_hash`, `projection_version`: disparadores de re-renderizado (cambios en la fuente o en el renderizador)
+
 **`rag.file_actions`**: registro de auditoría
 
 - `action_type`: `ADD`, `MODIFY`, `SOURCE_ONLY` o `DELETE`
 - `source_hash` / `body_hash`: huellas explícitas (`NULL` al eliminar)
 - `run_timestamp` / `processed_at`: tiempos de registro y finalización
 
-Los volúmenes v0.2 existentes deben aplicar `storage/postgres/migrations/001_body_hashes.sql` antes de arrancar el indexador nuevo. Las filas heredadas con `body_hash` nulo se reindexan una vez de forma conservadora. Para una actualización limpia: respalda PostgreSQL, aplica la migración, vacía las cuatro tablas RAG y vuelve a poblar el corpus. No ejecutes el indexador antiguo contra el esquema nuevo.
+`init.sh` solo se ejecuta sobre un volumen vacío, así que las bases de datos existentes deben aplicar en orden las migraciones de `storage/postgres/migrations/` antes de arrancar un indexador más nuevo:
+
+- `001_body_hashes.sql` (volúmenes v0.2): añade las columnas de huella del cuerpo. Las filas heredadas con `body_hash` nulo se reindexan una vez de forma conservadora. No ejecutes el indexador antiguo contra el esquema nuevo.
+- `002_transcript_projection.sql`: crea `rag.transcripts` para el lector.
+
+Para una actualización limpia: respalda PostgreSQL, aplica las migraciones, vacía las cinco tablas RAG y vuelve a poblar el corpus.
 
 ## Cambiar el Modelo de Embedding
 
@@ -291,8 +308,8 @@ docker compose exec postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
 docker compose exec indexer python -m src.debugger stats
 ```
 
-> `debugger clear` trunca `document_chunks`, `indexing_history` y
-> `file_actions`, y elimina el clon local de contenido (se vuelve a clonar en
+> `debugger clear` trunca las cinco tablas (`document_chunks`, `documents`,
+> `transcripts`, `indexing_history`, `file_actions`) y elimina el clon local de contenido (se vuelve a clonar en
 > la siguiente ejecución).
 
 ## Copia de Seguridad y Restauración de Datos
@@ -384,10 +401,12 @@ indexer/src/
 ├── document_loader.py   # Procesamiento de Markdown
 ├── change_detector.py   # Comparación de hash de contenido
 ├── chunker.py           # Fragmentación semántica
-├── embeddings.py        # Generación de embeddings (abstracción de proveedor)
+├── embeddings.py        # Generación de embeddings (cliente compatible con OpenAI)
 ├── vector_db.py         # Operaciones de base de datos
 ├── debugger.py          # Utilidades de depuración
 ├── stats.py             # Cálculo de estadísticas
+├── transcript_export.py # Proyección para el lector (Markdown -> HTML)
+├── uri_mapping.py       # Analizador de la tabla de títulos URI映射.md
 ├── models.py            # Modelos de datos
 ├── paths.py             # Gestión de rutas
 └── settings.py          # Configuración
@@ -438,7 +457,7 @@ docker compose logs indexer | grep -i error
 docker compose exec indexer python -m src.pipeline
 
 # Verificar que el git clone tuvo éxito
-docker compose exec indexer ls -la data/BedtimeNews-Transcripts/
+docker compose exec indexer ls -la /data/BedtimeNews-Transcripts/
 ```
 
 **Errores de la API de embeddings:**
@@ -455,7 +474,7 @@ docker compose exec indexer ls -la data/BedtimeNews-Transcripts/
 **Conexión a la base de datos fallida:**
 
 - Asegúrate de que postgres esté en ejecución: `docker compose ps postgres`
-- Comprueba las credenciales en `config.yml`
+- Comprueba las credenciales `POSTGRES_*` en `.env`
 - Prueba la conexión: `docker compose exec indexer python -m src.debugger test`
 
 **El planificador no se ejecuta:**

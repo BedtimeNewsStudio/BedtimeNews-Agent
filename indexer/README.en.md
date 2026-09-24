@@ -19,7 +19,10 @@ See the [main README](../README.en.md) for setup instructions.
   its identifier
 - **Standardised titles**: the upstream `URI映射.md` is parsed and the
   URI → title mapping written to `rag.documents`
-- **Smart chunking**: Markdown-aware semantic chunking
+- **Smart chunking**: Markdown-aware semantic chunking, one section per
+  sub-heading inside `## 正文` (the text before the first sub-heading is its own
+  section); overlap is carried only within a section, never across a heading,
+  and chunks under 50 words are dropped
 - **Batch embedding**: Efficient batched embedding API usage
 - **Monitoring**: Built-in debugger and statistics
 
@@ -35,20 +38,15 @@ Added and body-modified files are loaded and embedded before one transaction rep
 
 Set in `config.yml`:
 
-```bash
-# Every hour (default)
-INDEXER_CRON_SCHEDULE="0 * * * *"
-
-# Every 30 minutes
-INDEXER_CRON_SCHEDULE="*/30 * * * *"
-
-# Daily at 2 AM
-INDEXER_CRON_SCHEDULE="0 2 * * *"
+```yaml
+indexer_cron_schedule: "0 * * * *"      # Every hour (default)
+# indexer_cron_schedule: "*/30 * * * *" # Every 30 minutes
+# indexer_cron_schedule: "0 2 * * *"    # Daily at 2 AM
 ```
 
 ### Local sample mode
 
-`index_config.sample.yml` names seven deterministic transcripts covering ordinary, fractional, `misc`, and multi-channel URIs. Run it only with `INDEXER_SCOPE=sample`, `INDEX_CONFIG_FILE=/app/index_config.sample.yml`, an isolated data directory, and a `POSTGRES_DB` ending in `_local`; the indexer refuses any other database target. `docker-compose.sample.yml` supplies the service overrides.
+`index_config.sample.yml` names eight deterministic transcripts covering ordinary, fractional, `misc`, and multi-channel URIs. Run it only with `INDEXER_SCOPE=sample`, `INDEX_CONFIG_FILE=/app/index_config.sample.yml`, an isolated data directory, and a `POSTGRES_DB` ending in `_local`; the indexer refuses any other database target. `docker-compose.sample.yml` supplies the service overrides.
 
 ### Document Filters
 
@@ -150,7 +148,7 @@ docker compose exec indexer python -m src.debugger clear
 
 ## Database Schema
 
-The indexer manages four tables in the `rag` schema:
+The indexer manages five tables in the `rag` schema:
 
 **`rag.document_chunks`**: Stores chunks with embeddings
 
@@ -198,13 +196,26 @@ without touching the transcript.
 - `indexed_at`: last successful body indexing time
 - `source_observed_at`: last accepted source-only or body update
 
+**`rag.transcripts`**: Rendered transcripts for the in-app reader
+
+- `doc_id`: transcript URI (primary key)
+- `canonical_title` / `source_title`: standardised title and the transcript's own `# ` title
+- `channel`, `publication_date`: channel name and the `**发布日期**` value
+- `body_html`: the rendered page served by the agent's `/transcripts` API
+- `source_hash`, `projection_version`: re-render triggers (source edits or a renderer change)
+
 **`rag.file_actions`**: Audit log
 
 - `action_type`: `ADD`, `MODIFY`, `SOURCE_ONLY`, or `DELETE`
 - `source_hash` / `body_hash`: explicit fingerprints (`NULL` for `DELETE`)
 - `run_timestamp` / `processed_at`: record and completion times
 
-Existing v0.2 volumes must apply `storage/postgres/migrations/001_body_hashes.sql` before the new indexer starts. Legacy rows have a null `body_hash` and are conservatively re-indexed once. For a guaranteed clean upgrade, back up PostgreSQL, apply the migration, clear all four RAG tables, and repopulate the corpus. Never run the old indexer after rows use the new schema.
+`init.sh` only runs on an empty data volume, so existing databases apply the migrations in `storage/postgres/migrations/` in order before starting a newer indexer:
+
+- `001_body_hashes.sql` (v0.2 volumes): adds the body fingerprint columns. Legacy rows have a null `body_hash` and are conservatively re-indexed once. Never run the old indexer after rows use the new schema.
+- `002_transcript_projection.sql`: creates `rag.transcripts` for the reader.
+
+For a guaranteed clean upgrade, back up PostgreSQL, apply the migrations, clear all five RAG tables, and repopulate the corpus.
 
 ## Changing the Embedding Model
 
@@ -283,8 +294,9 @@ docker compose exec postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
 docker compose exec indexer python -m src.debugger stats
 ```
 
-> `debugger clear` truncates `document_chunks`, `indexing_history`, and
-> `file_actions`, and deletes the local content clone (re-cloned on the next run).
+> `debugger clear` truncates all five tables (`document_chunks`, `documents`,
+> `transcripts`, `indexing_history`, `file_actions`) and deletes the local
+> content clone (re-cloned on the next run).
 
 ## Data Backup and Restore
 
@@ -369,10 +381,12 @@ indexer/src/
 ├── document_loader.py   # Markdown processing
 ├── change_detector.py   # Content hash comparison
 ├── chunker.py           # Semantic chunking
-├── embeddings.py        # Embedding generation (provider abstraction)
+├── embeddings.py        # Embedding generation (OpenAI-compatible client)
 ├── vector_db.py         # Database operations
 ├── debugger.py          # Debug utilities
 ├── stats.py             # Statistics calculation
+├── transcript_export.py # Reader projection (Markdown -> HTML)
+├── uri_mapping.py       # URI映射.md title table parser
 ├── models.py            # Data models
 ├── paths.py             # Path management
 └── settings.py          # Configuration
@@ -423,7 +437,7 @@ docker compose logs indexer | grep -i error
 docker compose exec indexer python -m src.pipeline
 
 # Verify git clone succeeded
-docker compose exec indexer ls -la data/BedtimeNews-Transcripts/
+docker compose exec indexer ls -la /data/BedtimeNews-Transcripts/
 ```
 
 **Embedding API errors:**
@@ -438,7 +452,7 @@ docker compose exec indexer ls -la data/BedtimeNews-Transcripts/
 **Database connection failed:**
 
 - Ensure postgres is running: `docker compose ps postgres`
-- Check credentials in `config.yml`
+- Check the `POSTGRES_*` credentials in `.env`
 - Test connection: `docker compose exec indexer python -m src.debugger test`
 
 **Scheduler not running:**

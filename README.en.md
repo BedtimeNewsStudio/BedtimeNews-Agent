@@ -184,7 +184,7 @@ git tag v0.1.0 && git push origin v0.1.0
 
 ### Body-hash schema upgrade
 
-The indexer now invalidates vectors from the SHA-256 of the exact normalized `## 正文` text, while retaining a separate whole-source hash. Existing volumes must apply `storage/postgres/migrations/001_body_hashes.sql` before running the new indexer; the production runbook is in [indexer/README.en.md](indexer/README.en.md). The deterministic local subset is available through `docker-compose.sample.yml` and requires isolated `POSTGRES_DATA_DIR` / `INDEXER_DATA_DIR` paths.
+The indexer now invalidates vectors from the SHA-256 of the exact normalized `## 正文` text, while retaining a separate whole-source hash. Existing volumes must apply the migrations in `storage/postgres/migrations/` in order (`001_body_hashes.sql`, then `002_transcript_projection.sql`, which creates the reader's `rag.transcripts`) before running the new indexer; the production runbook is in [indexer/README.en.md](indexer/README.en.md). The deterministic local subset is available through `docker-compose.sample.yml` and requires isolated `POSTGRES_DATA_DIR` / `INDEXER_DATA_DIR` paths.
 
 ## Service-Specific Documentation
 

@@ -29,9 +29,8 @@ updates:
   # they land as a distinct, legible PR: the agent leans on behaviour of theirs
   # that is not public API (astream_events surfacing on_chat_model_stream from a
   # blocking .invoke(), and the langgraph_node metadata key).
-  # tests/test_graph_smoke.py exists to catch exactly that, which is what makes
-  # auto-merging this group defensible. To require a human on it instead, add
-  # this group's name to EXCLUDE_GROUPS in the auto-merge workflow.
+  # agent/tests/test_graph_smoke.py exists to catch exactly that, which is what
+  # makes auto-merging this group defensible.
   - package-ecosystem: "uv"
     directory: "/"
     schedule:

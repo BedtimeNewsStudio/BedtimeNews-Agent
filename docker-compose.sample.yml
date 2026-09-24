@@ -22,7 +22,5 @@ services:
 
   web:
     container_name: bedtimenews-sample-web
-    environment:
-      POSTGRES_DB: postgres_local
     ports: !override
       - "${SAMPLE_FRONTEND_PORT:-18080}:8080"

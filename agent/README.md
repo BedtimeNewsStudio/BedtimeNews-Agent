@@ -109,6 +109,19 @@ data: [DONE]
 后处理修改了已流式输出的回答时，流中还会出现 `answer_final`；失败时出现
 `error`；流水线静默阶段会发送 `: ping` 心跳注释。
 
+### GET /transcripts
+
+阅读器导航索引，来自 `rag.transcripts`：
+`{"items": [{doc_id, canonical_title, source_title, channel, publication_date, source_hash, updated_at}, ...]}`，
+按栏目排序，栏目内按 `publication_date` 从新到旧。响应带 `ETag`
+（`Cache-Control: no-cache`），对 `If-None-Match` 返回 `304`；数据库不可用时返回 `503`。
+
+### GET /transcripts/{doc_id}
+
+按精确 URI 返回一篇渲染后的文稿（如
+`/transcripts/ShuiQianXiaoXi/0501-0600/0588.md`）：字段同上，另加 `body_html`。
+只接受规范的相对 `.md` URI，其它输入或未知 URI 返回 `404`。`ETag`/`304` 行为相同。
+
 ## 评估
 
 这些是手动评估工具（会访问真实的数据库/LLM），不是自动化单元测试。
@@ -218,6 +231,7 @@ agent/src/
 ├── vector_db.py       # 数据库操作
 ├── models.py          # Pydantic 模型
 ├── settings.py        # 配置
+├── uri_mapping.py     # 由 URI 推导的后备引用标题
 ├── eval_agent.py      # 手动流水线评估工具
 ├── eval_retriever.py  # 手动检索评估工具
 └── eval_queries.py    # 评估查询类别与示例

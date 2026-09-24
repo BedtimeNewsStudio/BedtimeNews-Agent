@@ -4,7 +4,7 @@ indexer/data/**
 
 # Environment variables
 .env
-# Unified YAML config (rendered to .env by scripts/render-env.py)
+# App config (template: config.example.yml); holds API keys
 config.yml
 
 # Python

@@ -16,7 +16,8 @@ markdown 文件、生成 embedding，并存入 PostgreSQL + pgvector。
   丢弃标题行、`**发布日期**` 元数据与附录的订正/核对记录
 - **URI 作为 doc_id**：文稿相对 `contents/` 的路径（含 `.md`）即其标识
 - **标准化标题**：解析上游 `URI映射.md`，把 URI → 标题写入 `rag.documents`
-- **智能分块**：感知 markdown 的语义分块
+- **智能分块**：感知 markdown 的语义分块，`## 正文` 内每个小标题一节（第一个小标题
+  之前的正文单独成节）；重叠只在同一节内延续，不跨越标题；不足 50 词的 chunk 丢弃
 - **批量 embedding**：高效的 embedding API 批量调用
 - **可监控**：内置调试工具与统计信息
 
@@ -40,7 +41,7 @@ indexer_cron_schedule: "0 * * * *"      # 每小时（默认）
 
 ### 本地小样本模式
 
-`index_config.sample.yml` 固定选择七篇文稿，覆盖普通期号、小数期号、`misc` 与多个栏目。仅可在 `INDEXER_SCOPE=sample`、`INDEX_CONFIG_FILE=/app/index_config.sample.yml`、隔离的数据目录以及以 `_local` 结尾的 `POSTGRES_DB` 下运行；否则 Indexer 会拒绝启动。`docker-compose.sample.yml` 提供服务覆盖配置。
+`index_config.sample.yml` 固定选择八篇文稿，覆盖普通期号、小数期号、`misc` 与多个栏目。仅可在 `INDEXER_SCOPE=sample`、`INDEX_CONFIG_FILE=/app/index_config.sample.yml`、隔离的数据目录以及以 `_local` 结尾的 `POSTGRES_DB` 下运行；否则 Indexer 会拒绝启动。`docker-compose.sample.yml` 提供服务覆盖配置。
 
 ### 文档过滤规则
 
@@ -141,7 +142,7 @@ docker compose exec indexer python -m src.debugger clear
 
 ## 数据库 Schema
 
-Indexer 管理 `rag` schema 中的四张表：
+Indexer 管理 `rag` schema 中的五张表：
 
 **`rag.document_chunks`**：存储 chunk 与 embedding
 
@@ -185,13 +186,26 @@ LEFT JOIN 这张表，把引用渲染成标准化标题而不是原始 URI。每
 - `indexed_at`：正文最后成功索引时间
 - `source_observed_at`：最后接受源文件变化的时间
 
+**`rag.transcripts`**：供站内阅读器使用的渲染后文稿
+
+- `doc_id`：文稿 URI（主键）
+- `canonical_title` / `source_title`：标准化标题与文稿自身的 `# ` 标题
+- `channel`、`publication_date`：栏目名与 `**发布日期**` 的值
+- `body_html`：渲染后的页面，由 agent 的 `/transcripts` API 提供
+- `source_hash`、`projection_version`：重新渲染的触发条件（源文件变化或渲染器变更）
+
 **`rag.file_actions`**：审计日志
 
 - `action_type`：`ADD`、`MODIFY`、`SOURCE_ONLY` 或 `DELETE`
 - `source_hash` / `body_hash`：两个明确的哈希（删除时为 `NULL`）
 - `run_timestamp` / `processed_at`：记录与完成时间
 
-已有 v0.2 数据卷必须在新 Indexer 启动前执行 `storage/postgres/migrations/001_body_hashes.sql`。`body_hash` 为空的旧记录会保守地重新索引一次。若要保证完全一致，应先备份 PostgreSQL，执行迁移后清空四张 RAG 表并重新填充全部语料。新 schema 写入后不可再运行旧版 Indexer。
+`init.sh` 只在空数据卷上运行，因此已有数据库需在启动新版 Indexer 前按顺序执行 `storage/postgres/migrations/` 中的迁移：
+
+- `001_body_hashes.sql`（v0.2 数据卷）：新增正文哈希字段。`body_hash` 为空的旧记录会保守地重新索引一次。新 schema 写入后不可再运行旧版 Indexer。
+- `002_transcript_projection.sql`：创建阅读器使用的 `rag.transcripts`。
+
+若要保证完全一致，应先备份 PostgreSQL，执行迁移后清空全部五张 RAG 表并重新填充全部语料。
 
 ## 更换 Embedding 模型
 
@@ -270,8 +284,9 @@ docker compose exec postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
 docker compose exec indexer python -m src.debugger stats
 ```
 
-> `debugger clear` 会清空 `document_chunks`、`indexing_history` 与
-> `file_actions`，并删除本地内容克隆（下次运行时重新克隆）。
+> `debugger clear` 会清空全部五张表（`document_chunks`、`documents`、
+> `transcripts`、`indexing_history`、`file_actions`），并删除本地内容克隆
+> （下次运行时重新克隆）。
 
 ## 数据备份与恢复
 
@@ -357,10 +372,12 @@ indexer/src/
 ├── document_loader.py   # Markdown 处理
 ├── change_detector.py   # 内容哈希比对
 ├── chunker.py           # 语义分块
-├── embeddings.py        # Embedding 生成（提供方抽象）
+├── embeddings.py        # Embedding 生成（OpenAI 兼容客户端）
 ├── vector_db.py         # 数据库操作
 ├── debugger.py          # 调试工具
 ├── stats.py             # 统计计算
+├── transcript_export.py # 阅读器投影（Markdown -> HTML）
+├── uri_mapping.py       # URI映射.md 标题表解析
 ├── models.py            # 数据模型
 ├── paths.py             # 路径管理
 └── settings.py          # 配置
@@ -411,7 +428,7 @@ docker compose logs indexer | grep -i error
 docker compose exec indexer python -m src.pipeline
 
 # 确认 git clone 成功
-docker compose exec indexer ls -la data/BedtimeNews-Transcripts/
+docker compose exec indexer ls -la /data/BedtimeNews-Transcripts/
 ```
 
 **Embedding API 报错：**
@@ -426,7 +443,7 @@ docker compose exec indexer ls -la data/BedtimeNews-Transcripts/
 **数据库连接失败：**
 
 - 确认 postgres 在运行：`docker compose ps postgres`
-- 检查 `config.yml` 中的凭据
+- 检查 `.env` 中的 `POSTGRES_*` 凭据
 - 测试连接：`docker compose exec indexer python -m src.debugger test`
 
 **调度器未运行：**

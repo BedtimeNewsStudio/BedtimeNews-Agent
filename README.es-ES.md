@@ -167,11 +167,11 @@ Para lanzar una versión, empuja una etiqueta `v*` (las etiquetas de imagen omit
 git tag v0.1.0 && git push origin v0.1.0
 ```
 
-> Las notas de versión deben señalar cambios operativos: nuevas variables de entorno renombradas, cambios de esquema (ej. `EMBEDDING_DIM` — consulta el manual en [indexer/README.es-ES.md](indexer/README.es-ES.md)), y si se requiere reindexación. `storage/postgres/init.sh` solo se ejecuta en un volumen de datos nuevo, por lo que los cambios de esquema nunca se aplican automáticamente a despliegues existentes.
+> Las notas de versión deben señalar cambios operativos: variables de entorno nuevas o renombradas, cambios de esquema (ej. `EMBEDDING_DIM` — consulta el manual en [indexer/README.es-ES.md](indexer/README.es-ES.md)), y si se requiere reindexación. `storage/postgres/init.sh` solo se ejecuta en un volumen de datos nuevo, por lo que los cambios de esquema nunca se aplican automáticamente a despliegues existentes.
 
 ### Actualización del esquema de hash del cuerpo
 
-El indexador ahora invalida vectores con el SHA-256 del texto normalizado exacto de `## 正文` y conserva otra huella de la fuente completa. Los volúmenes existentes deben aplicar `storage/postgres/migrations/001_body_hashes.sql` antes del indexador nuevo; consulta [indexer/README.es-ES.md](indexer/README.es-ES.md). `docker-compose.sample.yml` ofrece el subconjunto local determinista y requiere rutas aisladas en `POSTGRES_DATA_DIR` / `INDEXER_DATA_DIR`.
+El indexador ahora invalida vectores con el SHA-256 del texto normalizado exacto de `## 正文` y conserva otra huella de la fuente completa. Los volúmenes existentes deben aplicar en orden las migraciones de `storage/postgres/migrations/` (`001_body_hashes.sql` y luego `002_transcript_projection.sql`, que crea `rag.transcripts` para el lector) antes del indexador nuevo; consulta [indexer/README.es-ES.md](indexer/README.es-ES.md). `docker-compose.sample.yml` ofrece el subconjunto local determinista y requiere rutas aisladas en `POSTGRES_DATA_DIR` / `INDEXER_DATA_DIR`.
 
 ## Documentación Específica de Servicios
 

@@ -115,6 +115,21 @@ The stream can also contain `answer_final` when post-processing changed the
 streamed answer, `error` on failure, and `: ping` heartbeat comments during
 silent pipeline stages.
 
+### GET /transcripts
+
+Reader navigation index built from `rag.transcripts`:
+`{"items": [{doc_id, canonical_title, source_title, channel, publication_date, source_hash, updated_at}, ...]}`,
+ordered by channel, then newest `publication_date` first. Responses carry an
+`ETag` (`Cache-Control: no-cache`) and answer `If-None-Match` with `304`. `503`
+when the database is unavailable.
+
+### GET /transcripts/{doc_id}
+
+One rendered transcript by its exact URI (e.g.
+`/transcripts/ShuiQianXiaoXi/0501-0600/0588.md`): the same fields plus
+`body_html`. Only canonical relative `.md` URIs are accepted; anything else,
+or an unknown URI, returns `404`. Same `ETag`/`304` behaviour.
+
 ## Evaluation
 
 These are manual evaluation harnesses (they hit a live DB/LLM), not automated
@@ -225,6 +240,7 @@ agent/src/
 ├── vector_db.py       # Database operations
 ├── models.py          # Pydantic models
 ├── settings.py        # Configuration
+├── uri_mapping.py     # Fallback citation title from a URI
 ├── eval_agent.py      # Manual pipeline evaluation harness
 ├── eval_retriever.py  # Manual retrieval evaluation harness
 └── eval_queries.py    # Evaluation query categories and examples

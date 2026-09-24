@@ -36,6 +36,11 @@ services:
       # environment only relocates the file and wires deployment paths.
       CONFIG_YAML: /run/config/config.yml
       INDEX_CONFIG_FILE: /app/index_config.yml
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB:-postgres_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
     volumes:
       - ./config.yml:/run/config/config.yml:ro
       - ${INDEXER_DATA_DIR:-./indexer/data}:/data

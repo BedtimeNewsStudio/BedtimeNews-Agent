@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="620" viewBox="0 0 1320 620" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="940" viewBox="0 0 1320 940" role="img" aria-labelledby="title desc">
   <title id="title">Indexer pipeline</title>
-  <desc id="desc">The indexer synchronizes and scans the transcript repository, detects changed and deleted files, deletes stale records, and processes every added or modified file through load, chunk, embed, and durable database update stages.</desc>
+  <desc id="desc">One indexer run in five phases. Phase 1 syncs and scans the transcript repository and classifies each file as added, body-modified, source-only, or deleted. Phase 2 refreshes every standardised title. Phase 3 applies RAG changes: deletions remove chunks, title and history in one transaction; added or body-modified files are loaded (正文 only), chunked and embedded before one transaction replaces their chunks and history; source-only edits just record history. Phase 4 renders or removes reader projections in rag.transcripts. Phase 5 logs chunk statistics when anything was embedded.</desc>
   <defs>
     <linearGradient id="canvas" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#ffffff"/>
@@ -33,75 +33,101 @@
       .eyebrow { fill:#647089; font:400 16px ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; letter-spacing:.1em }
       .group-label { fill:#2a5fe0; font:400 16px ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; letter-spacing:.08em }
       .num { fill:#2a5fe0; font:400 15px ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; text-anchor:middle }
-      .label { fill:#0e1420; font:400 22px ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; text-anchor:middle }
-      .sub { fill:#46536b; font:400 16px ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; text-anchor:middle }
-      .mono { fill:#647089; font:400 15px ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; text-anchor:middle }
+      .label { fill:#0e1420; font:400 21px ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; text-anchor:middle }
+      .sub { fill:#46536b; font:400 15px ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; text-anchor:middle }
       .blue-line { fill:none; stroke:#4a7df0; stroke-width:3; marker-end:url(#blue-arrow) }
       .gold-line { fill:none; stroke:#f2c14e; stroke-width:2.5; marker-end:url(#gold-arrow) }
       .teal-line { fill:none; stroke:#35c7b1; stroke-width:3; marker-end:url(#teal-arrow) }
-      .edge-label { fill:#647089; font:400 15px ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; letter-spacing:.03em; text-anchor:middle }
+      .edge-label { fill:#647089; font:400 14px ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; letter-spacing:.03em; text-anchor:middle }
       .gold { fill:#9a6509 }
     </style>
   </defs>
 
-  <rect class="canvas" x="4" y="4" width="1312" height="612" rx="28"/>
+  <rect class="canvas" x="4" y="4" width="1312" height="932" rx="28"/>
   <text class="eyebrow" x="42" y="47">BEDTIMENEWS / INDEXER RUN</text>
-  <line x1="42" y1="92" x2="1278" y2="92" stroke="#d9e2f2"/>
+  <line x1="42" y1="72" x2="1278" y2="72" stroke="#d9e2f2"/>
 
-  <text class="group-label" x="50" y="132">DISCOVER CHANGES</text>
+  <!-- Phase 1 + 2 -->
+  <text class="group-label" x="50" y="108">PHASE 1 · DETECT CHANGES</text>
+  <text class="group-label" x="1000" y="108">PHASE 2 · TITLES</text>
 
-  <rect class="node" x="50" y="160" width="230" height="120" rx="17"/>
-  <text class="num" x="165" y="190">01</text>
-  <text class="label" x="165" y="226">Sync repository</text>
-  <text class="sub" x="165" y="257">clone or pull latest</text>
+  <rect class="node" x="50" y="128" width="220" height="112" rx="17"/>
+  <text class="num" x="160" y="156">01</text>
+  <text class="label" x="160" y="190">Sync repository</text>
+  <text class="sub" x="160" y="218">clone or pull latest</text>
 
-  <rect class="node focus" x="365" y="160" width="230" height="120" rx="17"/>
-  <text class="num" x="480" y="190">02</text>
-  <text class="label" x="480" y="226">Scan files</text>
-  <text class="sub" x="480" y="257">apply include / exclude rules</text>
+  <rect class="node focus" x="340" y="128" width="220" height="112" rx="17"/>
+  <text class="num" x="450" y="156">02</text>
+  <text class="label" x="450" y="190">Scan files</text>
+  <text class="sub" x="450" y="218">include / exclude rules</text>
 
-  <rect class="node change" x="680" y="160" width="230" height="120" rx="17"/>
-  <text class="num" x="795" y="190">03</text>
-  <text class="label" x="795" y="226">Detect changes</text>
-  <text class="sub" x="795" y="257">ADD · MODIFY · DELETE</text>
+  <rect class="node change" x="630" y="128" width="300" height="112" rx="17"/>
+  <text class="num" x="780" y="156">03</text>
+  <text class="label" x="780" y="190">Classify each file</text>
+  <text class="sub" x="780" y="218">source hash · 正文 hash · version</text>
 
-  <rect class="node database" x="995" y="160" width="275" height="120" rx="17"/>
-  <text class="mono" x="1132.5" y="190">DELETE PATH</text>
-  <text class="label" x="1132.5" y="226">Remove stale data</text>
-  <text class="sub" x="1132.5" y="257">chunks + indexing history</text>
+  <rect class="node" x="1000" y="128" width="270" height="112" rx="17"/>
+  <text class="num" x="1135" y="156">04</text>
+  <text class="label" x="1135" y="190">Refresh titles</text>
+  <text class="sub" x="1135" y="218">URI映射.md → rag.documents</text>
 
-  <path class="blue-line" d="M280 220H365"/>
-  <path class="blue-line" d="M595 220H680"/>
-  <path class="gold-line" d="M910 220H995"/>
-  <text class="edge-label gold" x="952.5" y="196">DELETE</text>
+  <path class="blue-line" d="M270 184H340"/>
+  <path class="blue-line" d="M560 184H630"/>
+  <path class="blue-line" d="M930 184H1000"/>
 
-  <rect class="group" x="50" y="365" width="1220" height="205" rx="22"/>
-  <text class="group-label" x="225" y="403">EACH ADDED OR MODIFIED FILE · COMMIT BEFORE THE NEXT FILE</text>
+  <!-- Phase 3 -->
+  <rect class="group" x="50" y="290" width="1220" height="410" rx="22"/>
+  <text class="group-label" x="78" y="326">PHASE 3 · APPLY RAG CHANGES</text>
 
-  <rect class="node focus" x="78" y="435" width="230" height="110" rx="16"/>
-  <text class="num" x="193" y="463">04</text>
-  <text class="label" x="193" y="499">Load document</text>
-  <text class="sub" x="193" y="528">parse Markdown</text>
+  <text class="edge-label gold" x="160" y="366">DELETE</text>
+  <rect class="node database" x="78" y="380" width="1164" height="52" rx="14"/>
+  <text class="label" x="660" y="413">Remove chunks + title + history in one transaction</text>
 
-  <rect class="node" x="383" y="435" width="230" height="110" rx="16"/>
-  <text class="num" x="498" y="463">05</text>
-  <text class="label" x="498" y="499">Chunk</text>
-  <text class="sub" x="498" y="528">semantic sections</text>
+  <text class="edge-label" x="160" y="466">ADD / BODY MODIFY</text>
+  <rect class="node focus" x="78" y="480" width="250" height="100" rx="16"/>
+  <text class="num" x="203" y="506">05</text>
+  <text class="label" x="203" y="538">Load 正文</text>
+  <text class="sub" x="203" y="563">drop title, date, 附录</text>
 
-  <rect class="node" x="688" y="435" width="230" height="110" rx="16"/>
-  <text class="num" x="803" y="463">06</text>
-  <text class="label" x="803" y="499">Embed</text>
-  <text class="sub" x="803" y="528">batched embedding API</text>
+  <rect class="node" x="383" y="480" width="250" height="100" rx="16"/>
+  <text class="num" x="508" y="506">06</text>
+  <text class="label" x="508" y="538">Chunk</text>
+  <text class="sub" x="508" y="563">per sub-heading section</text>
 
-  <rect class="node database" x="993" y="435" width="250" height="110" rx="16"/>
-  <text class="num" x="1118" y="463">07</text>
-  <text class="label" x="1118" y="499">Commit update</text>
-  <text class="sub" x="1118" y="528">chunks + audit + history</text>
+  <rect class="node" x="688" y="480" width="250" height="100" rx="16"/>
+  <text class="num" x="813" y="506">07</text>
+  <text class="label" x="813" y="538">Embed</text>
+  <text class="sub" x="813" y="563">batched, per document</text>
 
-  <path class="blue-line" d="M308 490H383"/>
-  <path class="blue-line" d="M613 490H688"/>
-  <path class="teal-line" d="M918 490H993"/>
-  <path class="blue-line" d="M795 280V316Q795 332 779 332H193Q173 332 173 352V435"/>
-  <rect x="405" y="310" width="240" height="40" rx="20" fill="#f6f9fd" stroke="#b7c9ed"/>
-  <text class="edge-label" x="525" y="335">ADD / MODIFY</text>
+  <rect class="node database" x="993" y="480" width="249" height="100" rx="16"/>
+  <text class="num" x="1117.5" y="506">08</text>
+  <text class="label" x="1117.5" y="538">Replace index</text>
+  <text class="sub" x="1117.5" y="563">chunks + history, one tx</text>
+
+  <path class="blue-line" d="M328 530H383"/>
+  <path class="blue-line" d="M633 530H688"/>
+  <path class="teal-line" d="M938 530H993"/>
+
+  <text class="edge-label gold" x="160" y="626">SOURCE ONLY</text>
+  <rect class="node change" x="78" y="640" width="1164" height="44" rx="14"/>
+  <text class="sub" x="660" y="668">Record the new source hash in history; vectors untouched, no embedding call</text>
+
+  <path class="blue-line" d="M1135 240V290"/>
+
+  <!-- Phase 4 + 5 -->
+  <text class="group-label" x="50" y="748">PHASE 4 · READER PROJECTIONS</text>
+  <text class="group-label" x="700" y="748">PHASE 5 · STATISTICS</text>
+
+  <rect class="node database" x="50" y="768" width="580" height="112" rx="17"/>
+  <text class="num" x="340" y="796">09</text>
+  <text class="label" x="340" y="830">Render or remove rag.transcripts</text>
+  <text class="sub" x="340" y="858">Markdown → HTML when source or renderer changed</text>
+
+  <rect class="node" x="700" y="768" width="570" height="112" rx="17"/>
+  <text class="num" x="985" y="796">10</text>
+  <text class="label" x="985" y="830">Log chunk statistics</text>
+  <text class="sub" x="985" y="858">only when this run embedded chunks</text>
+
+  <path class="blue-line" d="M560 700V768"/>
+  <path class="blue-line" d="M630 824H700"/>
 </svg>

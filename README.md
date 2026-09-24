@@ -168,7 +168,7 @@ git tag v0.1.0 && git push origin v0.1.0
 
 ### 正文哈希 schema 升级
 
-Indexer 现在以实际送入分块与 embedding 的规范化 `## 正文` SHA256 判断向量是否失效，同时保留完整源文件哈希。已有数据卷必须在运行新版 Indexer 前执行 `storage/postgres/migrations/001_body_hashes.sql`；生产操作步骤见 [indexer/README.md](indexer/README.md)。`docker-compose.sample.yml` 提供固定小样本，本地运行时必须设置隔离的 `POSTGRES_DATA_DIR` / `INDEXER_DATA_DIR`。
+Indexer 现在以实际送入分块与 embedding 的规范化 `## 正文` SHA256 判断向量是否失效，同时保留完整源文件哈希。已有数据卷必须在运行新版 Indexer 前按顺序执行 `storage/postgres/migrations/` 中的迁移（`001_body_hashes.sql`，然后是创建阅读器 `rag.transcripts` 表的 `002_transcript_projection.sql`）；生产操作步骤见 [indexer/README.md](indexer/README.md)。`docker-compose.sample.yml` 提供固定小样本，本地运行时必须设置隔离的 `POSTGRES_DATA_DIR` / `INDEXER_DATA_DIR`。
 
 ## 服务专属文档
 

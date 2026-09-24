@@ -50,3 +50,7 @@ retrieval_match_count: 30
 retrieval_top_k: 15
 grading_parallel_threshold: 30
 grading_excerpt_chars: 350
+
+# -- Indexer ------------------------------------------------------------------
+# indexer_cron_schedule: "0 * * * *" # minute hour day month weekday
+# indexer_scope: "full" # "sample" is local-only (POSTGRES_DB must end in _local)
