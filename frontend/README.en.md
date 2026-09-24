@@ -87,6 +87,10 @@ The frontend:
 | GET    | `/api/transcripts/{doc_id}`           | One transcript (proxied)             |
 | POST   | `/chat`                               | Proxies the agent SSE stream         |
 | GET    | `/healthz`                            | Liveness check                       |
+| GET    | `/index.html`                         | `308` redirect to `/`                |
+| GET    | `/robots.txt`                         | Allows all; points at the sitemap    |
+| GET    | `/sitemap.xml`                        | Home, channel lists, every transcript |
+| GET    | `/s/{short_id}`                       | Short link, `302` to the transcript  |
 
 ## Development Workflow
 
@@ -128,6 +132,8 @@ AGENT_BACKEND_HOST=localhost AGENT_BACKEND_PORT=8000 \
 | `AGENT_BACKEND_HOST` | `agent` | Agent service name on the Docker network |
 | `AGENT_BACKEND_PORT` | `8000`  | Agent port                               |
 | `FRONTEND_PORT`      | `8080`  | Host port the frontend is published on   |
+| `APP_VERSION`        | (empty) | Masthead version; compose sets it from `IMAGE_TAG` (`latest`/empty falls back to the package version) |
+| `PUBLIC_BASE_URL`    | `https://bedtime.blog` | Origin for canonical, sitemap and robots URLs |
 
 ## Debugging
 
@@ -182,7 +188,7 @@ paths (not GitHub Pages).
 
 ## Troubleshooting
 
-**Port 8080 in use:** set `frontend_port` in `config.yml` to another host port and
+**Port 8080 in use:** set `FRONTEND_PORT` in `.env` to another host port and
 recreate the service (`docker compose up -d web`).
 
 **Cannot connect to backend:**

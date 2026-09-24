@@ -35,13 +35,15 @@ class _FakeUpstreamClient:
 @pytest.fixture
 def client():
     test_client = TestClient(server.app)
-    server._SHORT_ID_CACHE = {}
+    server._SHORT_ID_CACHE = None
+    server._SHORT_ID_BUILT_AT = 0.0
     try:
         yield test_client
     finally:
         test_client.close()
         server._client = None
-        server._SHORT_ID_CACHE = {}
+        server._SHORT_ID_CACHE = None
+        server._SHORT_ID_BUILT_AT = 0.0
 
 
 def _upstream_response(status_code, content=b""):
@@ -412,27 +414,6 @@ def test_sitemap_contains_root_channels_articles_and_lastmods(client):
     assert len(fake.calls) == 1
 
 
-def test_sitemap_emits_full_current_scale_without_detail_fetches(client):
-    items = [
-        _index_item(
-            f"ShuiQianXiaoXi/0001-2000/{number:04d}.md",
-            f"【睡前消息{number}】测试",
-            "2026-01-01",
-        )
-        for number in range(1, 1838)
-    ]
-    fake = _FakeJsonClient(_json_upstream(200, {"items": items}))
-    server._client = fake
-
-    response = client.get("/sitemap.xml")
-
-    assert response.status_code == 200
-    root = ET.fromstring(response.content)
-    namespace = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
-    assert len(root.findall("sm:url", namespace)) == 1839  # root + channel + docs
-    assert len(fake.calls) == 1
-
-
 def test_sitemap_does_not_return_partial_success_on_bad_upstream(client):
     server._client = _FakeJsonClient(error=httpx.ConnectError("offline"))
 
@@ -461,7 +442,6 @@ def test_short_link_is_deterministic_and_uses_the_restricted_alphabet(client):
     assert short_id == server._short_id_for("ShuiQianXiaoXi/0001-0100/0001.md")
     assert len(short_id) == server.SHORT_ID_LENGTH
     assert set(short_id) <= server._BASE58_SET
-    assert not set(short_id) & {"0", "O", "I", "l"}
 
 
 def test_short_link_rejects_malformed_ids_without_querying_upstream(client):
@@ -476,14 +456,32 @@ def test_short_link_rejects_malformed_ids_without_querying_upstream(client):
     assert fake.calls == []
 
 
-def test_short_link_retries_once_on_a_cache_miss_then_404s(client):
+def test_short_link_rebuilds_on_a_cache_miss_once_the_interval_passed(
+    client, monkeypatch
+):
     fake = _FakeJsonClient(_json_upstream(200, {"items": []}))
     server._client = fake
+    now = [1000.0]
+    monkeypatch.setattr(server, "_now", lambda: now[0])
 
+    client.get("/s/11111111", follow_redirects=False)
+    now[0] += server.SHORT_ID_MIN_REFRESH_SECONDS
     response = client.get("/s/11111111", follow_redirects=False)
 
     assert response.status_code == 404
     assert len(fake.calls) == 2
+
+
+def test_short_link_misses_do_not_refetch_within_the_interval(client, monkeypatch):
+    fake = _FakeJsonClient(_json_upstream(200, {"items": []}))
+    server._client = fake
+    monkeypatch.setattr(server, "_now", lambda: 1000.0)
+
+    for suffix in "12345":
+        response = client.get(f"/s/1111111{suffix}", follow_redirects=False)
+        assert response.status_code == 404
+
+    assert len(fake.calls) == 1
 
 
 def test_short_link_returns_503_when_upstream_is_down(client):

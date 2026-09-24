@@ -1004,12 +1004,6 @@ body {
   overflow-y: auto;
 }
 
-.chat-pane-head,
-.chat-fab,
-.chat-close {
-  display: none;
-}
-
 /* Clipped to zero width rather than display:none, because a display switch
    cannot be animated. app.js marks it inert while it is shut, so it stays out
    of the tab order and the accessibility tree. */
@@ -1061,20 +1055,6 @@ body[data-view="browse"] .reading-scroll {
   padding: 0 var(--reading-inline);
   border-bottom: 1px solid var(--line);
   background: var(--bg);
-}
-
-.reading-bar-label {
-  grid-column: 3;
-  min-width: 0;
-  margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: var(--font-cjk);
-  font-size: 0.82rem;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-  color: var(--text-dim);
 }
 
 .reading-bar .reading-back {
@@ -1169,15 +1149,6 @@ body[data-view="browse"] .reading-scroll {
   font: inherit;
   font-size: 1.08rem;
   padding: 0.55rem 0;
-}
-
-.chat-pane-head {
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
 }
 
 .archive-head h1,
@@ -1588,12 +1559,6 @@ body[data-view="browse"] .reading-scroll {
 
   .reading-bar .reading-close {
     grid-column: 5;
-  }
-
-  .chat-fab,
-  .chat-pane-head,
-  .chat-close {
-    display: none !important;
   }
 
   /* The tabbar is viewport-fixed; reserve its height on the flex container so

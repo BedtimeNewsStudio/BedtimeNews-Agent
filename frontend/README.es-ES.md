@@ -102,6 +102,10 @@ El frontend:
 | GET    | `/api/transcripts/{doc_id}`           | Una transcripción (proxy)                        |
 | POST   | `/chat`                               | Hace proxy del flujo SSE del agente al navegador |
 | GET    | `/healthz`                            | Comprobación de vitalidad                        |
+| GET    | `/index.html`                         | Redirección `308` a `/`                          |
+| GET    | `/robots.txt`                         | Permite todo; apunta al sitemap                  |
+| GET    | `/sitemap.xml`                        | Inicio, listas por programa y cada transcripción |
+| GET    | `/s/{short_id}`                       | Enlace corto, `302` a la transcripción           |
 
 ## Flujo de Desarrollo
 
@@ -144,6 +148,8 @@ AGENT_BACKEND_HOST=localhost AGENT_BACKEND_PORT=8000 \
 | `AGENT_BACKEND_HOST` | `agent`     | Nombre del servicio agente en la red Docker  |
 | `AGENT_BACKEND_PORT` | `8000`      | Puerto del agente                            |
 | `FRONTEND_PORT`      | `8080`      | Puerto del host donde se publica el frontend |
+| `APP_VERSION`        | (vacío)     | Versión en la cabecera; compose la toma de `IMAGE_TAG` (`latest`/vacío recurre a la versión del paquete) |
+| `PUBLIC_BASE_URL`    | `https://bedtime.blog` | Origen de las URL canónicas, del sitemap y de robots |
 
 ## Depuración
 
@@ -200,7 +206,7 @@ aplicación `/transcripts/…` (no GitHub Pages).
 
 ## Solución de Problemas
 
-**Puerto 8080 en uso:** establece `frontend_port` en `config.yml` a otro puerto del
+**Puerto 8080 en uso:** establece `FRONTEND_PORT` en `.env` a otro puerto del
 host y recrea el servicio (`docker compose up -d web`).
 
 **No se puede conectar al backend:**

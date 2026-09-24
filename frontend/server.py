@@ -23,6 +23,7 @@ import hashlib
 import json
 import os
 import re
+import time
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import date, datetime
@@ -287,7 +288,12 @@ def _index_items(payload: dict) -> list[dict]:
     return items
 
 
-_SHORT_ID_CACHE: dict[str, str] = {}
+_SHORT_ID_CACHE: dict[str, str] | None = None
+_SHORT_ID_BUILT_AT = 0.0
+# A forced rebuild costs a full index query, and any well-formed unknown short
+# ID asks for one; this bounds that to one upstream query per interval.
+SHORT_ID_MIN_REFRESH_SECONDS = 60.0
+_now = time.monotonic
 
 
 async def _short_id_map(*, force_refresh: bool = False) -> dict[str, str]:
@@ -299,9 +305,12 @@ async def _short_id_map(*, force_refresh: bool = False) -> dict[str, str]:
     at this corpus size (~2000 docs) the whole map is a few hundred KB, so
     the only reason to rebuild is a short_id the cached map doesn't have,
     which a newly published document would trigger on its first lookup.
+    Forced rebuilds are rate-limited by SHORT_ID_MIN_REFRESH_SECONDS.
     """
-    global _SHORT_ID_CACHE
-    if _SHORT_ID_CACHE and not force_refresh:
+    global _SHORT_ID_CACHE, _SHORT_ID_BUILT_AT
+    if _SHORT_ID_CACHE is not None and (
+        not force_refresh or _now() - _SHORT_ID_BUILT_AT < SHORT_ID_MIN_REFRESH_SECONDS
+    ):
         return _SHORT_ID_CACHE
     items = _index_items(await _fetch_upstream_json(TRANSCRIPTS_ENDPOINT))
     mapping: dict[str, str] = {}
@@ -312,6 +321,7 @@ async def _short_id_map(*, force_refresh: bool = False) -> dict[str, str]:
             continue
         mapping[_short_id_for(doc_id)] = doc_id
     _SHORT_ID_CACHE = mapping
+    _SHORT_ID_BUILT_AT = _now()
     return mapping
 
 
@@ -526,7 +536,6 @@ def _render_shell(
         "__BODY_VIEW__": escape(body_view, quote=True),
         "__BODY_PANEL__": escape(body_panel, quote=True),
         "__SSR_DOC_ID__": escape(ssr_doc_id, quote=True),
-        "__SSR_CHANNEL__": escape(active_channel or "", quote=True),
         "__CHANNEL_NAV__": _render_channel_nav(active_channel),
         "__READING_INERT__": "" if body_view == "browse" else "inert",
         "__ARCHIVE_HIDDEN__": "" if archive_visible else "hidden",
@@ -632,7 +641,7 @@ async def chat(request: Request) -> StreamingResponse:
     """Proxy the chat SSE stream from the internal agent to the browser."""
     body = await request.body()
 
-    async def event_stream() -> AsyncGenerator[bytes, None]:
+    async def event_stream() -> AsyncGenerator[bytes]:
         client = _client
         if client is None:
             yield _sse_error("档案服务尚未就绪，请稍后重试。")
@@ -659,7 +668,7 @@ async def chat(request: Request) -> StreamingResponse:
         except httpx.TimeoutException:
             yield _sse_error("信号超时，请稍后重试。")
         except Exception as exc:  # noqa: BLE001 - surface anything to the client
-            yield _sse_error(f"信号中断：{exc}")
+            yield _sse_error(f"信号中断：{exc}，请稍后重试。")
 
     return StreamingResponse(
         event_stream(),
@@ -685,7 +694,7 @@ async def _proxy_transcript_json(request: Request, upstream_url: str) -> Respons
         headers["If-None-Match"] = etag
     try:
         response = await client.get(upstream_url, headers=headers)
-    except (httpx.TimeoutException, httpx.NetworkError):
+    except httpx.TimeoutException, httpx.NetworkError:
         return JSONResponse(
             {"detail": "文稿服务暂时不可用"},
             status_code=503,
@@ -777,7 +786,7 @@ async def short_link(short_id: str) -> Response:
         doc_id = mapping.get(short_id)
         if doc_id is None:
             # Not in the resident cache — could be a document published
-            # since the cache was built. Rebuild once before giving up.
+            # since the cache was built. Rebuild (rate-limited) before giving up.
             mapping = await _short_id_map(force_refresh=True)
             doc_id = mapping.get(short_id)
     except _UpstreamError:

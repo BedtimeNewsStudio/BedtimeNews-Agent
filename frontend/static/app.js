@@ -17,8 +17,8 @@ const STAGE_LABELS = {
 const STAGE_ORDER = ["condense", "route", "rewrite", "retrieve", "grade", "generate"];
 
 // How many prior turns to replay. Every turn is re-sent on each request, so this
-// trades context depth against payload size; two is enough to resolve almost all
-// pronouns without carrying the whole session.
+// trades context depth against payload size; three is enough to resolve almost
+// all pronouns without carrying the whole session.
 const HISTORY_TURNS = 3;
 // Answers are truncated before being sent back: resolving "那它呢" needs the
 // subject of the previous turn, not its full text.
@@ -52,7 +52,6 @@ const els = {
   archiveState: document.getElementById("archive-state"),
   readingPane: document.getElementById("reading-pane"),
   readingScroll: document.getElementById("reading-scroll"),
-  readingBarLabel: document.getElementById("reading-bar-label"),
   readingBack: document.getElementById("reading-back"),
   readingDocBack: document.getElementById("reading-doc-back"),
   readingClose: document.getElementById("reading-close"),
@@ -64,8 +63,6 @@ const els = {
   readerBody: document.getElementById("reader-body"),
   readerState: document.getElementById("reader-state"),
   chatPane: document.getElementById("chat-pane"),
-  chatFab: document.getElementById("chat-fab"),
-  chatClose: document.getElementById("chat-close"),
   tabChat: document.getElementById("tab-chat"),
   tabArchive: document.getElementById("tab-archive"),
 };
@@ -73,7 +70,7 @@ const els = {
 let busy = false;
 // Aborts the run in flight when the reader hits stop.
 let abortController = null;
-const mobileDrawer = window.matchMedia("(max-width: 900px)");
+const mobileLayout = window.matchMedia("(max-width: 900px)");
 // Must match the .reading-pane flex-basis transition in styles.css.
 const PANE_SLIDE_MS = 460;
 
@@ -172,7 +169,7 @@ function normalizeMarkdown(raw) {
     .replace(/^([ \t]*)([*+-])(?=[^\s*+-])/gm, "$1$2 ");
 }
 
-// Citations arrive as ordinary markdown links — `[[标准化标题]](https://…​.html)` —
+// Citations arrive as ordinary markdown links — `[[标准化标题]](/transcripts/<URI>.md)` —
 // so markdown-it turns them into <a> elements on its own; styles.css picks them
 // out by href.
 function renderMarkdown(md, raw) {
@@ -282,7 +279,7 @@ let sampleCategories = [];
 
 function renderSampleQuestions() {
   els.grid.replaceChildren();
-  const mobile = mobileDrawer.matches;
+  const mobile = mobileLayout.matches;
   for (const cat of sampleCategories) {
     const topics = shuffle(cat.topics || []).slice(0, PER_CATEGORY);
     if (!topics.length) continue;
@@ -416,8 +413,8 @@ async function loadTranscriptIndex() {
 
 /* ------------------------------------------------------------- channel bar */
 
-// Loudest signal first: the channel carrying the most transcripts leads, which
-// reads as a frequency index instead of an alphabetical list nobody scans.
+// Channels follow the fixed CHANNEL_ORDER; any channel not listed there sorts
+// after it alphabetically.
 function renderChannelBar(items) {
   const counts = new Map();
   for (const item of items) {
@@ -467,23 +464,9 @@ function itemSearchText(item) {
 }
 
 function renderArchiveHead() {
-  // Large in-page channel title (e.g. 睡前消息). The reading-bar chrome must
-  // not repeat this name — that is cleared in updateReadingBar for archive.
+  // Large in-page channel title (e.g. 睡前消息); the reading bar carries no title.
   els.archiveTitle.hidden = false;
   els.archiveTitle.textContent = channelLabel(currentChannel);
-}
-
-// "睡前消息588" under "睡前消息588" is the same words twice. When the source
-// title wraps the canonical one in brackets, that is what it always looks like:
-// the brackets hold the episode's own subject line, which is the useful half.
-function archiveRowTitle(item) {
-  const canonical = item.canonical_title || "";
-  const source = item.source_title || item.doc_id;
-  const wrapped = canonical && `【${canonical}】`;
-  if (wrapped && source.startsWith(wrapped)) {
-    return source.slice(wrapped.length).trim() || source;
-  }
-  return source;
 }
 
 function archiveSortKey(item) {
@@ -566,13 +549,9 @@ function setView(view) {
   const wasAtBottom = isNearBottom();
   document.body.dataset.view = view;
   const browse = view === "browse";
-  if (!browse) {
-    document.body.classList.remove("chat-open");
-    els.chatFab.setAttribute("aria-expanded", "false");
-  }
   // Closed / off-mode panes stay out of the tab order and a11y tree.
   els.readingPane.toggleAttribute("inert", !browse);
-  if (mobileDrawer.matches) {
+  if (mobileLayout.matches) {
     // Mobile: full-screen modes — the inactive pane is fully inert.
     els.chatPane.toggleAttribute("inert", browse);
   } else {
@@ -581,7 +560,7 @@ function setView(view) {
   if (!browse && els.readingPane.contains(document.activeElement)) {
     els.appShell.focus();
   }
-  if (browse && mobileDrawer.matches && els.chatPane.contains(document.activeElement)) {
+  if (browse && mobileLayout.matches && els.chatPane.contains(document.activeElement)) {
     els.readingPane.focus?.();
   }
   syncChatPanelAccessibility();
@@ -771,9 +750,8 @@ async function copyShareLink() {
 }
 
 function updateReadingBar() {
-  // Titles live in the pane (archive H1 / reader H1). Top chrome keeps fixed
-  // slots so borders do not jump when back/edit appear.
-  els.readingBarLabel.textContent = "";
+  // Titles live in the pane (archive H1 / reader H1). The bar keeps fixed
+  // slots so its border does not jump when back/edit appear.
   const canGoBack = Boolean(readingBackTarget());
   els.readingBack.hidden = false;
   els.readingBack.classList.toggle("is-slot-hidden", !canGoBack);
@@ -818,7 +796,7 @@ async function showArchive(generation, channel) {
   setPanelLevel("archive");
   renderArchiveHead();
   els.readingScroll.scrollTo({ top: 0 });
-  document.title = `${channelLabel(channel)} · 睡前消息知识库`;
+  document.title = `${channelLabel(channel)}文稿 · 睡前消息知识库`;
   els.archiveState.hidden = false;
   els.archiveState.textContent = "正在接收文稿目录…";
   try {
@@ -897,8 +875,11 @@ async function showReader(uri, generation) {
     updateReadingBar();
     updateShareButton();
     updateChannelBar();
-    document.title = `${article.canonical_title || article.source_title} · 睡前消息知识库`;
-    els.readerTitle.textContent = article.source_title || article.canonical_title || "";
+    // Same rule as the server's _display_title, so the tab title doesn't change on hydration.
+    const displayTitle =
+      article.source_title || article.canonical_title || article.doc_id || "文稿";
+    document.title = `${displayTitle} · 睡前消息知识库`;
+    els.readerTitle.textContent = displayTitle;
     els.readerBody.innerHTML = article.body_html;
     delete document.body.dataset.ssrDocId;
     for (const link of els.readerBody.querySelectorAll("a")) {
@@ -990,42 +971,15 @@ function navigate(href) {
 
 function syncChatPanelAccessibility() {
   // Mobile uses full-screen modes (tabs), not a side drawer.
-  if (mobileDrawer.matches) {
+  if (mobileLayout.matches) {
     const browse = document.body.dataset.view === "browse";
     els.chatPane.toggleAttribute("inert", browse);
     els.chatPane.toggleAttribute("aria-hidden", browse);
-    document.body.classList.remove("chat-open");
-    els.chatFab.setAttribute("aria-expanded", "false");
     return;
   }
-  const drawerClosed =
-    document.body.dataset.view === "browse" &&
-    !document.body.classList.contains("chat-open");
-  // Desktop never hides chat; drawerClosed is always false on desktop.
+  // Desktop never hides chat.
   els.chatPane.toggleAttribute("inert", false);
   els.chatPane.removeAttribute("aria-hidden");
-}
-
-function openChatPanel() {
-  if (mobileDrawer.matches) {
-    navigate("/");
-    return;
-  }
-  if (document.body.dataset.view === "chat") return;
-  document.body.classList.add("chat-open");
-  els.chatFab.setAttribute("aria-expanded", "true");
-  syncChatPanelAccessibility();
-  window.setTimeout(() => els.input.focus(), 0);
-}
-
-function closeChatPanel() {
-  if (mobileDrawer.matches) {
-    // On mobile the archive is a full-screen mode; "close chat" is N/A.
-    return;
-  }
-  document.body.classList.remove("chat-open");
-  els.chatFab.setAttribute("aria-expanded", "false");
-  syncChatPanelAccessibility();
 }
 
 els.archiveSearch.addEventListener("input", () => renderArchive());
@@ -1054,7 +1008,7 @@ els.tabArchive?.addEventListener("click", (event) => {
   event.preventDefault();
   openArchiveTab();
 });
-mobileDrawer.addEventListener("change", () => {
+mobileLayout.addEventListener("change", () => {
   syncChatPanelAccessibility();
   updateMobileTabs();
   // Category labels vs flat list depends on viewport.
@@ -1130,14 +1084,8 @@ els.readingDocBack?.addEventListener("click", () => {
   suppressDocHistoryPush = true;
   navigate(transcriptPath(target));
 });
-els.chatFab.addEventListener("click", openChatPanel);
-els.chatClose.addEventListener("click", closeChatPanel);
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
-  if (document.body.classList.contains("chat-open")) {
-    closeChatPanel();
-    return;
-  }
   // Escape also backs out of the reading pane, the way it closes a modal.
   if (panelLevel) navigate("/");
 });
@@ -1189,7 +1137,9 @@ function addTransmissionTurn() {
 // showing them after the trace itself is folded away.
 function captureCounts(ctx, stepType, content) {
   if (stepType === "retrieve") {
-    const m = content.match(/(\d+)/);
+    // "Retrieved 90 chunks (30 unique), kept top 15 by similarity." — the kept
+    // count is what grading actually sees; the raw total counts duplicates.
+    const m = content.match(/kept top (\d+)/i) || content.match(/(\d+)/);
     if (m) ctx.counts.retrieved = m[1];
   } else if (stepType === "grade") {
     const m = content.match(/\b(\d{1,9})[ \t]*(?:relevant\b|个?相关)/i);
@@ -1339,7 +1289,7 @@ function renderStreamingText(state) {
     // Renderer still in flight: pre-wrap plain text keeps the answer readable
     // until it lands, and the next tick upgrades it.
     state.ctx.answerBody.style.whiteSpace = "pre-wrap";
-    state.ctx.answerBody.textContent = state.answerText;
+    state.ctx.answerBody.textContent = visibleText;
   }
   if (stick) scrollToEnd();
 }
@@ -1510,11 +1460,16 @@ async function handleQuestionError(err, state) {
   }
 
   state.ctx.statusEl.textContent = "信号中断";
+  // The frontend server already sends complete sentences ending in 请稍后重试;
+  // only bare messages (network, HTTP status, raw agent errors) need framing.
+  const text = /请稍后重试。?$/.test(err.message)
+    ? err.message
+    : `信号中断：${err.message}。请稍后重试。`;
   const msg = document.createElement("p");
   msg.className = "answer-error";
-  msg.textContent = `信号中断：${err.message}。请稍后重试。`;
+  msg.textContent = text;
   state.ctx.answerBody.appendChild(msg);
-  announce(`信号中断：${err.message}`);
+  announce(text);
 }
 
 function finishQuestion() {

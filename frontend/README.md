@@ -76,6 +76,10 @@ Frontend：
 | GET  | `/api/transcripts/{doc_id}`           | 单篇文稿（代理 agent）         |
 | POST | `/chat`                               | 将 agent 的 SSE 流代理给浏览器 |
 | GET  | `/healthz`                            | 存活检查                       |
+| GET  | `/index.html`                         | `308` 重定向到 `/`             |
+| GET  | `/robots.txt`                         | 允许全部抓取，并指向 sitemap   |
+| GET  | `/sitemap.xml`                        | 首页、各栏目列表及全部文稿     |
+| GET  | `/s/{short_id}`                       | 短链接，`302` 跳转到文稿       |
 
 ## 开发流程
 
@@ -117,6 +121,8 @@ AGENT_BACKEND_HOST=localhost AGENT_BACKEND_PORT=8000 \
 | `AGENT_BACKEND_HOST` | `agent` | Docker 网络上的 agent 服务名 |
 | `AGENT_BACKEND_PORT` | `8000`  | Agent 端口                   |
 | `FRONTEND_PORT`      | `8080`  | Frontend 发布到的宿主机端口  |
+| `APP_VERSION`        | （空）  | 页头显示的版本；compose 取自 `IMAGE_TAG`（`latest`/空时回退为包版本） |
+| `PUBLIC_BASE_URL`    | `https://bedtime.blog` | canonical、sitemap 与 robots 中 URL 的源站 |
 
 ## 调试
 
@@ -170,7 +176,7 @@ Frontend 代理 agent 的 `/chat` 端点。
 
 ## 故障排查
 
-**8080 端口被占用：** 在 `config.yml` 中把 `frontend_port` 设为其它宿主机端口，
+**8080 端口被占用：** 在 `.env` 中把 `FRONTEND_PORT` 设为其它宿主机端口，
 并重建服务（`docker compose up -d web`）。
 
 **无法连接后端：**

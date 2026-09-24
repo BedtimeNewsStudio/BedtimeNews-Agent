@@ -28,18 +28,21 @@
         preference = q === "light" || q === "dark" ? q : sessionStorage.getItem("theme");
         if (preference !== "light" && preference !== "dark") preference = null;
         if (q === "light" || q === "dark") sessionStorage.setItem("theme", q);
-        localStorage.removeItem("theme");
       } catch (e) {
         console.warn("Theme storage is unavailable; using the system preference.", e);
       }
-      root.dataset.theme = preference || systemTheme;
+      var theme = preference || systemTheme;
+      root.dataset.theme = theme;
       root.dataset.themePreference = preference ? "user" : "system";
+      // Keep in sync with applyTheme() in app.js.
+      document.getElementById("theme-color-meta")
+        .setAttribute("content", theme === "light" ? "#ffffff" : "#212121");
     })();
   </script>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 
-<body data-view="__BODY_VIEW__" data-panel="__BODY_PANEL__" data-ssr-doc-id="__SSR_DOC_ID__" data-ssr-channel="__SSR_CHANNEL__">
+<body data-view="__BODY_VIEW__" data-panel="__BODY_PANEL__" data-ssr-doc-id="__SSR_DOC_ID__">
   <a class="skip-link" href="#app-shell">跳到主要内容</a>
 
   <header class="masthead">
@@ -78,14 +81,6 @@
 
   <main class="app-shell" id="app-shell" tabindex="-1">
     <section class="chat-pane" id="chat-pane" aria-label="知识库 Agent">
-      <header class="chat-pane-head">
-        <span>ASK THE ARCHIVE</span>
-        <button class="chat-close" id="chat-close" type="button" aria-label="关闭 Agent 面板">
-          <svg class="icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
-            <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
-          </svg>
-        </button>
-      </header>
       <div class="stage" id="stage">
         <section class="hero" id="hero">
           <div class="sample-section">
@@ -107,7 +102,7 @@
           <label class="sr-only" for="composer-input">输入你的问题</label>
           <textarea id="composer-input" class="composer-input" rows="1" placeholder="输入你的问题"
             autocomplete="off" spellcheck="false" enterkeyhint="send"></textarea>
-          <button type="submit" class="composer-send" id="composer-send" aria-label="发送">
+          <button type="submit" class="composer-send" id="composer-send" aria-label="发送问题">
             <!-- Desktop shows the label text; mobile swaps it for icons:
                  up arrow = send, square = stop. -->
             <svg class="icon icon-send" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
@@ -138,7 +133,6 @@
             <path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" />
           </svg>
         </button>
-        <p class="reading-bar-label" id="reading-bar-label"></p>
         <button class="reading-share is-slot-hidden" id="reading-share" type="button" aria-label="复制分享链接" title="复制分享链接" tabindex="-1" aria-hidden="true">
           <svg class="icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
             <circle cx="18" cy="5" r="2.5" fill="none" stroke="currentColor" stroke-width="1.75" />
@@ -182,8 +176,6 @@
       </div>
     </aside>
   </main>
-
-  <button class="chat-fab" id="chat-fab" type="button" aria-controls="chat-pane" aria-expanded="false">问 Agent</button>
 
   <!-- Mobile primary nav: auto layout ≤900px. Chat and archive are full-screen
        modes, not a side drawer. -->
