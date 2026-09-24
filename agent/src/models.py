@@ -2,6 +2,8 @@
 
 from pydantic import BaseModel, Field
 
+from .settings import settings
+
 # ============================================================================
 # Chat API Models
 # ============================================================================
@@ -81,7 +83,7 @@ class RetrieveRequest(BaseModel):
         min_length=1,
     )
     match_threshold: float = Field(
-        default=0.7,
+        default_factory=lambda: settings.match_threshold,
         description="Cosine similarity threshold (0.0-1.0)",
         ge=0.0,
         le=1.0,

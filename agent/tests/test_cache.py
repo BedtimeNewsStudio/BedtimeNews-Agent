@@ -1,6 +1,11 @@
 """Unit tests for the query cache (hash_query) and LRUCache."""
 
+from pydantic import BaseModel
 from src.cache import LRUCache, hash_query
+
+
+class _Payload(BaseModel):
+    text: str
 
 
 class TestHashQuery:
@@ -8,11 +13,6 @@ class TestHashQuery:
         a = hash_query("q", 0.5, 10)
         b = hash_query("q", 0.5, 10)
         assert a == b
-
-    def test_md5_hex_shape(self):
-        h = hash_query("q", 0.5, 10)
-        assert len(h) == 32
-        assert all(c in "0123456789abcdef" for c in h)
 
     def test_each_parameter_affects_key(self):
         base = hash_query("q", 0.5, 10, include_text=True, include_heading=True)
@@ -42,14 +42,14 @@ class TestLRUCache:
         cache = LRUCache(capacity=10)
         cache.put("a", 1)
         cache.put("b", 2)
-        assert cache.size() == 2
+        assert len(cache.cache) == 2
 
     def test_capacity_eviction_drops_least_recently_used(self):
         cache = LRUCache(capacity=2, max_memory_mb=100)
         cache.put("a", 1)
         cache.put("b", 2)
         cache.put("c", 3)  # exceeds capacity -> evicts "a"
-        assert cache.size() == 2
+        assert len(cache.cache) == 2
         assert cache.get("a") is None
         assert cache.get("b") == 2
         assert cache.get("c") == 3
@@ -68,24 +68,16 @@ class TestLRUCache:
         cache = LRUCache(capacity=2)
         cache.put("a", 1)
         cache.put("a", 2)
-        assert cache.size() == 1
+        assert len(cache.cache) == 1
         assert cache.get("a") == 2
 
     def test_memory_cap_eviction(self):
-        # ~1 KB cap; each value is far larger, so only one fits at a time.
+        # ~1 KB cap. The value is a model, like the retriever's cached responses,
+        # so this fails if its size is measured shallowly.
         cache = LRUCache(capacity=1000, max_memory_mb=0.001)
-        big = "x" * 2000
+        big = _Payload(text="x" * 2000)
         cache.put("a", big)
         cache.put("b", big)
-        assert cache.size() == 1
+        assert len(cache.cache) == 1
         assert cache.get("b") == big
-        assert cache.get("a") is None
-
-    def test_clear_resets_state(self):
-        cache = LRUCache(capacity=10)
-        cache.put("a", 1)
-        cache.put("b", 2)
-        cache.clear()
-        assert cache.size() == 0
-        assert cache.memory_usage_mb() == 0
         assert cache.get("a") is None

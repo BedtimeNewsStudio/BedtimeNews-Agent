@@ -49,6 +49,7 @@ from .eval_queries import (
 )
 from .models import RetrieveRequest
 from .retriever import retriever
+from .settings import settings
 
 LABELLED_QUERIES_FILE = Path(__file__).with_name("eval_retriever_labels.json")
 
@@ -104,14 +105,14 @@ def main():
     parser.add_argument(
         "--match-count",
         type=int,
-        default=5,
-        help="Number of results to retrieve per query (default: 5)",
+        default=settings.retrieval_top_k,
+        help="Number of results to retrieve per query (default: retrieval_top_k)",
     )
     parser.add_argument(
         "--threshold",
         type=float,
-        default=0.5,
-        help="Minimum similarity threshold (default: 0.5)",
+        default=settings.match_threshold,
+        help="Minimum similarity threshold (default: match_threshold)",
     )
 
     parser.add_argument(
@@ -277,8 +278,8 @@ def _format_summary(
 
 def _run_retrieval_test(
     queries: list[dict[str, str]],
-    match_count: int = 5,
-    match_threshold: float = 0.5,
+    match_count: int,
+    match_threshold: float,
 ) -> dict[str, Any]:
     """
     Run retrieval tests on a list of queries.

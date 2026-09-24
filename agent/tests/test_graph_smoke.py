@@ -38,10 +38,6 @@ GENERATION_OUTPUT = f"{ANSWER}\n\n{graph_mod.FOLLOWUPS_DELIMITER}\n" + "\n".join
 )
 
 
-class _ScriptedFastModel(GenericFakeChatModel):
-    """Answers the fast-model nodes in the order the graph calls them."""
-
-
 def _fake_chunk(i: int) -> ChunkResult:
     return ChunkResult(
         chunk_id=f"chunk-{i}",
@@ -72,7 +68,7 @@ class _FakeRetriever:
 @pytest.fixture
 def stub_pipeline(monkeypatch):
     """Replace every outbound dependency of the graph."""
-    # route -> RAG, query_rewrite -> one query, grade -> both documents relevant.
+    # route -> RAG, query_rewrite -> one query, grade -> all three relevant.
     fast = GenericFakeChatModel(messages=iter(["RAG", "鹤岗 收缩型城市", "1,2,3"]))
     generation = GenericFakeChatModel(messages=iter([GENERATION_OUTPUT]))
 

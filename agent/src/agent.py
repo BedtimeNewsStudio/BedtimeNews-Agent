@@ -2,10 +2,11 @@
 LangGraph-based Agentic RAG agent for BedtimeNews knowledge base.
 
 Public API:
-    agent_query(question: str) -> dict
+    agent_query(question: str, history: list[dict] | None = None) -> dict
         Process a user question and return complete result.
 
-    agent_stream_query(question: str) -> AsyncIterator[dict]
+    agent_stream_query(question: str, history: list[dict] | None = None)
+            -> AsyncIterator[dict]
         Process a user question and yield streaming events.
 
 Usage:
@@ -75,6 +76,7 @@ async def agent_stream_query(
 
     Args:
         question: The user's input question or query string
+        history: Prior turns, oldest first, each {question, answer, grounded}
 
     Yields:
         dict: Events with structure:

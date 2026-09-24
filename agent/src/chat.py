@@ -31,7 +31,7 @@ def nonstream_chat(request: ChatRequest) -> ChatResponse:
     )
 
 
-async def stream_chat(request: ChatRequest) -> AsyncGenerator[str, None]:
+async def stream_chat(request: ChatRequest) -> AsyncGenerator[str]:
     """
     Stream chat responses in Server-Sent Events (SSE) format.
 

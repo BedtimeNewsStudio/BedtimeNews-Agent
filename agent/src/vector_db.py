@@ -1,7 +1,6 @@
 """Vector Database Operations for RAG System.
 
 Provides module-level functions for PostgreSQL + pgvector operations with connection pooling.
-Follows the pattern from topicstreams/common/database.py.
 """
 
 import logging
@@ -168,8 +167,8 @@ class _Connection:
 @retry_on_transient_error()
 def search_similar_chunks(
     query_embedding: list[float],
-    match_threshold: float = 0.7,
-    match_count: int = 10,
+    match_threshold: float,
+    match_count: int,
     doc_id_filter: list[str] | None = None,
     include_text: bool = True,
 ) -> list[dict[str, Any]]:
@@ -187,12 +186,23 @@ def search_similar_chunks(
     Returns:
         List of matching chunks with similarity scores
     """
+    # The inner query orders by the raw `<=>` distance with a LIMIT so pgvector
+    # can serve it from the HNSW index; the threshold is applied afterwards.
+    # Filtering or ordering on the derived similarity would force a full scan.
     # LEFT JOIN, not INNER: a chunk whose title row is missing (a transcript
     # indexed before the title sync caught up) must still be retrievable, with
     # the caller falling back to a rule-derived label.
+    params: list[Any] = [query_embedding]
+    doc_filter_sql = ""
+    if doc_id_filter:
+        placeholders = ",".join(["%s"] * len(doc_id_filter))
+        doc_filter_sql = f"AND c.doc_id IN ({placeholders})"
+        params.extend(doc_id_filter)
+    params.extend([query_embedding, match_count, match_threshold])
+
     query = f"""
-        WITH similarities AS (
-            SELECT DISTINCT ON (c.chunk_id)
+        SELECT * FROM (
+            SELECT
                 c.chunk_id,
                 c.doc_id,
                 d.title,
@@ -200,27 +210,16 @@ def search_similar_chunks(
                 c.heading,
                 {"c.text," if include_text else ""}
                 c.word_count,
-                1 - (c.embedding <=> %s::halfvec) as similarity
+                1 - (c.embedding <=> %s::halfvec) AS similarity
             FROM rag.document_chunks c
             LEFT JOIN rag.documents d ON d.doc_id = c.doc_id
-            WHERE c.embedding IS NOT NULL
-        )
-        SELECT * FROM similarities
+            WHERE c.embedding IS NOT NULL {doc_filter_sql}
+            ORDER BY c.embedding <=> %s::halfvec
+            LIMIT %s
+        ) nearest
         WHERE similarity >= %s
-    """
-
-    params = [query_embedding, match_threshold]
-
-    if doc_id_filter:
-        placeholders = ",".join(["%s"] * len(doc_id_filter))
-        query += f" AND doc_id IN ({placeholders})"
-        params.extend(doc_id_filter)
-
-    query += """
         ORDER BY similarity DESC, chunk_id
-        LIMIT %s
     """
-    params.append(match_count)
 
     with _Connection() as conn:
         cursor = conn.cursor()

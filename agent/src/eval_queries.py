@@ -1,7 +1,7 @@
 """
 Evaluation queries for the BedtimeNews Agentic RAG system.
 
-Includes 18 categories covering multiple channels (睡前消息, 参考信息, 每日新闻, 讲点黑话, 高见, 产经破壁机):
+Includes 19 categories covering multiple channels (睡前消息, 参考信息, 讲点黑话, 高见, 产经破壁机):
 
 1. 地方债/城投债/独山县
 2. 人口问题/社会化抚养
@@ -21,6 +21,7 @@ Includes 18 categories covering multiple channels (睡前消息, 参考信息, �
 16. 跨主题综合问题
 17. 复杂推理问题
 18. 问候语（测试基本路由）
+19. 补录语料回归验证
 """
 
 # =============================================================================

@@ -40,7 +40,16 @@ def hash_query(
 
 
 def _estimate_size(obj: Any) -> int:
-    """Estimate memory footprint of a cached object in bytes."""
+    """Approximate memory footprint of a cached value in bytes.
+
+    ``sys.getsizeof`` is shallow: a pydantic response holding thirty chunks of
+    text measures the same ~100 bytes as an empty one, so it cannot drive a
+    memory cap. The serialized length tracks what the value actually holds.
+    """
+    if hasattr(obj, "model_dump_json"):
+        return len(obj.model_dump_json())
+    if isinstance(obj, str | bytes):
+        return len(obj)
     return sys.getsizeof(obj)
 
 
@@ -118,20 +127,3 @@ class LRUCache:
         _, size = self._sizes.popitem(last=False)
         self.cache.popitem(last=False)
         self._total_size -= size
-
-    def clear(self) -> None:
-        """Clear all cached items."""
-        with self._lock:
-            self.cache.clear()
-            self._sizes.clear()
-            self._total_size = 0
-
-    def size(self) -> int:
-        """Return current cache size."""
-        with self._lock:
-            return len(self.cache)
-
-    def memory_usage_mb(self) -> float:
-        """Return approximate memory usage in megabytes."""
-        with self._lock:
-            return self._total_size / (1024 * 1024)

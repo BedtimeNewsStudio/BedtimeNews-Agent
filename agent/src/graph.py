@@ -102,6 +102,9 @@ _direct_llm = ChatOpenAI(
     **settings.generation.client_kwargs("generation"),
 )
 
+# The first retrieval plus one broader query-rewrite retry.
+MAX_ITERATIONS = 2
+
 _GRADING_SYSTEM_PROMPT = """You are a document relevance grader.
 
 Assess which documents are relevant to the user's input (question, topic, or statement).
@@ -572,7 +575,7 @@ def _retrieve_node(state: AgentState) -> AgentState:
             )
             all_chunks.append(chunk)
 
-    # Deduplicate by chunk_id (SQL DISTINCT ON already handles most, but this ensures safety)
+    # The same chunk is usually retrieved by several of the rewritten queries
     seen_ids = set()
     unique_chunks = []
     for chunk in all_chunks:
@@ -643,31 +646,34 @@ def _documents_grade_node(state: AgentState) -> AgentState:
     # ("大家好，……欢迎收看第N期睡前消息"), which describes nothing. Grading on
     # headings alone discarded chunks that were densely on-topic and had been
     # retrieved on the strength of their text.
-    chunk_list = []
-    for i, doc in enumerate(documents, 1):
-        heading = doc.metadata.get("heading", "")
-        similarity = doc.metadata.get("similarity", 0)
-        excerpt = " ".join((doc.page_content or "").split())[
-            : settings.grading_excerpt_chars
-        ]
-        chunk_list.append(
-            f"Document {i} [{heading}] (similarity: {similarity:.2f})\n"
-            f"Excerpt: {excerpt}\n"
-        )
+    def format_for_grading(docs: list[Document]) -> str:
+        # Numbered from 1 within each prompt: the grader's answer is parsed as
+        # positions in the list it was shown.
+        entries = []
+        for i, doc in enumerate(docs, 1):
+            heading = doc.metadata.get("heading", "")
+            similarity = doc.metadata.get("similarity", 0)
+            excerpt = " ".join((doc.page_content or "").split())[
+                : settings.grading_excerpt_chars
+            ]
+            entries.append(
+                f"Document {i} [{heading}] (similarity: {similarity:.2f})\n"
+                f"Excerpt: {excerpt}\n"
+            )
+        return "\n---\n".join(entries)
 
     # Use parallel processing for large document sets
     if len(documents) > settings.grading_parallel_threshold:
         # Split into batches for parallel processing
         batch_size = max(10, len(documents) // 3)
         batches = [
-            chunk_list[i : i + batch_size]
-            for i in range(0, len(chunk_list), batch_size)
+            documents[i : i + batch_size] for i in range(0, len(documents), batch_size)
         ]
 
         # Prepare messages for each batch
         messages_list = []
         for batch in batches:
-            batch_text = "\n---\n".join(batch)
+            batch_text = format_for_grading(batch)
             messages_list.append(
                 [
                     SystemMessage(content=_GRADING_SYSTEM_PROMPT),
@@ -714,7 +720,7 @@ def _documents_grade_node(state: AgentState) -> AgentState:
         )
     else:
         # Single batch mode for smaller document sets
-        all_chunks_text = "\n---\n".join(chunk_list)
+        all_chunks_text = format_for_grading(documents)
 
         messages = [
             SystemMessage(content=_GRADING_SYSTEM_PROMPT),
@@ -742,20 +748,12 @@ def _documents_grade_node(state: AgentState) -> AgentState:
             # All documents are relevant
             relevant_chunks = documents
         else:
-            # Parse comma-separated numbers
-            try:
-                # Extract numbers from response (handles "1,3,5" or "1, 3, 5" etc.)
-                numbers = re.findall(r"\d+", response_text)
-                relevant_indices = {
-                    int(n) - 1 for n in numbers if 1 <= int(n) <= len(documents)
-                }
-                relevant_chunks = [documents[i] for i in sorted(relevant_indices)]
-            except (ValueError, IndexError):
-                # If parsing fails, log warning and keep all documents to be safe
-                logger.warning(
-                    f"Failed to parse grading response: {response_text}, keeping all documents"
-                )
-                relevant_chunks = documents
+            # Extract numbers from response (handles "1,3,5" or "1, 3, 5" etc.)
+            numbers = re.findall(r"\d+", response_text)
+            relevant_indices = {
+                int(n) - 1 for n in numbers if 1 <= int(n) <= len(documents)
+            }
+            relevant_chunks = [documents[i] for i in sorted(relevant_indices)]
 
         total_time = time.perf_counter() - start_time
         logger.info(
@@ -920,8 +918,8 @@ Example ending:
     # delimiter, so they cost no extra call and can see what was retrieved.
     answer, followups = _split_followups(answer)
 
-    # Repair citations the model may have written without (or with a placeholder)
-    # URL — the prompt asks for full markdown links but can't guarantee them.
+    # Turn the bare `[[URI]]` citations the prompt asks for (and the spellings the
+    # model drifts into) into titled links to the transcript pages.
     answer, repaired = _repair_citations(answer, citation_map)
 
     # Repair only rewrites citations that are present in some form. The model
@@ -1034,7 +1032,7 @@ def _should_refine_query(state: AgentState) -> Literal["generate", "rewrite"]:
     relevant_chunks = state.get("relevant_documents", [])
     iteration_count = state.get("iteration_count", 0)
     # Fallback matters only if state was built outside create_initial_state
-    max_iterations = state.get("max_iterations", 1)
+    max_iterations = state.get("max_iterations", MAX_ITERATIONS)
 
     # If we have relevant documents, proceed to generation
     if relevant_chunks:
@@ -1101,7 +1099,7 @@ def _repair_citations(answer: str, citation_map: dict[str, str]) -> tuple[str, i
 
     This is the step that turns what the model wrote — `[[<URI>]]`, or one of the
     spellings it drifts into — into what the reader should see:
-    `[[标准化标题]](https://…/<URI>.html)`. The model never writes the URL or the
+    `[[标准化标题]](/transcripts/<URI>)`. The model never writes the URL or the
     title itself; both are looked up here from the retrieved documents, so a
     citation is either correct or absent, never plausibly wrong.
 
@@ -1114,7 +1112,7 @@ def _repair_citations(answer: str, citation_map: dict[str, str]) -> tuple[str, i
     """
     repaired = 0
 
-    def _sub(match: "re.Match[str]") -> str:
+    def _sub(match: re.Match[str]) -> str:
         nonlocal repaired
         name = match.group(1) or match.group(2)
         canonical = citation_map.get(name)
@@ -1265,5 +1263,5 @@ def create_initial_state(
         "final_answer": "",
         "reasoning_steps": [],
         "iteration_count": 0,
-        "max_iterations": 2,
+        "max_iterations": MAX_ITERATIONS,
     }
