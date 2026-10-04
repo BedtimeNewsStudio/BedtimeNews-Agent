@@ -8,7 +8,9 @@ El Q&A funciona con un sistema RAG agéntico (Retrieval-Augmented Generation) �
 enrutamiento automático, búsqueda semántica, contexto de transcripciones
 recuperadas y citas de episodios.
 
-> **¡Pruébalo:** [bedtime.blog](https://bedtime.blog)
+<video src="https://github.com/user-attachments/assets/ce5061b0-a96a-4efa-918f-4b6e68350bcd" controls playsinline width="100%"></video>
+
+> Video en chino. ¿No se reproduce? Prueba el sitio directamente en [bedtime.blog](https://bedtime.blog).
 
 ## Descripción General
 

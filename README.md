@@ -6,7 +6,9 @@
 问答由智能 RAG（检索增强生成）系统提供——自动路由、语义搜索、检索文稿
 上下文与节目引用。
 
-> **立即体验：** [bedtime.blog](https://bedtime.blog)
+<video src="https://github.com/user-attachments/assets/ce5061b0-a96a-4efa-918f-4b6e68350bcd" controls playsinline width="100%"></video>
+
+> 视频无法播放？可直接访问 [bedtime.blog](https://bedtime.blog) 体验。
 
 ## 概述
 
