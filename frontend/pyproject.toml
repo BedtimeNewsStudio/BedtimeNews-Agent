@@ -5,7 +5,7 @@ description = "Custom FastAPI + static UI frontend for Bedtime News"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.141.1",
-    "uvicorn[standard]>=0.52.4",
+    "uvicorn[standard]>=0.54.0",
     "httpx>=0.28.0",
 ]
 
