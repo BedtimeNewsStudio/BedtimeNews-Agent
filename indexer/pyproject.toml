@@ -7,7 +7,7 @@ dependencies = [
     # Scheduling
     "croniter>=6.0.0",
     # Database
-    "psycopg2-binary>=2.9.12",
+    "psycopg2-binary>=2.9.13",
     # Embeddings
     "openai>=3.8.0",
     "tiktoken>=0.13.0",

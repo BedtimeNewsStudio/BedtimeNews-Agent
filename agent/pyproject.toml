@@ -5,7 +5,7 @@ description = "Agentic RAG retrieval API for Bedtime News"
 requires-python = ">=3.12"
 dependencies = [
     # Web Framework
-    "fastapi>=0.141.1",
+    "fastapi>=0.142.2",
     "uvicorn[standard]>=0.54.0",
     # Database
     "psycopg2-binary>=2.9.11",
