@@ -46,7 +46,7 @@ from fastapi.responses import (
 )
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import Response
-from starlette.types import Scope
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from starters import CATEGORIES
 
 AGENT_BACKEND_HOST = os.environ.get("AGENT_BACKEND_HOST", "agent")
@@ -130,6 +130,40 @@ async def security_headers(request: Request, call_next):
         "connect-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'none'"
     )
     return response
+
+
+class HeadAsGetMiddleware:
+    """Answer HEAD exactly like GET, minus the body.
+
+    Routes are registered for GET only, so without this a HEAD fell through to
+    the static mount: a 404 for every SSR page, robots.txt and sitemap.xml, and
+    the bare static shell for "/". Crawlers and link checkers that probe with
+    HEAD then treat live pages as missing. Rewriting the method lets HEAD share
+    the GET route's status, ETag, Content-Type and Content-Length.
+
+    Added last so it is the outermost layer and every other middleware (gzip
+    included) sees a GET.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or scope["method"] != "HEAD":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_without_body(message: Message) -> None:
+            if message["type"] == "http.response.body":
+                if message.get("more_body", False):
+                    return
+                message = {"type": "http.response.body", "body": b""}
+            await send(message)
+
+        await self.app({**scope, "method": "GET"}, receive, send_without_body)
+
+
+app.add_middleware(HeadAsGetMiddleware)
 
 
 def _sse_error(message: str) -> bytes:

@@ -379,6 +379,36 @@ def test_robots_txt_advertises_sitemap_and_revalidates(client):
     assert second.status_code == 304
 
 
+def _assert_head_matches_get(client, path):
+    get = client.get(path, headers={"Accept-Encoding": "identity"})
+    head = client.head(path, headers={"Accept-Encoding": "identity"})
+
+    assert head.status_code == get.status_code
+    assert head.content == b""
+    for name in ("content-type", "content-length", "etag", "cache-control"):
+        assert head.headers.get(name) == get.headers.get(name), name
+
+
+@pytest.mark.parametrize("path", ["/", "/robots.txt", "/app.js"])
+def test_head_matches_get_for_local_pages(client, path):
+    _assert_head_matches_get(client, path)
+
+
+def test_head_matches_get_for_ssr_transcript(client):
+    server._client = _FakeJsonClient(_json_upstream(200, _article_payload()))
+
+    _assert_head_matches_get(client, "/transcripts/ShuiQianXiaoXi/0501-0600/0588.md")
+
+
+def test_head_on_missing_transcript_is_still_a_404(client):
+    server._client = _FakeJsonClient(_json_upstream(404, {"detail": "not found"}))
+
+    response = client.head("/transcripts/ShuiQianXiaoXi/0001-0100/0001.md")
+
+    assert response.status_code == 404
+    assert response.content == b""
+
+
 def test_sitemap_contains_root_channels_articles_and_lastmods(client):
     items = [
         _index_item(
