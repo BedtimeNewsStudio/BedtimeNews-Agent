@@ -11,6 +11,7 @@ from types import FrameType
 
 from croniter import croniter
 
+from .db import request_shutdown
 from .settings import settings
 
 logger = logging.getLogger(__name__)
@@ -24,10 +25,7 @@ shutdown_requested = False
 
 def run_scheduler(run_pipeline: Callable[[], None]) -> None:
     """Run the pipeline according to the configured cron expression."""
-    global shutdown_requested
-    shutdown_requested = False
-    signal.signal(signal.SIGTERM, _signal_handler)
-    signal.signal(signal.SIGINT, _signal_handler)
+    install_signal_handlers()
     _configure_file_logging()
 
     cron_schedule = settings.indexer_cron_schedule
@@ -37,13 +35,17 @@ def run_scheduler(run_pipeline: Callable[[], None]) -> None:
     logger.info("Schedule: %s", cron_schedule)
 
     try:
-        schedule = croniter(cron_schedule, datetime.now().astimezone())
+        croniter(cron_schedule, datetime.now().astimezone())
     except KeyError, TypeError, ValueError:
         logger.exception("Invalid cron schedule: %s", cron_schedule)
         sys.exit(1)
 
     while not shutdown_requested:
-        next_run = schedule.get_next(datetime)
+        # Compute the next slot from *now*: a run that overran the interval
+        # skips the missed slots instead of firing them back to back.
+        next_run = croniter(cron_schedule, datetime.now().astimezone()).get_next(
+            datetime
+        )
         logger.info("Next indexing run: %s", next_run.isoformat())
         if not _wait_until(next_run):
             break
@@ -53,6 +55,12 @@ def run_scheduler(run_pipeline: Callable[[], None]) -> None:
             logger.exception("Scheduled pipeline execution failed")
 
     logger.info("Shutting down...")
+
+
+def install_signal_handlers() -> None:
+    """Route SIGTERM/SIGINT to a graceful stop that also aborts a build."""
+    signal.signal(signal.SIGTERM, _signal_handler)
+    signal.signal(signal.SIGINT, _signal_handler)
 
 
 def _configure_file_logging() -> None:
@@ -88,7 +96,13 @@ def _wait_until(next_run: datetime) -> bool:
 
 
 def _signal_handler(signum: int, _frame: FrameType | None) -> None:
-    """Request shutdown after the active pipeline or scheduler wait finishes."""
+    """Stop scheduling and abort a running build.
+
+    The running statement is cancelled, so Postgres rolls the build
+    transaction back and nothing half-built remains (compose gives the
+    indexer a 30 s stop grace period).
+    """
     global shutdown_requested
     logger.info("Received signal %s", signum)
     shutdown_requested = True
+    request_shutdown()

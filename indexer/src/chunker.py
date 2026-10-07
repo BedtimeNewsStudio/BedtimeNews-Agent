@@ -10,6 +10,13 @@ HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.+?)$", re.MULTILINE)
 PARAGRAPH_SPLIT_PATTERN = re.compile(r"\n\s*\n")
 TOKEN_PATTERN = re.compile(r"[\u4e00-\u9fff]|[a-zA-Z]+|\S")
 
+# Bump whenever the chunking parameters below (the defaults of chunk_document)
+# or the chunking logic change. It is part of the snapshot pipeline
+# fingerprint, so a bump makes the next build a full build; chunks whose text
+# did not change still reuse their vectors. Forgetting a bump mixes old and new
+# chunking in one snapshot.
+CHUNKER_VERSION = 1
+
 
 def chunk_document(
     document: Document,

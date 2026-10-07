@@ -6,8 +6,8 @@ required_uris:
   - ShuiQianXiaoXi/misc/motiaonews1.md
   - CanKaoXinXi/0401-0500/0490.md
   - GaoJian/0001-0100/0012.md
-  - JiangDianHeiHua/0001-0100/0005.md
-  - ChanJingPoBiJi/misc/biz-001.md
+
+  - ChanJingPoBiJi/2024-07-25.md
   - ChanJingPoBiJi/2026-06-03.md
 
 include:
@@ -16,8 +16,8 @@ include:
   - ShuiQianXiaoXi/misc/motiaonews1.md
   - CanKaoXinXi/0401-0500/0490.md
   - GaoJian/0001-0100/0012.md
-  - JiangDianHeiHua/0001-0100/0005.md
-  - ChanJingPoBiJi/misc/biz-001.md
+
+  - ChanJingPoBiJi/2024-07-25.md
   - ChanJingPoBiJi/2026-06-03.md
 
 exclude: []

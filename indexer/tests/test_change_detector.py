@@ -67,12 +67,9 @@ class TestDetectChanges:
                 "body_normalization_version": BODY_NORMALIZATION_VERSION,
             },
         }
-        monkeypatch.setattr(
-            change_detector, "get_indexing_histories", lambda: histories
-        )
-
         changes = detect_changes(
-            {"same.md", "source-only.md", "body.md", "legacy.md", "added.md"}
+            {"same.md", "source-only.md", "body.md", "legacy.md", "added.md"},
+            histories,
         )
 
         assert changes.added == {"added.md"}
@@ -94,11 +91,7 @@ class TestDetectChanges:
         history = current | {
             "body_normalization_version": BODY_NORMALIZATION_VERSION - 1
         }
-        monkeypatch.setattr(
-            change_detector, "get_indexing_histories", lambda: {"doc.md": history}
-        )
-
-        changes = detect_changes({"doc.md"})
+        changes = detect_changes({"doc.md"}, {"doc.md": history})
 
         assert changes.body_modified == {"doc.md"}
 

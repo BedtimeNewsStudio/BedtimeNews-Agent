@@ -12,6 +12,7 @@ class _ImmediateSchedule:
 def _disable_scheduler_side_effects(monkeypatch):
     monkeypatch.setattr(scheduler.signal, "signal", lambda *_args: None)
     monkeypatch.setattr(scheduler, "_configure_file_logging", lambda: None)
+    monkeypatch.setattr(scheduler, "shutdown_requested", False)
 
 
 def test_scheduler_runs_pipeline_when_schedule_is_due(monkeypatch):
@@ -44,3 +45,33 @@ def test_scheduler_rejects_invalid_cron_expression(monkeypatch):
         scheduler.run_scheduler(lambda: None)
 
     assert exc_info.value.code == 1
+
+
+def test_overrunning_run_does_not_trigger_catch_up(monkeypatch):
+    """The next slot is computed from now, so missed slots are skipped."""
+    _disable_scheduler_side_effects(monkeypatch)
+    starts = []
+
+    class _Schedule:
+        def __init__(self, start):
+            self.start = start
+
+        def get_next(self, _return_type):
+            starts.append(self.start)
+            return self.start
+
+    monkeypatch.setattr(scheduler, "croniter", lambda _expr, start: _Schedule(start))
+    runs = []
+
+    def run_pipeline():
+        runs.append(1)
+        if len(runs) == 2:
+            scheduler.shutdown_requested = True
+
+    scheduler.run_scheduler(run_pipeline)
+
+    # Each loop builds a fresh schedule anchored at the current time instead of
+    # stepping through a pre-computed sequence of (possibly missed) slots.
+    assert len(runs) == 2
+    assert len(starts) == 2
+    assert starts == sorted(starts)

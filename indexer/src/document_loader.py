@@ -9,10 +9,12 @@ from .paths import CONTENTS_DIR
 
 logger = logging.getLogger(__name__)
 
-# Increment this whenever the normalized text passed to chunking, or the way it
-# is chunked, changes. Rows written by an older version are deliberately
-# re-indexed even if the source bytes are unchanged.
+# Increment this whenever the normalized text passed to chunking changes
+# (chunking changes bump CHUNKER_VERSION in chunker.py instead). It is part of
+# the snapshot pipeline fingerprint, so a bump makes the next build a full
+# build; chunks whose text is unchanged still reuse their vectors.
 #   2: overlap no longer carried across section headings; min chunk size 200 -> 50
+#      (from before CHUNKER_VERSION existed)
 #   3: text before a body's first sub-heading is no longer dropped
 BODY_NORMALIZATION_VERSION = 3
 

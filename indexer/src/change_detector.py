@@ -2,11 +2,11 @@
 
 import hashlib
 from dataclasses import dataclass, field
+from typing import Any
 
 from .document_loader import BODY_NORMALIZATION_VERSION, load_indexable_source
 from .models import LoadedIndexableSource
 from .paths import CONTENTS_DIR
-from .vector_db import get_indexing_histories
 
 
 @dataclass
@@ -38,15 +38,19 @@ class ChangeSet:
         return self.added | self.body_modified | self.legacy_requires_reindex
 
 
-def detect_changes(current_files: set[str]) -> ChangeSet:
-    """Compare synchronized sources with the state represented in PostgreSQL.
+def detect_changes(
+    current_files: set[str], histories: dict[str, dict[str, Any]]
+) -> ChangeSet:
+    """Compare synchronized sources with a snapshot's ``index_state``.
+
+    ``histories`` maps file path -> that snapshot's index_state row (empty for
+    a build with nothing to compare against).
 
     The full-source hash is the cheap first gate. Only a new, changed, or legacy
     source is parsed and normalized. This keeps the hourly no-op path to one raw
     file read per transcript while ensuring only changes to the exact text sent
     to chunking and embeddings cause a RAG rebuild.
     """
-    histories = get_indexing_histories()
     changes = ChangeSet(deleted=set(histories) - current_files)
 
     for uri in sorted(current_files):

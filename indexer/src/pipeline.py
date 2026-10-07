@@ -1,34 +1,42 @@
-"""Incremental RAG indexing and transcript projection pipeline."""
+"""One indexer run: build and publish a RAG snapshot.
+
+    file lock -> bootstrap/adopt -> git sync and pin commit -> plan (diff
+    against the base snapshot) -> GC + disk precheck -> Phase A -> Phase B
+    -> GC -> indexer_status
+
+Every step that can fail leaves published snapshots untouched; the next run
+retries against the same base. ``python -m src.pipeline`` runs one
+incremental build (same as ``python -m src.snapshots build``).
+"""
 
 import logging
+from dataclasses import dataclass
 
-from .change_detector import ChangeSet, detect_changes
-from .chunker import chunk_document
-from .embeddings import generate_embeddings
-from .file_scanner import scan_files
-from .git_sync import sync_repository
-from .models import Chunk
-from .paths import CONTENTS_DIR
-from .settings import settings
-from .stats import collect_stats
-from .transcript_export import TRANSCRIPT_PROJECTION_VERSION, project_transcript
-from .uri_mapping import load_uri_titles, resolve_title
-from .vector_db import (
-    close_connection_pool,
-    delete_indexed_document,
-    delete_transcript_projection,
-    get_transcript_states,
-    record_source_only_change,
-    replace_document_index,
-    sync_transcript_titles,
-    upsert_document_titles,
-    upsert_transcript_projection,
+from . import catalog
+from .builder import (
+    BuildBusy,
+    BuildCancelled,
+    disk_precheck,
+    plan_build,
+    prepare,
+    publish,
 )
+from .db import SHUTDOWN, close, connect
+from .git_sync import head_commit, sync_repository
+from .run_lock import RunLockBusy, run_lock
+from .settings import settings
 
 logging.basicConfig(
     level=logging.INFO, format="[%(asctime)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
 )
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class RunResult:
+    result: str  # published / no_change / skipped_busy / failed
+    snapshot_id: str | None = None
+    error: str | None = None
 
 
 def _validate_scope_safety() -> None:
@@ -43,203 +51,101 @@ def _validate_scope_safety() -> None:
         )
 
 
-def main():
-    """Synchronize Markdown, RAG state, titles, and reader projections."""
+def _record(result: RunResult, *, published: bool = False) -> None:
     try:
-        logger.info("=" * 70)
-        logger.info(" CONTENT INDEXING PIPELINE")
-        logger.info("=" * 70)
-
-        _validate_scope_safety()
-        logger.info(f"Index scope: {settings.indexer_scope}")
-
-        logger.info("Phase 1: Detecting source and body changes")
-        sync_repository()
-        current_files = scan_files()
-        changes = detect_changes(current_files)
-        logger.info(
-            "Changes: +%d body~%d source~%d legacy~%d -%d",
-            len(changes.added),
-            len(changes.body_modified),
-            len(changes.source_only),
-            len(changes.legacy_requires_reindex),
-            len(changes.deleted),
-        )
-
-        logger.info("Phase 2: Refreshing document titles")
-        titles = sync_document_titles(current_files)
-
-        all_chunks: list[Chunk] = []
-        sync_errors: list[tuple[str, Exception]] = []
-        try:
-            if changes.has_changes:
-                logger.info("Phase 3: Applying RAG changes")
-                process_deletions(changes.deleted)
-                all_chunks = process_content_changes(changes)
-                process_source_only_changes(changes)
-            else:
-                logger.info("Phase 3: No RAG changes")
-        except Exception as exc:
-            logger.exception("RAG synchronization failed; reader sync will still run")
-            sync_errors.append(("RAG", exc))
-
-        rendered = removed = 0
-        try:
-            logger.info("Phase 4: Synchronizing reader projections")
-            rendered, removed = sync_transcript_projections(
-                current_files,
-                changes.current_source_hashes,
-                titles,
-            )
-        except Exception as exc:
-            logger.exception("Reader projection synchronization failed")
-            sync_errors.append(("reader projection", exc))
-
-        if sync_errors:
-            failed = ", ".join(label for label, _ in sync_errors)
-            raise RuntimeError(f"{failed} synchronization failed") from sync_errors[0][
-                1
-            ]
-
-        if all_chunks:
-            logger.info("Phase 5: RAG statistics")
-            logger.info("-" * 70)
-            stats = collect_stats(all_chunks)
-            logger.info(f"Total documents:        {stats['total_documents']}")
-            logger.info(f"Total chunks:           {stats['total_chunks']}")
-            logger.info(f"Total tokens:           {stats['total_tokens']:,}")
-            logger.info(f"Avg tokens per chunk:   {stats['avg_tokens_per_chunk']:.1f}")
-            logger.info(f"Min tokens:             {stats['min_tokens']}")
-            logger.info(f"Max tokens:             {stats['max_tokens']}")
-            logger.info(f"Embedding model:        {stats['embedding_model']}")
-            logger.info(f"Estimated API calls:    {stats['estimated_api_calls']}")
-
-        if not changes.has_changes and not rendered and not removed:
-            logger.info("No source, body, or reader changes.")
-
-        logger.info("=" * 70)
-        logger.info(" PIPELINE COMPLETE")
-        logger.info("=" * 70)
+        conn = connect()
     except Exception:
-        logger.error("=" * 70)
-        logger.error(" PIPELINE FAILED")
-        logger.error("=" * 70)
-        logger.exception("Pipeline error")
-        raise
+        logger.exception("Could not record indexer status")
+        return
+    try:
+        catalog.record_run(conn, result.result, result.error, published=published)
+    except Exception:
+        logger.exception("Could not record indexer status")
     finally:
-        close_connection_pool()
+        close(conn)
 
 
-def sync_document_titles(current_files: set[str]) -> dict[str, str]:
-    """Write and return URI -> 标准化标题 for every active document."""
-    mapped = load_uri_titles()
-    titles = {uri: resolve_title(uri, mapped) for uri in sorted(current_files)}
-    upsert_document_titles(titles)
-    return titles
+def run_once(*, full: bool = False, sync: bool = True) -> RunResult:
+    """Run one build cycle; never raises for build failures (see RunResult)."""
+    _validate_scope_safety()
+    try:
+        with run_lock():
+            result = _locked_run(full=full, sync=sync)
+    except RunLockBusy as exc:
+        logger.info("Skipped: %s", exc)
+        result = RunResult("skipped_busy", error=str(exc))
+        _record(result)
+        return result
+    return result
 
 
-def process_deletions(deleted_files: set[str]) -> None:
-    """Atomically remove deleted files from all RAG tables."""
-    if not deleted_files:
-        return
-    logger.info(f"Processing {len(deleted_files)} deleted files")
-    for uri in sorted(deleted_files):
-        delete_indexed_document(uri, uri)
+def _locked_run(*, full: bool, sync: bool) -> RunResult:
+    logger.info("=" * 70)
+    logger.info(" SNAPSHOT BUILD (%s)", "full requested" if full else "incremental")
+    logger.info("=" * 70)
+    conn = None
+    published = False
+    try:
+        conn = connect()
+        catalog.bootstrap(conn)
+        if sync:
+            sync_repository()
+        commit = head_commit()
+        logger.info("Transcripts commit: %s", commit or "unknown")
 
-
-def process_content_changes(changes: ChangeSet) -> list[Chunk]:
-    """Embed and atomically replace added/body-changed/legacy documents."""
-    files = changes.reindex_files
-    if not files:
-        return []
-
-    logger.info(
-        "Re-indexing %d added + %d body-modified + %d legacy files",
-        len(changes.added),
-        len(changes.body_modified),
-        len(changes.legacy_requires_reindex),
-    )
-    all_chunks: list[Chunk] = []
-
-    for index, uri in enumerate(sorted(files), start=1):
-        source = changes.loaded_sources[uri]
-        chunks = chunk_document(source.document)
-        embeddings = (
-            generate_embeddings([chunk.text for chunk in chunks]) if chunks else []
+        plan = plan_build(conn, full=full, source_commit=commit)
+        c = plan.changes
+        logger.info(
+            "Plan: %s build, base=%s; +%d body~%d source~%d legacy~%d -%d, "
+            "render=%d removed=%d titles_changed=%s",
+            "full" if plan.full else "incremental",
+            plan.base.snapshot_id if plan.base else None,
+            len(c.added),
+            len(c.body_modified),
+            len(c.source_only),
+            len(c.legacy_requires_reindex),
+            len(c.deleted),
+            len(plan.render),
+            len(plan.transcripts_removed),
+            plan.titles_changed,
         )
-        action = "ADD" if uri in changes.added else "MODIFY"
-
-        replace_document_index(
-            file_path=uri,
-            doc_id=uri,
-            chunks=chunks,
-            embeddings=embeddings,
-            source_hash=source.source_hash,
-            body_hash=source.body_hash,
-            body_normalization_version=source.body_normalization_version,
-            action_type=action,
-        )
-        all_chunks.extend(chunks)
-        logger.info(f"  [{index}/{len(files)}] {uri}: {len(chunks)} chunks ({action})")
-
-    return all_chunks
-
-
-def process_source_only_changes(changes: ChangeSet) -> None:
-    """Advance source state for title/date/appendix-only edits, without RAG work."""
-    if not changes.source_only:
-        return
-    logger.info(
-        "Recording %d source-only changes (zero embedding calls)",
-        len(changes.source_only),
-    )
-    for uri in sorted(changes.source_only):
-        source = changes.loaded_sources[uri]
-        record_source_only_change(
-            file_path=uri,
-            source_hash=source.source_hash,
-            body_hash=source.body_hash,
-            body_normalization_version=source.body_normalization_version,
-        )
+        if not plan.has_changes:
+            logger.info("No changes against %s", plan.base.snapshot_id)
+            result = RunResult("no_change")
+        else:
+            catalog.collect_garbage(conn)
+            disk_precheck(conn, plan)
+            prepared = prepare(conn, plan)
+            snapshot_id, stats = publish(conn, plan, prepared)
+            published = True
+            logger.info("Published snapshot %s: %s", snapshot_id, stats)
+            result = RunResult("published", snapshot_id)
+        catalog.collect_garbage(conn)
+    except BuildBusy as exc:
+        logger.info("Skipped: %s", exc)
+        result = RunResult("skipped_busy", error=str(exc))
+    except BuildCancelled as exc:
+        logger.warning("Build cancelled: %s", exc)
+        result = RunResult("failed", error=f"cancelled: {exc}")
+    except Exception as exc:
+        if SHUTDOWN.is_set():
+            logger.warning("Build interrupted by shutdown: %s", exc)
+        else:
+            logger.exception("Build failed")
+        result = RunResult("failed", error=f"{type(exc).__name__}: {exc}")
+    finally:
+        if conn is not None:
+            close(conn)
+    _record(result, published=published)
+    logger.info("Run result: %s", result.result)
+    return result
 
 
-def sync_transcript_projections(
-    current_files: set[str],
-    current_source_hashes: dict[str, str],
-    titles: dict[str, str],
-) -> tuple[int, int]:
-    """Apply source add/modify/delete independently of embedding history."""
-    stored_states = get_transcript_states()
-    removed = sorted(set(stored_states) - current_files)
-    changed = sorted(
-        uri
-        for uri in current_files
-        if stored_states.get(uri)
-        != (current_source_hashes[uri], TRANSCRIPT_PROJECTION_VERSION)
-    )
-
-    for uri in removed:
-        delete_transcript_projection(uri)
-
-    for index, uri in enumerate(changed, start=1):
-        raw_bytes = (CONTENTS_DIR / uri).read_bytes()
-        projection = project_transcript(uri, raw_bytes, titles[uri])
-        expected_hash = current_source_hashes[uri]
-        if projection.source_hash != expected_hash:
-            raise RuntimeError(f"Transcript changed during pipeline run: {uri}")
-        upsert_transcript_projection(projection)
-        logger.info(f"  [{index}/{len(changed)}] rendered {uri}")
-
-    # URI映射.md is outside contents/, so title-only mapping corrections have no
-    # transcript source hash. Refresh the lightweight title field separately.
-    sync_transcript_titles(titles)
-    logger.info(
-        "Reader projections: rendered=%d removed=%d unchanged=%d",
-        len(changed),
-        len(removed),
-        len(current_files) - len(changed),
-    )
-    return len(changed), len(removed)
+def main() -> None:
+    """Scheduler/entrypoint hook: one incremental run."""
+    result = run_once()
+    if result.result == "failed":
+        raise RuntimeError(result.error)
 
 
 if __name__ == "__main__":

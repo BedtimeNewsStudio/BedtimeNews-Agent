@@ -13,6 +13,23 @@ BEDTIMENEWS_TRANSCRIPTS_REPO_URL = (
 )
 
 
+def head_commit() -> str | None:
+    """The commit the working tree is pinned to, or None outside a git clone."""
+    if not (BEDTIMENEWS_TRANSCRIPTS_DIR / ".git").exists():
+        return None
+    success, output = _run_command(
+        [
+            "git",
+            "-c",
+            f"safe.directory={BEDTIMENEWS_TRANSCRIPTS_DIR}",
+            "rev-parse",
+            "HEAD",
+        ],
+        BEDTIMENEWS_TRANSCRIPTS_DIR,
+    )
+    return output.strip() if success else None
+
+
 def sync_repository() -> None:
     """Get a local copy of the latest git repo content of BedtimeNews-Transcripts.
 

@@ -3,9 +3,16 @@
 import os
 from pathlib import Path
 
+# Bind-mounted indexer data directory (INDEXER_DATA_DIR on the host).
+DATA_DIR = Path(os.environ.get("INDEXER_DATA_PATH", "/data"))
+
 # Local clone of the upstream transcript repository
 # (https://github.com/BedtimeNewsStudio/BedtimeNews-Transcripts).
-BEDTIMENEWS_TRANSCRIPTS_DIR = Path("/data/BedtimeNews-Transcripts")
+BEDTIMENEWS_TRANSCRIPTS_DIR = DATA_DIR / "BedtimeNews-Transcripts"
+
+# Run lock held for the whole of every indexer run; never create or delete it
+# by hand.
+LOCK_FILE = DATA_DIR / ".indexer.lock"
 
 # Transcripts live at contents/<栏目>/<百期文件夹>/<期号>.md. A document's URI —
 # the identifier used as doc_id throughout the system — is its path relative to

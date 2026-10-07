@@ -28,6 +28,10 @@ class EmbeddingConfig(BaseModel):
     api_key: str = ""
     base_url: str = ""  # empty -> client default (api.openai.com)
     model: str = ""
+    # Optional explicit vector-space id. Empty -> "<model>@<embedding_dim>".
+    # Set it when the same model is served by a different provider and the
+    # vectors must not be mixed with an existing snapshot's.
+    space_id: str = ""
 
     def client_kwargs(self) -> dict:
         """Keyword args for an OpenAI-compatible client built from this group."""
@@ -78,12 +82,25 @@ class Settings(BaseSettings):
     postgres_user: str = "postgres_user"
     postgres_password: str = "postgres_password"
 
+    # Password of the read-only `rag_agent` role the indexer maintains for the
+    # agent. Empty -> the role exists but cannot log in (NOLOGIN).
+    postgres_agent_password: str = ""
+
     # Embedding batch size (applies to all providers)
     embedding_batch_size: int = 20
+    # Output dimension of the embedding model: the dimension of the vector
+    # space a build writes (EMBEDDING_DIM in .env).
+    embedding_dim: int = 2560
 
     # Indexer configuration
     indexer_cron_schedule: str = "0 * * * *"  # cron: "minute hour day month weekday"
     indexer_scope: str = "full"
+
+    # Read-only mount of the Postgres data directory, used only for the
+    # free-space precheck before a build. Missing -> the check is skipped.
+    pgdata_path: str = "/pgdata"
+    # Minimum free space before a build: max(this, 3 x base snapshot size).
+    build_min_free_bytes: int = 2 * 1024**3
 
 
 settings = Settings()

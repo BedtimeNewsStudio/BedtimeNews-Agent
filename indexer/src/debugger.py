@@ -1,4 +1,8 @@
-"""Database Utilities for RAG Vector Database
+"""Debugging utilities for the RAG snapshots.
+
+stats / history / inspect read the current snapshot (history reads its
+index_state); recent reads rag_state.file_actions. Snapshot operations
+(list, retire, pin, build, ...) live in ``python -m src.snapshots``.
 
 Usage (inside Docker container):
     docker compose exec indexer python -m src.debugger test
@@ -10,22 +14,14 @@ Usage (inside Docker container):
     docker compose exec indexer python -m src.debugger logs
     docker compose exec indexer python -m src.debugger logs --lines 100
     docker compose exec indexer python -m src.debugger logs --all
-    docker compose exec indexer python -m src.debugger clear
 """
 
 import argparse
 import logging
-import shutil
 import sys
 
-from .paths import BEDTIMENEWS_TRANSCRIPTS_DIR
 from .scheduler import LOG_FILE
 from .vector_db import (
-    clear_all_chunks,
-    clear_document_titles,
-    clear_file_actions,
-    clear_indexing_history,
-    clear_transcript_projections,
     get_file_chunks,
     get_indexed_files,
     get_indexing_history,
@@ -168,36 +164,6 @@ def _cmd_logs(lines: int | None = None, show_all: bool = False):
         logger.exception("Failed to read log file")
 
 
-def _cmd_clear(force: bool = False):
-    """Clear all data from database and delete cloned git repository."""
-    if not force:
-        logger.warning("=" * 60)
-        logger.warning("WARNING: This will delete ALL data from the database:")
-        logger.warning("         - All chunks")
-        logger.warning("         - All indexing history")
-        logger.warning("         - All document titles")
-        logger.warning("         - All reader projections")
-        logger.warning("         - All file action logs")
-        logger.warning("         and remove the cloned git repository!")
-        logger.warning("=" * 60)
-        confirm = input("Type 'DELETE ALL' to confirm: ")
-        if confirm != "DELETE ALL":
-            logger.info("Cancelled")
-            return
-
-    clear_all_chunks()
-    clear_document_titles()
-    clear_transcript_projections()
-    clear_indexing_history()
-    clear_file_actions()
-
-    if BEDTIMENEWS_TRANSCRIPTS_DIR.exists():
-        shutil.rmtree(BEDTIMENEWS_TRANSCRIPTS_DIR)
-        logger.info(f"Deleted repository: {BEDTIMENEWS_TRANSCRIPTS_DIR}")
-    else:
-        logger.info(f"Repository not found: {BEDTIMENEWS_TRANSCRIPTS_DIR}")
-
-
 def main():
     """Main entry point for database utilities."""
     parser = argparse.ArgumentParser(
@@ -231,14 +197,6 @@ def main():
     )
     logs_parser.add_argument("--all", action="store_true", help="Show all log lines")
 
-    clear_parser = subparsers.add_parser(
-        "clear",
-        help="Wipe all RAG tables and the cloned transcript repo (DANGEROUS)",
-    )
-    clear_parser.add_argument(
-        "--force", action="store_true", help="Skip confirmation prompt"
-    )
-
     args = parser.parse_args()
 
     if not args.command:
@@ -259,8 +217,6 @@ def main():
             _cmd_inspect(args.file)
         elif args.command == "logs":
             _cmd_logs(lines=args.lines, show_all=args.all)
-        elif args.command == "clear":
-            _cmd_clear(args.force)
 
     except Exception:
         logger.exception("Command failed")
