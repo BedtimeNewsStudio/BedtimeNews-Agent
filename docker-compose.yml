@@ -7,8 +7,9 @@ services:
       POSTGRES_HOST_AUTH_METHOD: scram-sha-256
     volumes:
       - ${POSTGRES_DATA_DIR:-./storage/postgres/volume}:/var/lib/postgresql
-      # init.sh reads EMBEDDING_DIM from the env_file (.env) to size the
-      # embedding column. Runs only on first init of an empty data volume.
+      # init.sh only enables pgvector, on first init of an empty data volume.
+      # All RAG schemas (rag_meta, rag_state, the rag_s<id> snapshots) and the
+      # read-only rag_agent role are created by the indexer.
       - ./storage/postgres/init.sh:/docker-entrypoint-initdb.d/init.sh
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres_user} -d ${POSTGRES_DB:-postgres_db}" ]
@@ -31,6 +32,9 @@ services:
       context: ./indexer
       dockerfile: Dockerfile
     container_name: bedtimenews-indexer
+    # On stop, the indexer cancels a running build; Postgres rolls the build
+    # transaction back, so nothing half-built is left behind.
+    stop_grace_period: 30s
     environment:
       # App settings come from config.yml (mounted read-only below); the
       # environment only relocates the file and wires deployment paths.
@@ -41,10 +45,17 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-postgres_db}
       POSTGRES_USER: ${POSTGRES_USER:-postgres_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      # Read-only rag_agent role: created by the indexer; LOGIN only when set.
+      POSTGRES_AGENT_PASSWORD: ${POSTGRES_AGENT_PASSWORD:-}
+      # Dimension of the vector space snapshots are built in.
+      EMBEDDING_DIM: ${EMBEDDING_DIM:-2560}
     volumes:
       - ./config.yml:/run/config/config.yml:ro
       - ${INDEXER_DATA_DIR:-./indexer/data}:/data
       - bedtimenews_indexer_logs:/var/log/indexer
+      # Read-only view of the Postgres data directory, used only to check free
+      # disk space before a build (a full disk would take the database down).
+      - ${POSTGRES_DATA_DIR:-./storage/postgres/volume}:/pgdata:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -63,11 +74,26 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       POSTGRES_DB: ${POSTGRES_DB:-postgres_db}
+      # Set -> connect as the read-only rag_agent role. Unset -> fall back to
+      # the superuser below (logged as a warning).
+      POSTGRES_AGENT_PASSWORD: ${POSTGRES_AGENT_PASSWORD:-}
       POSTGRES_USER: ${POSTGRES_USER:-postgres_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      # Query-vector dimension; with embedding.model it names the vector space
+      # a snapshot must be in for this agent to read it.
+      EMBEDDING_DIM: ${EMBEDDING_DIM:-2560}
+      # Optional: pin one snapshot id instead of following the newest one.
+      RAG_SNAPSHOT: ${RAG_SNAPSHOT:-}
     volumes:
       - ./config.yml:/run/config/config.yml:ro
       - bedtimenews_agent_logs:/var/log/agent
+    # Ready = database reachable and a readable snapshot selected (/health).
+    healthcheck:
+      test: [ "CMD", "curl", "-fsS", "http://localhost:8000/health" ]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
     depends_on:
       postgres:
         condition: service_healthy

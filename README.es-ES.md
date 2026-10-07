@@ -31,7 +31,9 @@ PostgreSQL + pgvector.
 - Optimización de consultas y búsqueda semántica
 - Calificación basada en LLM de documentos
 - Transcripciones recuperadas proporcionadas como contexto de respuesta, con citas en formato markdown y reparación de citas
-- Indexación automatizada de documentos con actualizaciones incrementales
+- Indexación automatizada de documentos con actualizaciones incrementales,
+  publicada como snapshots inmutables: atómica, reversible y adoptada por el
+  agente sin reiniciar
 - Interfaz web: chat de preguntas y respuestas más navegación y lectura de
   transcripciones dentro del sitio (las citas saltan directamente al lector
   integrado)
@@ -45,7 +47,12 @@ PostgreSQL + pgvector.
 - **[Frontend](frontend/README.es-ES.md)**: Interfaz de chat personalizada (HTML/CSS/JS estático servido por una pequeña aplicación FastAPI)
 - **[Agente](agent/README.es-ES.md)**: Servicio RAG agente basado en LangGraph
 - **[Indexador](indexer/README.es-ES.md)**: Pipeline automatizado de incrustación de documentos
-- **Base de Datos**: PostgreSQL con extensión pgvector como base de datos vectorial
+- **Base de Datos**: PostgreSQL con extensión pgvector como base de datos
+  vectorial. El indexador es el único que escribe y publica la base de
+  conocimiento como snapshots inmutables y versionados (un esquema `rag_s<id>`
+  por construcción, registrado en `rag_meta`); el agente lee el snapshot
+  compatible más reciente mediante el rol de solo lectura `rag_agent` y cambia a
+  uno nuevo en 15 segundos
 
 La pila sirve HTTP puro en el puerto 8080 — sin TLS. La exposición pública y la
 terminación TLS se gestionan fuera de este repositorio.
@@ -86,6 +93,16 @@ terminación TLS se gestionan fuera de este repositorio.
    cp .env.example .env
    ```
 
+   - `EMBEDDING_DIM` es la dimensión de salida del modelo de embeddings (`2560`
+     para el modelo por defecto `Qwen/Qwen3-Embedding-4B`). Junto con el modelo
+     define el espacio vectorial en el que el indexador construye los snapshots
+     y que lee el agente; ya no dimensiona una columna de la base de datos, y
+     cambiarlo después hace que el indexador construya un snapshot nuevo en
+     lugar de requerir una migración.
+   - `POSTGRES_AGENT_PASSWORD` (opcional, recomendado) permite al agente
+     conectarse con el rol de solo lectura `rag_agent`, sin poder modificar
+     datos. Sin definir, el agente usa el superusuario y registra un aviso.
+
    > **Prioridad: variables de entorno > `config.yml`** (claves anidadas con
    > doble guion bajo, p.ej. `GENERATION__API_KEY`). Las claves y la config de
    > aplicación viven en `config.yml`; ya no hace falta exportar claves.
@@ -103,6 +120,10 @@ terminación TLS se gestionan fuera de este repositorio.
 
    Esto ejecuta las imágenes publicadas. Si has editado el código, añade `--build` — consulta [Imagen publicada vs tu checkout](#imagen-publicada-vs-tu-checkout).
 
+   Con una base de datos nueva, el agente no está listo (`/health` devuelve
+   `503`) hasta que se publica la primera construcción del indexador; después
+   pasa a estar listo por sí solo.
+
 ### Verificar Instalación
 
 ```bash
@@ -111,6 +132,10 @@ docker compose ps
 
 # Ver logs
 docker compose logs -f
+
+# Snapshots publicados por el indexador y disponibilidad del agente
+docker compose exec indexer python -m src.snapshots list
+docker compose exec agent curl -s http://localhost:8000/health
 ```
 
 ### Pruebas y Cobertura
@@ -127,6 +152,15 @@ Las opciones se reenvían a cada componente. Para ejecutar solo un componente, i
 ```bash
 cd agent  # o indexer / frontend
 uv run pytest --cov
+```
+
+Las pruebas de construcción/publicación y selección de snapshots necesitan
+PostgreSQL con pgvector y se omiten si no está disponible. Apúntalas a un
+servidor donde el usuario pueda crear bases de datos (cada prueba usa su propia
+base de datos temporal):
+
+```bash
+PGTEST_HOST=localhost PGTEST_PORT=5432 PGTEST_USER=postgres PGTEST_PASSWORD=postgres uv run pytest
 ```
 
 ## Versiones
@@ -169,11 +203,19 @@ Para lanzar una versión, empuja una etiqueta `v*` (las etiquetas de imagen omit
 git tag v0.1.0 && git push origin v0.1.0
 ```
 
-> Las notas de versión deben señalar cambios operativos: variables de entorno nuevas o renombradas, cambios de esquema (ej. `EMBEDDING_DIM` — consulta el manual en [indexer/README.es-ES.md](indexer/README.es-ES.md)), y si se requiere reindexación. `storage/postgres/init.sh` solo se ejecuta en un volumen de datos nuevo, por lo que los cambios de esquema nunca se aplican automáticamente a despliegues existentes.
+> Las notas de versión deben señalar cambios operativos: variables de entorno nuevas o renombradas, montajes y si se ejecutará una construcción completa. El indexador crea y adopta la estructura de la base de datos automáticamente; ya no hacen falta migraciones manuales. Un cambio en las tablas que lee el agente es un nuevo `format_version` de snapshot, construido junto al anterior.
 
-### Actualización del esquema de hash del cuerpo
+### Actualización a snapshots RAG
 
-El indexador ahora invalida vectores con el SHA-256 del texto normalizado exacto de `## 正文` y conserva otra huella de la fuente completa. Los volúmenes existentes deben aplicar en orden las migraciones de `storage/postgres/migrations/` (`001_body_hashes.sql` y luego `002_transcript_projection.sql`, que crea `rag.transcripts` para el lector) antes del indexador nuevo; consulta [indexer/README.es-ES.md](indexer/README.es-ES.md). `docker-compose.sample.yml` ofrece el subconjunto local determinista y requiere rutas aisladas en `POSTGRES_DATA_DIR` / `INDEXER_DATA_DIR`.
+El indexador con snapshots adopta automáticamente una base de datos existente en su primer arranque, sin pasos manuales y con el agente y el indexador actualizables en cualquier orden:
+
+- El esquema `rag` existente se registra como snapshot `legacy`; el registro de auditoría pasa a `rag_state` y `rag.indexing_history` pasa a ser `rag.index_state`.
+- La primera construcción es completa y reutiliza todos los vectores existentes (normalmente sin llamadas de embedding, unos minutos), publicando el primer snapshot normal.
+- `legacy` se conserva 7 días, así que mientras tanto el agente antiguo sigue funcionando y los datos pueden revertirse con `python -m src.snapshots retire <id>`.
+- Tras la adopción no se admite volver a una versión del **indexador** anterior a los snapshots; el agente puede volver atrás libremente hasta que `legacy` se recolecte.
+- El indexador incorpora un montaje de solo lectura de `POSTGRES_DATA_DIR` (comprobación de disco) y `POSTGRES_AGENT_PASSWORD` es opcional; ambos están en `docker-compose.yml`.
+
+Detalles: [indexer/README.es-ES.md](indexer/README.es-ES.md#actualización-desde-el-esquema-anterior-a-los-snapshots) y el [documento de diseño](docs/designs/20261007_rag-snapshot-architecture.md). `docker-compose.sample.yml` ofrece el subconjunto local determinista y requiere rutas aisladas en `POSTGRES_DATA_DIR` / `INDEXER_DATA_DIR`.
 
 ## Documentación Específica de Servicios
 
@@ -185,7 +227,7 @@ El indexador ahora invalida vectores con el SHA-256 del texto normalizado exacto
 
 Los datos se persisten entre reinicios:
 
-- **Datos de PostgreSQL** (chunks + embeddings): montados en enlace a `./storage/postgres/volume`
+- **Datos de PostgreSQL** (snapshots RAG, registro, registro de auditoría): montados en enlace a `./storage/postgres/volume`
 - **Logs de servicios**: volúmenes nombrados de Docker `bedtimenews_indexer_logs` y `bedtimenews_agent_logs`
 
 ## Estructura del Proyecto
@@ -212,9 +254,11 @@ BedtimeNews-Agent/
 │   ├── README.md
 │   ├── README.en.md
 │   └── README.es-ES.md
-├── docs/diagrams/      # Diagramas SVG de arquitectura y flujo de trabajo
-├── storage/            # Scripts de inicialización de base de datos
-│   └── postgres/
+├── docs/
+│   ├── designs/        # Documentos de diseño
+│   └── diagrams/       # Diagramas SVG de arquitectura y flujo de trabajo
+├── storage/
+│   └── postgres/       # init.sh (habilita pgvector); migrations/ es solo histórico
 ├── docker-compose.yml  # Orquestación de servicios
 ├── config.yml          # Config de aplicación y claves (no en git, copiada del ejemplo)
 ├── config.example.yml  # Plantilla de config de aplicación

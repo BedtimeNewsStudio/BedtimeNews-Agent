@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1296" height="650" viewBox="0 0 1296 650" role="img" aria-labelledby="title desc">
   <title id="title">BedtimeNews system architecture</title>
-  <desc id="desc">The request plane runs from the browser over plain HTTP (port 8080) through the web frontend and agent into PostgreSQL. The content plane runs from the transcript archive through the indexer into the same database.</desc>
+  <desc id="desc">The request plane runs from the browser over plain HTTP (port 8080) through the web frontend to the agent, which reads PostgreSQL read-only as the rag_agent role, one snapshot per request. The content plane runs from the transcript archive through the indexer, the only writer, which builds each update as an immutable snapshot schema rag_s&lt;id&gt; (chunks, vectors, transcripts) and publishes it atomically in the rag_meta registry; rag_state holds the indexer's audit log.</desc>
   <defs>
     <linearGradient id="canvas" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#ffffff"/>
@@ -68,18 +68,22 @@
   <rect class="node" x="690" y="165" width="210" height="130" rx="17"/>
   <text class="label" x="795" y="222">Agent</text>
   <text class="sub" x="795" y="256">LangGraph · :8000</text>
+  <text class="mono" x="795" y="282">one snapshot per request</text>
 
   <rect class="node database" x="990" y="165" width="240" height="410" rx="20"/>
-  <text class="mono" x="1110" y="201">SHARED STATE</text>
+  <text class="mono" x="1110" y="201">VERSIONED SNAPSHOTS</text>
   <text class="label" x="1110" y="241">PostgreSQL</text>
   <text class="sub" x="1110" y="275">+ pgvector</text>
-  <line x1="1022" y1="318" x2="1198" y2="318" stroke="#35c7b1" stroke-opacity=".35"/>
-  <text class="mono" x="1110" y="362">document chunks</text>
-  <text class="mono" x="1110" y="400">vector embeddings</text>
-  <text class="mono" x="1110" y="438">index history</text>
-  <circle cx="1040" cy="522" r="6" fill="#35c7b1"/>
-  <circle cx="1065" cy="522" r="6" fill="#35c7b1" fill-opacity=".55"/>
-  <circle cx="1090" cy="522" r="6" fill="#35c7b1" fill-opacity=".25"/>
+  <line x1="1022" y1="300" x2="1198" y2="300" stroke="#35c7b1" stroke-opacity=".35"/>
+  <text class="sub" x="1110" y="334">rag_s&lt;id&gt; · read-only</text>
+  <text class="mono" x="1110" y="360">chunks · vectors · transcripts</text>
+  <line x1="1022" y1="384" x2="1198" y2="384" stroke="#35c7b1" stroke-opacity=".2"/>
+  <text class="sub" x="1110" y="416">rag_meta</text>
+  <text class="mono" x="1110" y="442">snapshot registry</text>
+  <text class="mono" x="1110" y="464">indexer status</text>
+  <line x1="1022" y1="488" x2="1198" y2="488" stroke="#35c7b1" stroke-opacity=".2"/>
+  <text class="sub" x="1110" y="520">rag_state</text>
+  <text class="mono" x="1110" y="546">audit log</text>
 
   <path class="blue-line" d="M250 230H370"/>
   <path class="blue-line" d="M600 230H690"/>
@@ -87,6 +91,7 @@
   <text class="edge-label" x="310" y="207">HTTP :8080</text>
   <text class="edge-label" x="645" y="207">/chat</text>
   <text class="edge-label" x="945" y="207">search</text>
+  <text class="edge-label" x="945" y="258">read-only</text>
 
   <rect class="node archive" x="50" y="465" width="260" height="110" rx="17"/>
   <text class="label" x="180" y="512">Transcript archive</text>
@@ -99,5 +104,6 @@
   <path class="teal-line" d="M310 520H400"/>
   <path class="teal-line" d="M630 520H990"/>
   <text class="edge-label" x="355" y="497">pull</text>
-  <text class="edge-label" x="810" y="497">durable per-file writes</text>
+  <text class="edge-label" x="810" y="497">build · publish snapshot</text>
+  <text class="edge-label" x="810" y="548">atomic · reversible</text>
 </svg>

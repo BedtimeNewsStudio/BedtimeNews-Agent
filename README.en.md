@@ -28,7 +28,8 @@ reader. Built with LangGraph, any OpenAI-compatible chat/embedding endpoints (th
 - LLM-based document grading
 - Retrieved transcripts supplied as answer context, with markdown citations and
   citation repair
-- Automated document indexing with incremental updates
+- Automated document indexing with incremental updates, published as immutable
+  snapshots: atomic, reversible, and picked up by the agent without a restart
 - Web interface: chat Q&A plus in-app transcript browsing/reading (citations
   jump straight to the in-app reader)
 
@@ -43,7 +44,11 @@ reader. Built with LangGraph, any OpenAI-compatible chat/embedding endpoints (th
   transcript list and reader, with content served from the index database)
 - **[Agent](agent/README.en.md)**: LangGraph-based agentic RAG service
 - **[Indexer](indexer/README.en.md)**: Automated document embedding pipeline
-- **Database**: PostgreSQL with pgvector extension as vector database
+- **Database**: PostgreSQL with pgvector extension as vector database. The
+  indexer is the only writer and publishes the knowledge base as immutable,
+  versioned snapshots (one `rag_s<id>` schema per build, registered in
+  `rag_meta`); the agent reads the newest compatible snapshot through the
+  read-only `rag_agent` role and switches to a new one within 15 seconds
 
 Indexing scope: only each transcript's `## 正文` (body) section is indexed; the
 `## 附录` (appendix — fact corrections and verification notes) and the
@@ -88,6 +93,15 @@ termination are handled outside this repo.
    cp .env.example .env
    ```
 
+   - `EMBEDDING_DIM` is the embedding model's output dimension (`2560` for the
+     default `Qwen/Qwen3-Embedding-4B`). With the model it names the vector
+     space the indexer builds snapshots in and the agent reads; it no longer
+     sizes a database column, and changing it later makes the indexer build a
+     new snapshot instead of requiring a migration.
+   - `POSTGRES_AGENT_PASSWORD` (optional, recommended) lets the agent connect as
+     the read-only `rag_agent` role, so it cannot modify any data. Unset, the
+     agent falls back to the superuser and logs a warning.
+
    > **Precedence: real environment variables > `config.yml`** (nested keys use
    > double underscores, e.g. `GENERATION__API_KEY`). Keys and app config live
    > in `config.yml`; there is no need to export keys anymore.
@@ -106,6 +120,9 @@ termination are handled outside this repo.
    This runs the published images. If you have edited the code, add `--build` —
    see [Published image vs. your checkout](#published-image-vs-your-checkout).
 
+   On a fresh database the agent is not ready (`/health` returns `503`) until
+   the indexer's first build is published; it then becomes ready by itself.
+
 ### Verify Installation
 
 ```bash
@@ -114,6 +131,10 @@ docker compose ps
 
 # View logs
 docker compose logs -f
+
+# Snapshots published by the indexer, and the agent's readiness
+docker compose exec indexer python -m src.snapshots list
+docker compose exec agent curl -s http://localhost:8000/health
 ```
 
 ### Tests and Coverage
@@ -131,6 +152,14 @@ from that directory:
 ```bash
 cd agent  # or indexer / frontend
 uv run pytest --cov
+```
+
+The snapshot build/publish and selection tests need PostgreSQL with pgvector
+and are skipped otherwise. Point them at a server where the user may create
+databases (each test uses its own throwaway database):
+
+```bash
+PGTEST_HOST=localhost PGTEST_PORT=5432 PGTEST_USER=postgres PGTEST_PASSWORD=postgres uv run pytest
 ```
 
 ## Releases
@@ -179,14 +208,32 @@ git tag v0.1.0 && git push origin v0.1.0
 ```
 
 > Release notes should call out operational changes: new/renamed env vars,
-> schema changes (e.g. `EMBEDDING_DIM` — see the runbook in
-> [indexer/README.en.md](indexer/README.en.md)), and whether re-indexing is required.
-> `storage/postgres/init.sh` only runs on a fresh data volume, so schema changes
-> never apply automatically to existing deployments.
+> mounts, and whether a full build will run. The database structure is created
+> and adopted by the indexer automatically; manual migrations are no longer
+> needed. A change to the tables the agent reads is a new snapshot
+> `format_version`, built side by side with the old one.
 
-### Body-hash schema upgrade
+### Upgrading to RAG snapshots
 
-The indexer now invalidates vectors from the SHA-256 of the exact normalized `## 正文` text, while retaining a separate whole-source hash. Existing volumes must apply the migrations in `storage/postgres/migrations/` in order (`001_body_hashes.sql`, then `002_transcript_projection.sql`, which creates the reader's `rag.transcripts`) before running the new indexer; the production runbook is in [indexer/README.en.md](indexer/README.en.md). The deterministic local subset is available through `docker-compose.sample.yml` and requires isolated `POSTGRES_DATA_DIR` / `INDEXER_DATA_DIR` paths.
+The snapshot-aware indexer adopts an existing database automatically on its
+first start — no manual steps, and the agent and indexer may be upgraded in
+either order:
+
+- The existing `rag` schema is registered as snapshot `legacy`; the audit log
+  moves to `rag_state` and `rag.indexing_history` becomes `rag.index_state`.
+- The first build is a full build that reuses every existing vector (normally
+  no embedding calls, a few minutes) and publishes the first regular snapshot.
+- `legacy` is kept for 7 days, so the old agent keeps working meanwhile and
+  data can be rolled back with `python -m src.snapshots retire <id>`.
+- Rolling the **indexer** back to a pre-snapshot version after adoption is not
+  supported; the agent can be rolled back freely until `legacy` is collected.
+- The indexer gains a read-only mount of `POSTGRES_DATA_DIR` (disk precheck)
+  and `POSTGRES_AGENT_PASSWORD` is optional — both are in `docker-compose.yml`.
+
+Details: [indexer/README.en.md](indexer/README.en.md#upgrading-from-the-pre-snapshot-schema)
+and the [design document](docs/designs/20261007_rag-snapshot-architecture.md).
+The deterministic local subset is available through `docker-compose.sample.yml`
+and requires isolated `POSTGRES_DATA_DIR` / `INDEXER_DATA_DIR` paths.
 
 ## Service-Specific Documentation
 
@@ -198,7 +245,7 @@ The indexer now invalidates vectors from the SHA-256 of the exact normalized `##
 
 Data is persisted across restarts:
 
-- **PostgreSQL data** (chunks + embeddings): bind-mounted to `./storage/postgres/volume`
+- **PostgreSQL data** (RAG snapshots, registry, audit log): bind-mounted to `./storage/postgres/volume`
 - **Service logs**: Docker named volumes `bedtimenews_indexer_logs` and `bedtimenews_agent_logs`
 
 ## Project Structure
@@ -225,9 +272,11 @@ BedtimeNews-Agent/
 │   ├── README.md
 │   ├── README.en.md
 │   └── README.es-ES.md
-├── docs/diagrams/      # SVG architecture and workflow diagrams
-├── storage/            # Database initialization scripts
-│   └── postgres/
+├── docs/
+│   ├── designs/        # Design documents
+│   └── diagrams/       # SVG architecture and workflow diagrams
+├── storage/
+│   └── postgres/       # init.sh (enables pgvector); migrations/ is historical only
 ├── docker-compose.yml  # Service orchestration
 ├── config.yml          # App + secrets config (not in git, copied from the example)
 ├── config.example.yml  # App config template

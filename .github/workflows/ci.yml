@@ -37,6 +37,27 @@ jobs:
   pytest:
     name: pytest
     runs-on: ubuntu-latest
+    # Real PostgreSQL + pgvector for the snapshot build/publish and selection
+    # tests (indexer/tests/test_pipeline.py, agent/tests/test_snapshots.py);
+    # they create and drop their own throwaway databases.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGTEST_HOST: localhost
+      PGTEST_PORT: "5432"
+      PGTEST_USER: postgres
+      PGTEST_PASSWORD: postgres
     steps:
       - uses: actions/checkout@v7
 

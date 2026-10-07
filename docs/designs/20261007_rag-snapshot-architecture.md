@@ -1,6 +1,6 @@
 # RAG Snapshot Publishing: Separating Build from Serving
 
-Status: design draft (2026-10-07), not yet implemented. Section 16 records the decisions already made.
+Status: implemented (2026-10-07): phases 0–2 and the code and documentation parts of phase 3. What remains is operational: setting `POSTGRES_AGENT_PASSWORD` in production and, optionally, off-host backups. Section 16 records the decisions; section 18 records where the implementation refines or deviates from this design, and section 13 the phase 0 measurements.
 
 ## 1. Purpose
 
@@ -86,7 +86,7 @@ BedtimeNews-Transcripts (git)
 
 ### 5.1 Snapshot schema: `rag_s<id>`
 
-- `<id>`: `s` + UTC build time + the first 7 characters of the transcripts commit, for example `s20261007t0915z_a1b2c3d`. It is unique, sortable, and far below Postgres's 63-byte identifier limit.
+- `<id>`: `s` + UTC build time (to the second) + the first 7 characters of the transcripts commit, for example `s20261007t091512z_a1b2c3d`. It is unique (two builds within the same second step to the next second), sortable, and far below Postgres's 63-byte identifier limit.
 - Tables:
   - Served data: `document_chunks`, `documents`, `transcripts`, **with the same columns as today's `rag.*`**. The `embedding` column is sized for the build's vector space.
   - Build provenance: `index_state`, with the columns of today's `indexing_history` (`file_path`, `source_hash`, `body_hash`, `body_normalization_version`, and so on). It records which version of which source file each snapshot was built from and serves as the baseline for the next incremental build. The agent does not read it.
@@ -170,7 +170,7 @@ The scheduler changes to compute the next run time from **now**, skipping missed
 ### 6.3 Phase A: chunking and embedding (outside a transaction)
 
 - Chunk the transcripts that need processing (added and body-changed ones for an incremental build, all of them for a full build).
-- **Reuse vectors by text.** Load the mapping `sha256(chunk text) → embedding` from the latest published snapshot in the same `embedding_space` (the fingerprint does not have to match) and reuse any hit directly. Keeping 13,434 vectors in memory takes about 66 MB (halfvec).
+- **Reuse vectors by text.** The reuse source is the latest published snapshot in the same `embedding_space` (the fingerprint does not have to match). Phase A loads only the set of its `sha256(chunk text)` values to decide hits and misses; the hit vectors themselves never leave the database: Phase B joins them from the reuse source by text hash, server-side, inside the build transaction (see 18).
 - Only missed chunks are sent to the embedding API. New vectors are kept in process memory only; if Phase B fails, the next run recomputes them, and since they cover only genuinely new text, the cost is small.
 - Result: format upgrades and normalization or chunking changes re-embed only chunks whose text actually changed. Only a vector-space change (new model or dimension) truly requires calling the API for everything (about 25 minutes).
 
@@ -393,7 +393,22 @@ The old agent only reads `document_chunks`, `documents` and `transcripts`, so ad
 
 ## 13. To Measure, and Risks
 
-Before implementation (phase 0), measure on a copy of production data to confirm with numbers:
+Measured 2026-10-07 on the full corpus (1,902 transcripts, 13,434 chunks, 2560 dimensions) on a local 4-core machine, PostgreSQL 16 + pgvector 0.8.1, `maintenance_work_mem` 256 MB, 2 parallel maintenance workers. Embeddings came from a deterministic local stand-in, so embedding-API time is excluded:
+
+| Measurement                                                    | Result                                                                 |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Snapshot size (heap + TOAST + indexes)                         | ~240 MB (estimate in section 2: ~300 MB)                               |
+| Full build, every vector reused (e.g. first build after adoption) | 36 s end to end; Phase B 19 s (load 4 s, HNSW 12 s, self-check 3 s) |
+| Incremental build, one transcript changed                      | 19 s end to end; Phase B 14 s (copy base 1–2 s, HNSW 12 s)             |
+| Full build, every vector new                                   | Phase B 49 s before the vector-literal fix in 18, 35 s after (load 20 s, HNSW 12 s); Phase A is dominated by the embedding API |
+| WAL written per build                                          | ~205 MB (full or incremental: both copy/write the whole snapshot)      |
+| Peak extra disk during a build                                 | ~450 MB (new snapshot + WAL), well within 3 × base (~720 MB)           |
+| `SIGTERM` during Phase B                                       | statement cancelled, process exits in 0.2 s, nothing left behind       |
+| `SIGKILL` during Phase B                                       | backend notices the dead client and rolls back within ~3 s (18)        |
+
+The HNSW build dominates every build; incremental builds cannot avoid it because each snapshot owns its index. Still open, on production hardware: the effect of a build on live query latency on the shared 4-core host (parallelism may need to drop to 1), and `statvfs` through the read-only mount of a `postgres`-owned mode-700 directory (the mount point itself only needs path lookup, so it is expected to work).
+
+The original phase 0 checklist:
 
 - **Build time**: copying about 300 MB, `ANALYZE`, and the HNSW build, plus the effect of `maintenance_work_mem` (256 MB vs the default 64 MB) and `max_parallel_maintenance_workers`. Expected to be minutes.
 - **WAL volume and peak disk usage**: verify that the 3x factor in 6.7 is enough.
@@ -444,6 +459,8 @@ Each phase can ship on its own.
 
 ## 17. Documentation to Update When Implemented
 
+All items below were updated with the implementation, except `agent-workflow.svg`, whose change was optional and was not made.
+
 Every README exists in Chinese, English and Spanish (`README.md`, `README.en.md`, `README.es-ES.md`); **all three are updated together**. The "Phase" column refers to the phase in section 14 that the update ships with; documentation changes go in the same PR as the code, not as a follow-up.
 
 ### 17.1 Diagrams (`docs/diagrams/`)
@@ -486,3 +503,45 @@ Every README exists in Chinese, English and Spanish (`README.md`, `README.en.md`
 ### 17.5 Release notes
 
 The release notes (GitHub Release) of the version shipping phase 2 must state: existing data is adopted automatically on first start; rolling the indexer back to an older version after adoption is not supported; the indexer has a new read-only mount; `POSTGRES_AGENT_PASSWORD` is optional; the first build after adoption is a full build (normally with no embedding calls, taking a few minutes).
+
+## 18. Implementation Notes (2026-10-07)
+
+Where the implementation refines or deviates from the sections above.
+
+### Indexer
+
+| Topic                          | Implementation                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Modules                        | `pipeline.py` (one run), `builder.py` (plan, disk precheck, Phase A, Phase B, self-check), `catalog.py` (`rag_meta`/`rag_state`, role, adoption, registry, GC), `snapshot_schema.py` (ids, fingerprint, vector space, DDL), `snapshots.py` (ops commands), `run_lock.py`, `db.py`. The old per-file writer (`vector_db.py` write functions, `stats.py`, `debugger clear`) was removed; `vector_db.py` now only holds the debugger's read-only queries |
+| Format version                 | New snapshots are format 1, the same layout as the adopted `rag` schema (the served columns did not change). New snapshot tables declare `embedding` `NOT NULL`; the agent's queries are unchanged                                                                                                                                                                                                                   |
+| Pipeline fingerprint           | First 16 hex characters of `sha256("format=…;normalization=…;chunker=…")`. `CHUNKER_VERSION` starts at 1 in `chunker.py`                                                                                                                                                                                                                                                                                              |
+| Vector reuse                   | Server-side (see 6.3): new chunks go into a temporary table, then one `INSERT … SELECT` takes `COALESCE(new vector, reuse-source vector joined on sha256(text))`. Memory stays proportional to the new vectors only. Identical texts among the misses are embedded once                                                                                                                                                 |
+| Vector literals                | Vectors are sent as text with 7 significant digits (lossless for halfvec), a third the size of `repr`; this cut Phase B of an all-new full build from 49 s to 35 s                                                                                                                                                                                                                                                  |
+| Reader projections             | Copied from the base like the other tables; re-rendered only when `source_hash` or `projection_version` differs, and canonical titles refreshed in place (as before). A title-only change in `URI映射.md` still produces a new snapshot (decision 13)                                                                                                                                                                 |
+| Audit log                      | `rag_state.file_actions` rows are written inside the publish transaction. For full builds they are computed against the newest published snapshot of any lineage, so a full build after a version bump logs only real source changes                                                                                                                                                                                   |
+| Self-check details             | Also rejects chunks of transcripts missing from `index_state`. Vector checks use `vector_dims` and `l2_norm`. The query check forces the HNSW path (`enable_seqscan = off`) with k = min(10, chunk count). The model check runs for full builds and whenever new vectors were embedded, and is skipped for metadata-only builds                                                                                          |
+| Base recheck                   | `SELECT … FOR UPDATE` on the base's registry row right before registering. A `retire` that commits after this check waits for the build to commit and then retires the base, so that window is milliseconds; a `retire` during the build itself abandons the build (tested)                                                                                                                                             |
+| Snapshot id collisions         | Generated after the advisory lock is held; a second build within the same second takes the next second. Without a git checkout the commit part is `0000000`                                                                                                                                                                                                                                                          |
+| Cancellation                   | psycopg2 runs queries through `wait_select`, so the Python `SIGTERM` handler runs during a long statement and cancels it immediately (without it the handler waited for the HNSW build to finish). Every indexer connection sets `client_connection_check_interval = 5s`, so a `SIGKILL`ed indexer's backend stops and rolls back within seconds instead of finishing its statement                                        |
+| Disk precheck                  | Skipped with a warning when the `/pgdata` mount is absent (older compose files), rather than failing every build                                                                                                                                                                                                                                                                                                      |
+| GC "superseded" time           | Within a lineage: the publish time of the next newer published snapshot. For another lineage's latest snapshot: the publish time of the first newer snapshot of the current lineage; with none, it is kept indefinitely. Only schemas named exactly like a snapshot id (or `rag`) are ever dropped — a plain `rag_s` prefix test would also match `rag_state`                                                             |
+| Adoption                       | An empty `rag` schema (created by the old `init.sh` on a fresh volume) is not adopted, so a fresh deployment stays not ready until its first real build. Bootstrap takes the advisory lock blocking (it must not be skipped); builds and GC use the non-blocking form                                                                                                                                                      |
+| `rag_agent`                    | Also forced `NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`, with `CREATE` on `public` revoked                                                                                                                                                                                                                                                                                                        |
+| `indexer_status`               | `skipped_busy` neither increments nor resets `consecutive_failures`                                                                                                                                                                                                                                                                                                                                                  |
+| `EMBEDDING_DIM`                | Now passed by compose to both the indexer (`embedding_dim`, the build's vector space; returned vectors of another size fail the build) and the agent (its vector space)                                                                                                                                                                                                                                             |
+| Sample config                  | `index_config.sample.yml` replaced `ChanJingPoBiJi/misc/biz-001.md`, which no longer exists upstream, with `ChanJingPoBiJi/2024-07-25.md`                                                                                                                                                                                                                                                                              |
+
+### Agent
+
+| Topic                    | Implementation                                                                                                                                                                                                                                                       |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Request pinning          | The snapshot is taken once in `agent_query` / `agent_stream_query` and carried in the LangGraph state (`AgentState.snapshot`), so every node of one request reads the same schema; the transcript endpoints take it once per request                                    |
+| `/health`                | Served from the poller's last result (≤ 15 s old) and never queries the database itself. Body: `ready`, `reason`, `snapshot` (id, schema, format, vector space, publish time, data age, commit), the agent's vector space and supported formats, `pinned_by_config`, `checked_at`, `indexer_status`. Compose uses it as the agent's container healthcheck |
+| Database outage          | A failed poll keeps the last selected snapshot in memory (requests fail on their own) but reports not ready; the connection pool is created lazily (`minconn=1`) so startup never needs the database                                                                     |
+| Implicit legacy          | Before `rag_meta` exists, `rag` is readable only if its `embedding` dimension equals `EMBEDDING_DIM` and it holds at least one chunk                                                                                                                                       |
+| No snapshot              | `/chat` returns 503 (streaming: an `error` event); `/transcripts*` return 503                                                                                                                                                                                         |
+| Eval harnesses           | `eval_agent.py` / `eval_retriever.py` select the current snapshot once at start, since no poller runs outside the server                                                                                                                                              |
+
+### Tests (section 12)
+
+`indexer/tests/test_pipeline.py` and `agent/tests/test_snapshots.py` run against a real PostgreSQL + pgvector (CI starts a `pgvector/pgvector:pg18` service; locally they need `PGTEST_HOST` and are skipped otherwise), with deterministic fake embeddings. They cover items 1, 2, 4 (both the file lock and the advisory lock), 6, 7, 8, 10, 11, 12, 13 and 14; items 5 and the GC retention rules are also covered by unit tests without a database. Items 3 (kill mid-Phase B), 9 (switching while serving) and 15 (fresh database) were verified end to end against a local stack, together with adoption of a legacy schema written by the previous indexer release.

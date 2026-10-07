@@ -19,11 +19,42 @@ configuración.
 
 - `agent.py`: API pública (`agent_query()`, `agent_stream_query()`)
 - `graph.py`: Flujo de trabajo LangGraph con enrutamiento inteligente
-- `retriever.py`: Búsqueda semántica (embeddings + pgvector)
+- `retriever.py`: Búsqueda semántica (embeddings + pgvector) sobre un snapshot;
+  las claves de la caché de resultados incluyen el ID del snapshot, así que un
+  cambio de snapshot nunca sirve resultados obsoletos
 - `cache.py`: Caché LRU para resultados de consultas
 - `chat.py`: Manejadores de endpoints FastAPI
-- `main.py`: Servidor FastAPI
-- `vector_db.py`: Operaciones de PostgreSQL + pgvector
+- `main.py`: Servidor FastAPI (`/chat`, `/transcripts`, `/health`)
+- `snapshots.py`: Qué snapshot RAG leer: regla de selección, sondeo del
+  registro cada 15 segundos, disponibilidad
+- `vector_db.py`: Consultas de solo lectura a PostgreSQL + pgvector; cada
+  consulta recibe explícitamente el esquema del snapshot (sin `search_path`)
+
+### Snapshots RAG
+
+El indexador publica la base de conocimiento como snapshots inmutables
+(esquemas `rag_s<id>`) registrados en `rag_meta.snapshots`; ver el
+[README del indexador](../indexer/README.es-ES.md#esquema-de-base-de-datos). El agente:
+
+- **selecciona** el snapshot publicado cuyo `format_version` admite
+  (`SUPPORTED_FORMATS`, actualmente `{1}`) y cuyo espacio vectorial
+  (`<embedding.model>@<EMBEDDING_DIM>`, o `embedding.space_id`) coincide con el
+  suyo: primero el formato más alto y después el más reciente. `RAG_SNAPSHOT`
+  fija un ID de snapshot. Antes de que el indexador cree `rag_meta`, el esquema
+  `rag` original se lee como el snapshot implícito `legacy`;
+- mantiene el snapshot actual **en memoria** y vuelve a aplicar la regla cada
+  15 segundos en un hilo en segundo plano, de modo que un snapshot recién
+  publicado o revertido surte efecto sin reiniciar. El manejo de peticiones
+  nunca consulta `rag_meta`;
+- **fija cada petición** al snapshot vigente cuando empieza: todas las
+  recuperaciones de una respuesta de `/chat`, y cada respuesta del lector, leen
+  un único snapshot aunque se publique otro mientras tanto;
+- sigue en marcha si la base de datos o un snapshot legible no están
+  disponibles: entonces no está listo (`/health` devuelve `503`), `/chat` y
+  `/transcripts` devuelven `503`, y el sondeo sigue reintentando;
+- se conecta con el rol de solo lectura `rag_agent` cuando
+  `POSTGRES_AGENT_PASSWORD` está definido (no puede modificar datos ni bajo
+  inyección de prompts); si no, recurre al superusuario y registra un aviso.
 
 ### Comportamiento de Enrutamiento
 
@@ -123,19 +154,59 @@ latido `: ping` durante las etapas silenciosas del pipeline.
 
 ### GET /transcripts
 
-Índice de navegación del lector construido desde `rag.transcripts`:
+Índice de navegación del lector a partir de la tabla `transcripts` del snapshot actual:
 `{"items": [{doc_id, canonical_title, source_title, channel, publication_date, source_hash, updated_at}, ...]}`,
 ordenado por programa y, dentro de cada uno, por `publication_date` de más
 reciente a más antigua. Las respuestas llevan `ETag` (`Cache-Control: no-cache`)
-y responden a `If-None-Match` con `304`. `503` si la base de datos no está
-disponible.
+y responden a `If-None-Match` con `304`. `503` si la base de datos o un
+snapshot legible no están disponibles.
 
 ### GET /transcripts/{doc_id}
 
 Una transcripción renderizada por su URI exacta (p. ej.
 `/transcripts/ShuiQianXiaoXi/0501-0600/0588.md`): los mismos campos más
 `body_html`. Solo se aceptan URIs relativas canónicas `.md`; cualquier otra
-entrada o una URI desconocida devuelve `404`. Mismo comportamiento `ETag`/`304`.
+entrada o una URI desconocida devuelve `404`. Mismo comportamiento `ETag`/`304`/`503`.
+
+### GET /health
+
+Sonda de disponibilidad. `200` cuando la base de datos es accesible y hay un
+snapshot legible seleccionado; si no, `503` con un `reason` (base de datos
+inaccesible, ningún snapshot publicado en el espacio vectorial del agente,
+snapshot fijado retirado o inexistente, ...). Se sirve desde el último resultado
+del sondeo de snapshots (como mucho de hace 15 s): no consulta la base de datos
+ni llama a ningún modelo.
+
+```json
+{
+  "ready": true,
+  "snapshot": {
+    "id": "s20261007t091512z_a1b2c3d",
+    "schema": "rag_s20261007t091512z_a1b2c3d",
+    "format_version": 1,
+    "embedding_space": "Qwen/Qwen3-Embedding-4B@2560",
+    "published_at": "2026-10-07T09:15:40Z",
+    "data_age_seconds": 3600,
+    "source_commit": "a1b2c3d..."
+  },
+  "embedding_space": "Qwen/Qwen3-Embedding-4B@2560",
+  "supported_formats": [1],
+  "pinned_by_config": null,
+  "checked_at": "2026-10-07T10:15:38Z",
+  "indexer_status": {
+    "last_run_at": "...",
+    "last_result": "no_change",
+    "last_error": null,
+    "last_published_at": "...",
+    "consecutive_failures": 0
+  }
+}
+```
+
+`indexer_status` no afecta a la disponibilidad (un snapshot más antiguo sigue
+sirviendo); úsalo para alertas, p. ej. 3 fallos consecutivos o más de 3 horas
+sin ejecución. El archivo compose usa `/health` como comprobación de salud del
+contenedor del agente.
 
 ## Evaluación
 
@@ -220,12 +291,24 @@ embedding:
 
 - Cambiar de proveedor (OpenAI, una pasarela propia, ...) solo cambia los
   valores de `base_url` / `model` / `api_key` — sin cambios de código.
-- **Las dimensiones de los embeddings deben coincidir con la columna de la
-  base de datos.** La columna `embedding halfvec(N)` se dimensiona desde
-  `EMBEDDING_DIM` (`.env`, por defecto `2560` para
-  `Qwen/Qwen3-Embedding-4B`). Cambiar a un modelo con una dimensión diferente
-  requiere un cambio de esquema y una re-incrustación completa — consulta el
-  manual "Cambiar el Modelo de Embedding" en `indexer/README.es-ES.md`.
+- **El espacio vectorial debe coincidir con el del snapshot.** Los vectores de
+  consulta deben venir del modelo con el que se construyó el snapshot, así que
+  el agente solo lee snapshots de su propio espacio vectorial:
+  `<embedding.model>@<EMBEDDING_DIM>` (`.env`, por defecto `2560` para
+  `Qwen/Qwen3-Embedding-4B`), o `embedding.space_id` si está definido. Cambiar
+  de modelo implica que el indexador construya antes un nuevo snapshot —
+  consulta el manual "Cambiar el Modelo de Embedding" en
+  `indexer/README.es-ES.md`.
+
+**Base de datos y snapshots** (variables de entorno que `docker-compose.yml`
+toma de `.env`):
+
+- `POSTGRES_AGENT_PASSWORD`: conectar con el rol de solo lectura `rag_agent`
+  (recomendado). Sin definir → se usa `POSTGRES_USER` con un aviso
+- `EMBEDDING_DIM`: dimensión de los vectores de consulta (parte del espacio vectorial)
+- `RAG_SNAPSHOT`: ID de snapshot opcional que fijar (diagnóstico, fijación a
+  largo plazo); el agente deja de seguir snapshots nuevos y pasa a no estar
+  listo si ese snapshot se retira o se borra
 
 **Ajustes de Recuperación:**
 
@@ -249,9 +332,10 @@ agent/src/
 ├── chat.py            # Manejadores de endpoints
 ├── agent.py           # API RAG agente
 ├── graph.py           # Flujo de trabajo LangGraph
-├── retriever.py       # Búsqueda semántica con caché
+├── retriever.py       # Búsqueda semántica con caché por snapshot
 ├── cache.py           # Implementación de caché LRU
-├── vector_db.py       # Operaciones de base de datos
+├── snapshots.py       # Selección de snapshot, sondeo, disponibilidad
+├── vector_db.py       # Consultas de solo lectura cualificadas por snapshot
 ├── models.py          # Modelos Pydantic
 ├── settings.py        # Configuración
 ├── uri_mapping.py     # Título de cita de respaldo a partir de la URI
@@ -291,6 +375,9 @@ docker compose logs -f agent
 # Acceder al contenedor
 docker compose exec agent sh
 
+# Disponibilidad y snapshot servido
+docker compose exec agent curl -s http://localhost:8000/health
+
 # Probar la conexión a la base de datos (el helper vive en el servicio indexer)
 docker compose exec indexer python -m src.debugger test
 
@@ -306,7 +393,7 @@ episodio. El URI ya está presente en su contexto, así que no hay número de
 episodio ni enlace que pueda inventar. Tras la generación, `_repair_citations`
 reescribe cada cita como `[[título normalizado]](url)`.
 
-Los títulos provienen de `rag.documents.title`, unido con LEFT JOIN durante la
+Los títulos provienen de `documents.title` del snapshot, unido con LEFT JOIN durante la
 recuperación (escrito por el indexador desde el `URI映射.md` de origen). Si falta
 esa fila, se aplica una regla general:
 

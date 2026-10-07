@@ -16,11 +16,31 @@
 
 - `agent.py`：对外 API（`agent_query()`、`agent_stream_query()`）
 - `graph.py`：带智能路由的 LangGraph 工作流
-- `retriever.py`：语义搜索（embedding + pgvector）
+- `retriever.py`：针对单个快照的语义搜索（embedding + pgvector）；结果缓存的键包含快照 ID，
+  切换快照后不会返回旧结果
 - `cache.py`：查询结果的 LRU 缓存
 - `chat.py`：FastAPI 端点处理器
-- `main.py`：FastAPI 服务器
-- `vector_db.py`：PostgreSQL + pgvector 数据库操作
+- `main.py`：FastAPI 服务器（`/chat`、`/transcripts`、`/health`）
+- `snapshots.py`：选择读取哪个 RAG 快照：选择规则、每 15 秒轮询注册表、就绪状态
+- `vector_db.py`：只读的 PostgreSQL + pgvector 查询；每条查询都显式带上快照 schema（不使用 `search_path`）
+
+### RAG 快照
+
+Indexer 把知识库发布为不可变的快照（`rag_s<id>` schema），登记在
+`rag_meta.snapshots` 中；参见 [Indexer README](../indexer/README.md#数据库结构)。Agent：
+
+- **选择**已发布快照中 `format_version` 受支持（`SUPPORTED_FORMATS`，目前为 `{1}`）、
+  且向量空间（`<embedding.model>@<EMBEDDING_DIM>`，或 `embedding.space_id`）与自身一致的快照——
+  先取最高格式，再取最新发布的。设置 `RAG_SNAPSHOT` 时直接固定使用该快照 ID。
+  在 Indexer 创建 `rag_meta` 之前，原有的 `rag` schema 被当作隐式快照 `legacy` 读取；
+- 把当前快照保存在**进程内存**中，后台线程每 15 秒重新应用选择规则，因此新发布或回滚的快照
+  无需重启即可生效。处理请求时从不查询 `rag_meta`；
+- **每个请求固定在开始时的快照上**：一次 `/chat` 回答中的每次检索、每个阅读器响应都只读一个快照，
+  即使期间发布了新快照；
+- 数据库或可读快照不可用时不会退出：此时处于未就绪状态（`/health` 返回 `503`），`/chat` 和
+  `/transcripts` 返回 `503`，轮询线程持续重试；
+- 设置了 `POSTGRES_AGENT_PASSWORD` 时以只读角色 `rag_agent` 连接（即使遭受 prompt 注入也无法修改任何数据）；
+  否则回退到数据库超级用户并记录警告。
 
 ### 路由行为
 
@@ -111,16 +131,51 @@ data: [DONE]
 
 ### GET /transcripts
 
-阅读器导航索引，来自 `rag.transcripts`：
+阅读器导航索引，来自当前快照的 `transcripts` 表：
 `{"items": [{doc_id, canonical_title, source_title, channel, publication_date, source_hash, updated_at}, ...]}`，
 按栏目排序，栏目内按 `publication_date` 从新到旧。响应带 `ETag`
-（`Cache-Control: no-cache`），对 `If-None-Match` 返回 `304`；数据库不可用时返回 `503`。
+（`Cache-Control: no-cache`），对 `If-None-Match` 返回 `304`；数据库或可读快照不可用时返回 `503`。
 
 ### GET /transcripts/{doc_id}
 
 按精确 URI 返回一篇渲染后的文稿（如
 `/transcripts/ShuiQianXiaoXi/0501-0600/0588.md`）：字段同上，另加 `body_html`。
-只接受规范的相对 `.md` URI，其它输入或未知 URI 返回 `404`。`ETag`/`304` 行为相同。
+只接受规范的相对 `.md` URI，其它输入或未知 URI 返回 `404`。`ETag`/`304`/`503` 行为相同。
+
+### GET /health
+
+就绪探针。数据库可达且已选中可读快照时返回 `200`；否则返回 `503` 并给出 `reason`
+（数据库不可达、本 Agent 的向量空间中没有已发布快照、固定的快照已退役或不存在等）。
+结果来自快照轮询线程的上一次结果（最多 15 秒前），不查询数据库，也不调用模型。
+
+```json
+{
+  "ready": true,
+  "snapshot": {
+    "id": "s20261007t091512z_a1b2c3d",
+    "schema": "rag_s20261007t091512z_a1b2c3d",
+    "format_version": 1,
+    "embedding_space": "Qwen/Qwen3-Embedding-4B@2560",
+    "published_at": "2026-10-07T09:15:40Z",
+    "data_age_seconds": 3600,
+    "source_commit": "a1b2c3d..."
+  },
+  "embedding_space": "Qwen/Qwen3-Embedding-4B@2560",
+  "supported_formats": [1],
+  "pinned_by_config": null,
+  "checked_at": "2026-10-07T10:15:38Z",
+  "indexer_status": {
+    "last_run_at": "...",
+    "last_result": "no_change",
+    "last_error": null,
+    "last_published_at": "...",
+    "consecutive_failures": 0
+  }
+}
+```
+
+`indexer_status` 不影响就绪状态（旧快照仍可服务），可用于告警，例如连续 3 次失败或超过
+3 小时没有运行。compose 文件以 `/health` 作为 Agent 容器的健康检查。
 
 ## 评估
 
@@ -201,11 +256,18 @@ embedding:
 
 - 改用其它供应商（OpenAI、自建网关等）只改 `base_url` / `model` /
   `api_key` 三行的取值，代码不需要任何变更。
-- **Embedding 维度必须与数据库列匹配。** `embedding halfvec(N)` 列的 N
-  取自 `EMBEDDING_DIM`（`.env`，默认 `2560`，对应
-  `Qwen/Qwen3-Embedding-4B`）。切换到维度不同的模型需要变更 schema 并
-  完整重新 embedding——参见 `indexer/README.md` 中的“更换 Embedding
-  模型”操作手册。
+- **向量空间必须与快照一致。** 查询向量必须来自构建快照时使用的模型，因此 Agent 只读取
+  自身向量空间中的快照：`<embedding.model>@<EMBEDDING_DIM>`（`.env`，默认 `2560`，对应
+  `Qwen/Qwen3-Embedding-4B`），设置了 `embedding.space_id` 时以其为准。换模型时需由
+  Indexer 先构建新快照——参见 `indexer/README.md` 中的“更换 Embedding 模型”操作手册。
+
+**数据库与快照设置**（环境变量，由 `docker-compose.yml` 从 `.env` 传入）：
+
+- `POSTGRES_AGENT_PASSWORD`：以只读角色 `rag_agent` 连接（推荐）。未设置时回退到
+  `POSTGRES_USER` 并记录警告
+- `EMBEDDING_DIM`：查询向量的维度（向量空间的一部分）
+- `RAG_SNAPSHOT`：可选，固定使用的快照 ID（排障、长期固定）；此时 Agent 不跟随新快照，
+  该快照被退役或删除时进入未就绪状态
 
 **检索设置**：
 
@@ -226,9 +288,10 @@ agent/src/
 ├── chat.py            # 端点处理器
 ├── agent.py           # Agentic RAG API
 ├── graph.py           # LangGraph 工作流
-├── retriever.py       # 带缓存的语义搜索
+├── retriever.py       # 按快照缓存的语义搜索
 ├── cache.py           # LRU 缓存实现
-├── vector_db.py       # 数据库操作
+├── snapshots.py       # 快照选择、轮询、就绪状态
+├── vector_db.py       # 只读、带快照 schema 的数据库查询
 ├── models.py          # Pydantic 模型
 ├── settings.py        # 配置
 ├── uri_mapping.py     # 由 URI 推导的后备引用标题
@@ -266,6 +329,9 @@ docker compose logs -f agent
 # 进入容器
 docker compose exec agent sh
 
+# 就绪状态与正在服务的快照
+docker compose exec agent curl -s http://localhost:8000/health
+
 # 测试数据库连接（辅助工具位于 indexer 服务）
 docker compose exec indexer python -m src.debugger test
 
@@ -280,7 +346,7 @@ docker compose exec agent python -m src.eval_agent --limit 1
 上下文里已有的字符串，模型无需臆造期号或 URL。生成结束后由
 `_repair_citations` 统一改写成 `[[标准化标题]](链接)`。
 
-标题优先取自检索时 LEFT JOIN 出来的 `rag.documents.title`（由 indexer 从上游
+标题优先取自检索时 LEFT JOIN 出来的快照 `documents.title`（由 indexer 从上游
 `URI映射.md` 写入）。该行缺失时退回通则推导：
 
 | 栏目目录           | 标准化标题前缀 |

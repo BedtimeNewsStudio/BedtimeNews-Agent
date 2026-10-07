@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="940" viewBox="0 0 1320 940" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="1060" viewBox="0 0 1320 1060" role="img" aria-labelledby="title desc">
   <title id="title">Indexer pipeline</title>
-  <desc id="desc">One indexer run in five phases. Phase 1 syncs and scans the transcript repository and classifies each file as added, body-modified, source-only, or deleted. Phase 2 refreshes every standardised title. Phase 3 applies RAG changes: deletions remove chunks, title and history in one transaction; added or body-modified files are loaded (正文 only), chunked and embedded before one transaction replaces their chunks and history; source-only edits just record history. Phase 4 renders or removes reader projections in rag.transcripts. Phase 5 logs chunk statistics when anything was embedded.</desc>
+  <desc id="desc">One indexer run builds and publishes an immutable RAG snapshot. Setup: take the whole-run file lock (if another run holds it, record skipped_busy and exit); bootstrap rag_meta, rag_state and the read-only rag_agent role, adopting a pre-snapshot rag schema as snapshot legacy; sync the transcripts repository and pin the commit; plan by choosing the incremental base (the newest published snapshot of the current lineage) and diffing against its index_state, stopping with no_change when nothing changed. Then garbage-collect and check free disk space. Phase A, outside any transaction: chunk the 正文 of added and changed transcripts (all of them in a full build), reuse vectors by chunk-text hash from the newest snapshot in the same vector space, embed only the misses, and render reader projections. Phase B, one transaction holding the advisory lock: create schema rag_s&lt;id&gt;, copy the base and delete changed and deleted transcripts (incremental path) or start empty (full path), insert chunks, index_state, titles and reader projections, ANALYZE, build the HNSW index, self-check, recheck that the base is still published and newest, register the snapshot as published and grant rag_agent read access, then commit. Any failure rolls everything back and published snapshots are untouched. Finally garbage-collect again and update indexer_status.</desc>
   <defs>
     <linearGradient id="canvas" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#ffffff"/>
@@ -26,108 +26,154 @@
     <style>
       .canvas { fill:url(#canvas); stroke:#c4d0e6; stroke-width:2 }
       .group { fill:#eef4ff; stroke:#b7c9ed; stroke-width:1.5 }
+      .tx { fill:#edf9f6; stroke:#35a995; stroke-width:1.5; stroke-dasharray:7 5 }
       .node { fill:#ffffff; stroke:#c4d0e6; stroke-width:1.5; filter:url(#shadow) }
       .focus { fill:url(#blue-panel); stroke:#4a7df0 }
       .change { fill:#fff8e8; stroke:#b1770f }
       .database { fill:#edf9f6; stroke:#35a995 }
       .eyebrow { fill:#647089; font:400 16px ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; letter-spacing:.1em }
       .group-label { fill:#2a5fe0; font:400 16px ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; letter-spacing:.08em }
+      .tx-label { fill:#23806f; font:400 16px ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; letter-spacing:.08em }
       .num { fill:#2a5fe0; font:400 15px ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; text-anchor:middle }
-      .label { fill:#0e1420; font:400 21px ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; text-anchor:middle }
-      .sub { fill:#46536b; font:400 15px ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; text-anchor:middle }
+      .label { fill:#0e1420; font:400 20px ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; text-anchor:middle }
+      .sub { fill:#46536b; font:400 14px ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; text-anchor:middle }
       .blue-line { fill:none; stroke:#4a7df0; stroke-width:3; marker-end:url(#blue-arrow) }
       .gold-line { fill:none; stroke:#f2c14e; stroke-width:2.5; marker-end:url(#gold-arrow) }
       .teal-line { fill:none; stroke:#35c7b1; stroke-width:3; marker-end:url(#teal-arrow) }
       .edge-label { fill:#647089; font:400 14px ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; letter-spacing:.03em; text-anchor:middle }
       .gold { fill:#9a6509 }
+      .teal { fill:#23806f }
     </style>
   </defs>
 
-  <rect class="canvas" x="4" y="4" width="1312" height="932" rx="28"/>
-  <text class="eyebrow" x="42" y="47">BEDTIMENEWS / INDEXER RUN</text>
+  <rect class="canvas" x="4" y="4" width="1312" height="1052" rx="28"/>
+  <text class="eyebrow" x="42" y="47">BEDTIMENEWS / INDEXER RUN · BUILD AND PUBLISH A SNAPSHOT</text>
   <line x1="42" y1="72" x2="1278" y2="72" stroke="#d9e2f2"/>
 
-  <!-- Phase 1 + 2 -->
-  <text class="group-label" x="50" y="108">PHASE 1 · DETECT CHANGES</text>
-  <text class="group-label" x="1000" y="108">PHASE 2 · TITLES</text>
+  <!-- Setup -->
+  <text class="group-label" x="50" y="106">SETUP</text>
 
-  <rect class="node" x="50" y="128" width="220" height="112" rx="17"/>
-  <text class="num" x="160" y="156">01</text>
-  <text class="label" x="160" y="190">Sync repository</text>
-  <text class="sub" x="160" y="218">clone or pull latest</text>
+  <rect class="node change" x="50" y="122" width="270" height="112" rx="17"/>
+  <text class="num" x="185" y="149">01</text>
+  <text class="label" x="185" y="182">Run lock</text>
+  <text class="sub" x="185" y="208">flock .indexer.lock, non-blocking</text>
 
-  <rect class="node focus" x="340" y="128" width="220" height="112" rx="17"/>
-  <text class="num" x="450" y="156">02</text>
-  <text class="label" x="450" y="190">Scan files</text>
-  <text class="sub" x="450" y="218">include / exclude rules</text>
+  <rect class="node" x="366" y="122" width="270" height="112" rx="17"/>
+  <text class="num" x="501" y="149">02</text>
+  <text class="label" x="501" y="182">Bootstrap</text>
+  <text class="sub" x="501" y="208">rag_meta · rag_state · rag_agent</text>
+  <text class="sub" x="501" y="226">adopt old rag as legacy</text>
 
-  <rect class="node change" x="630" y="128" width="300" height="112" rx="17"/>
-  <text class="num" x="780" y="156">03</text>
-  <text class="label" x="780" y="190">Classify each file</text>
-  <text class="sub" x="780" y="218">source hash · 正文 hash · version</text>
+  <rect class="node" x="682" y="122" width="270" height="112" rx="17"/>
+  <text class="num" x="817" y="149">03</text>
+  <text class="label" x="817" y="182">Git sync</text>
+  <text class="sub" x="817" y="208">fetch + reset, pin the commit</text>
 
-  <rect class="node" x="1000" y="128" width="270" height="112" rx="17"/>
-  <text class="num" x="1135" y="156">04</text>
-  <text class="label" x="1135" y="190">Refresh titles</text>
-  <text class="sub" x="1135" y="218">URI映射.md → rag.documents</text>
+  <rect class="node focus" x="998" y="122" width="272" height="112" rx="17"/>
+  <text class="num" x="1134" y="149">04</text>
+  <text class="label" x="1134" y="182">Plan</text>
+  <text class="sub" x="1134" y="208">base = newest of current lineage</text>
+  <text class="sub" x="1134" y="226">diff its index_state</text>
 
-  <path class="blue-line" d="M270 184H340"/>
-  <path class="blue-line" d="M560 184H630"/>
-  <path class="blue-line" d="M930 184H1000"/>
+  <path class="blue-line" d="M320 178H366"/>
+  <path class="blue-line" d="M636 178H682"/>
+  <path class="blue-line" d="M952 178H998"/>
 
-  <!-- Phase 3 -->
-  <rect class="group" x="50" y="290" width="1220" height="410" rx="22"/>
-  <text class="group-label" x="78" y="326">PHASE 3 · APPLY RAG CHANGES</text>
+  <text class="edge-label gold" x="185" y="262">busy → skipped_busy, exit</text>
+  <path class="gold-line" d="M185 234V248"/>
+  <text class="edge-label gold" x="1195" y="262">no change → stop</text>
 
-  <text class="edge-label gold" x="160" y="366">DELETE</text>
-  <rect class="node database" x="78" y="380" width="1164" height="52" rx="14"/>
-  <text class="label" x="660" y="413">Remove chunks + title + history in one transaction</text>
+  <rect class="node change" x="50" y="282" width="1220" height="50" rx="14"/>
+  <text class="sub" x="660" y="312">05 · GC, then disk precheck: free space on the Postgres data mount ≥ max(2 GB, 3 × base snapshot), else failed</text>
+  <path class="blue-line" d="M1060 234V282"/>
 
-  <text class="edge-label" x="160" y="466">ADD / BODY MODIFY</text>
-  <rect class="node focus" x="78" y="480" width="250" height="100" rx="16"/>
-  <text class="num" x="203" y="506">05</text>
-  <text class="label" x="203" y="538">Load 正文</text>
-  <text class="sub" x="203" y="563">drop title, date, 附录</text>
+  <!-- Phase A -->
+  <rect class="group" x="50" y="362" width="1220" height="196" rx="22"/>
+  <text class="group-label" x="78" y="396">PHASE A · NO TRANSACTION · NEW VECTORS STAY IN MEMORY</text>
 
-  <rect class="node" x="383" y="480" width="250" height="100" rx="16"/>
-  <text class="num" x="508" y="506">06</text>
-  <text class="label" x="508" y="538">Chunk</text>
-  <text class="sub" x="508" y="563">per sub-heading section</text>
+  <rect class="node focus" x="78" y="418" width="268" height="112" rx="16"/>
+  <text class="num" x="212" y="444">06</text>
+  <text class="label" x="212" y="476">Chunk 正文</text>
+  <text class="sub" x="212" y="502">added + changed (full: all)</text>
 
-  <rect class="node" x="688" y="480" width="250" height="100" rx="16"/>
-  <text class="num" x="813" y="506">07</text>
-  <text class="label" x="813" y="538">Embed</text>
-  <text class="sub" x="813" y="563">batched, per document</text>
+  <rect class="node" x="376" y="418" width="268" height="112" rx="16"/>
+  <text class="num" x="510" y="444">07</text>
+  <text class="label" x="510" y="476">Reuse vectors</text>
+  <text class="sub" x="510" y="502">by sha256(chunk text),</text>
+  <text class="sub" x="510" y="520">newest snapshot, same space</text>
 
-  <rect class="node database" x="993" y="480" width="249" height="100" rx="16"/>
-  <text class="num" x="1117.5" y="506">08</text>
-  <text class="label" x="1117.5" y="538">Replace index</text>
-  <text class="sub" x="1117.5" y="563">chunks + history, one tx</text>
+  <rect class="node" x="674" y="418" width="268" height="112" rx="16"/>
+  <text class="num" x="808" y="444">08</text>
+  <text class="label" x="808" y="476">Embed misses</text>
+  <text class="sub" x="808" y="502">API only for new text</text>
 
-  <path class="blue-line" d="M328 530H383"/>
-  <path class="blue-line" d="M633 530H688"/>
-  <path class="teal-line" d="M938 530H993"/>
+  <rect class="node" x="972" y="418" width="270" height="112" rx="16"/>
+  <text class="num" x="1107" y="444">09</text>
+  <text class="label" x="1107" y="476">Render reader</text>
+  <text class="sub" x="1107" y="502">Markdown → HTML projections</text>
 
-  <text class="edge-label gold" x="160" y="626">SOURCE ONLY</text>
-  <rect class="node change" x="78" y="640" width="1164" height="44" rx="14"/>
-  <text class="sub" x="660" y="668">Record the new source hash in history; vectors untouched, no embedding call</text>
+  <path class="blue-line" d="M346 474H376"/>
+  <path class="blue-line" d="M644 474H674"/>
+  <path class="blue-line" d="M942 474H972"/>
+  <path class="blue-line" d="M660 332V362"/>
 
-  <path class="blue-line" d="M1135 240V290"/>
+  <!-- Phase B -->
+  <rect class="tx" x="50" y="590" width="1220" height="300" rx="22"/>
+  <text class="tx-label" x="78" y="624">PHASE B · ONE TRANSACTION · ADVISORY LOCK</text>
+  <path class="blue-line" d="M660 558V590"/>
 
-  <!-- Phase 4 + 5 -->
-  <text class="group-label" x="50" y="748">PHASE 4 · READER PROJECTIONS</text>
-  <text class="group-label" x="700" y="748">PHASE 5 · STATISTICS</text>
+  <rect class="node database" x="78" y="644" width="220" height="104" rx="16"/>
+  <text class="num" x="188" y="670">10</text>
+  <text class="label" x="188" y="700">Create schema</text>
+  <text class="sub" x="188" y="726">rag_s&lt;id&gt;, 4 tables</text>
 
-  <rect class="node database" x="50" y="768" width="580" height="112" rx="17"/>
-  <text class="num" x="340" y="796">09</text>
-  <text class="label" x="340" y="830">Render or remove rag.transcripts</text>
-  <text class="sub" x="340" y="858">Markdown → HTML when source or renderer changed</text>
+  <rect class="node database" x="328" y="644" width="260" height="104" rx="16"/>
+  <text class="num" x="458" y="670">11</text>
+  <text class="label" x="458" y="700">Copy base, delete</text>
+  <text class="sub" x="458" y="722">incremental: unchanged rows</text>
+  <text class="sub" x="458" y="740">full: start empty</text>
 
-  <rect class="node" x="700" y="768" width="570" height="112" rx="17"/>
-  <text class="num" x="985" y="796">10</text>
-  <text class="label" x="985" y="830">Log chunk statistics</text>
-  <text class="sub" x="985" y="858">only when this run embedded chunks</text>
+  <rect class="node database" x="618" y="644" width="300" height="104" rx="16"/>
+  <text class="num" x="768" y="670">12</text>
+  <text class="label" x="768" y="700">Insert</text>
+  <text class="sub" x="768" y="722">chunks + vectors · index_state</text>
+  <text class="sub" x="768" y="740">titles · reader projections</text>
 
-  <path class="blue-line" d="M560 700V768"/>
-  <path class="blue-line" d="M630 824H700"/>
+  <rect class="node database" x="948" y="644" width="294" height="104" rx="16"/>
+  <text class="num" x="1095" y="670">13</text>
+  <text class="label" x="1095" y="700">ANALYZE + HNSW</text>
+  <text class="sub" x="1095" y="726">bulk index build, then stats</text>
+
+  <path class="teal-line" d="M298 696H328"/>
+  <path class="teal-line" d="M588 696H618"/>
+  <path class="teal-line" d="M918 696H948"/>
+
+  <rect class="node change" x="78" y="774" width="340" height="96" rx="16"/>
+  <text class="num" x="248" y="798">14</text>
+  <text class="label" x="248" y="826">Self-check</text>
+  <text class="sub" x="248" y="850">complete · top-k · re-embed ≥ 0.99</text>
+
+  <rect class="node change" x="448" y="774" width="340" height="96" rx="16"/>
+  <text class="num" x="618" y="798">15</text>
+  <text class="label" x="618" y="826">Recheck base</text>
+  <text class="sub" x="618" y="850">still published and newest</text>
+
+  <rect class="node database" x="818" y="774" width="424" height="96" rx="16"/>
+  <text class="num" x="1030" y="798">16</text>
+  <text class="label" x="1030" y="826">Register published · grant</text>
+  <text class="sub" x="1030" y="850">rag_meta.snapshots, rag_agent SELECT → COMMIT</text>
+
+  <path class="teal-line" d="M1095 748V762H248V774"/>
+  <path class="teal-line" d="M418 822H448"/>
+  <path class="teal-line" d="M788 822H818"/>
+
+  <text class="edge-label gold" x="660" y="912">any failure, kill or dropped connection → ROLLBACK: nothing half-built, published snapshots untouched</text>
+
+  <!-- After -->
+  <text class="group-label" x="50" y="954">AFTER</text>
+  <rect class="node" x="50" y="968" width="590" height="66" rx="16"/>
+  <text class="label" x="345" y="1008">17 · GC: keep 2 current, others 7 days</text>
+  <rect class="node" x="680" y="968" width="590" height="66" rx="16"/>
+  <text class="label" x="975" y="1008">18 · Update rag_meta.indexer_status</text>
+  <path class="blue-line" d="M640 1001H680"/>
 </svg>

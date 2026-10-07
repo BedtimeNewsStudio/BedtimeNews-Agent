@@ -28,18 +28,22 @@ generation:
   fast_model: "deepseek-v4-flash" # cheap calls (routing, grading); empty -> model
 
 # -- Embedding model ---------------------------------------------------------
-# Changing the embedding model is NOT a simple config edit.
-# Each embedding model emits a fixed vector dimension (EMBEDDING_DIM in .env),
-# which sizes the `embedding halfvec(N)` column in the DB schema. The model's
-# output size and the column must match, or inserts fail with
-# "expected N dimensions, not M". Also note: switching models requires
-# RE-EMBEDDING the whole corpus even when the dimension is unchanged — vectors
-# from different models are not comparable.
+# The model and its output dimension (EMBEDDING_DIM in .env) name a vector
+# space, "<model>@<dimension>". The indexer builds each RAG snapshot in one
+# space, and the agent only reads snapshots in its own space (query and stored
+# vectors must come from the same model). Changing the model or dimension is
+# therefore not an in-place edit: the indexer builds a new snapshot in the new
+# space (re-embedding the whole corpus) while the old snapshot keeps serving;
+# agents configured with the new model then switch to it.
 # See the "Changing the embedding model" runbook in indexer/README.md.
 embedding:
   api_key: "" # required
   base_url: "https://api.siliconflow.com/v1"
   model: "Qwen/Qwen3-Embedding-4B"
+  # Optional explicit vector-space id, overriding "<model>@<dimension>". Set
+  # it (identically for indexer and agent) when the same model name is served
+  # by a different provider whose vectors must not be mixed with the old ones.
+  # space_id: "Qwen/Qwen3-Embedding-4B@2560-vendor-b"
 
 # Embedding batch size (applies to all providers)
 embedding_batch_size: 20
@@ -52,5 +56,6 @@ grading_parallel_threshold: 30
 grading_excerpt_chars: 350
 
 # -- Indexer ------------------------------------------------------------------
-# indexer_cron_schedule: "0 * * * *" # minute hour day month weekday
+# indexer_cron_schedule: "0 * * * *" # minute hour day month weekday; a run that
+#                                    # overruns its slot is not caught up
 # indexer_scope: "full" # "sample" is local-only (POSTGRES_DB must end in _local)

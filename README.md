@@ -21,7 +21,7 @@
 - 查询优化与语义搜索
 - 基于LLM的文档相关性评分
 - 将检索文稿作为回答上下文，并提供 Markdown 引用与引用修复
-- 自动化文档索引与增量更新
+- 自动化文档索引与增量更新，以不可变快照发布：原子、可回滚，Agent 无需重启即可切换
 - 网页界面：聊天提问 + 站内浏览/阅读文稿（引用直接跳转到应用内阅读器）
 
 ## 架构
@@ -34,7 +34,9 @@
   由轻量 FastAPI 服务托管；站内托管文稿列表与正文阅读器，文稿内容来自索引数据库）
 - **[Agent](agent/README.md)**：基于 LangGraph 的智能 RAG 服务
 - **[Indexer](indexer/README.md)**：自动化文档 embedding 流水线
-- **Database**：PostgreSQL + pgvector 扩展的向量数据库
+- **Database**：PostgreSQL + pgvector 扩展的向量数据库。Indexer 是唯一的写入方，把知识库发布为
+  不可变、带版本的快照（每次构建一个 `rag_s<id>` schema，登记在 `rag_meta` 中）；Agent 通过只读角色
+  `rag_agent` 读取最新的兼容快照，并在 15 秒内切换到新快照
 
 索引范围：每篇文稿仅 `## 正文` 进入检索；`## 附录`（事实订正、核对记录）与
 `**发布日期**` 元数据行不索引。
@@ -77,6 +79,12 @@
    cp .env.example .env
    ```
 
+   - `EMBEDDING_DIM` 是 embedding 模型的输出维度（默认模型 `Qwen/Qwen3-Embedding-4B` 为 `2560`）。
+     它与模型一起确定 Indexer 构建快照、Agent 读取快照所用的向量空间；不再决定数据库列的类型，
+     之后修改它会让 Indexer 构建一个新快照，而不需要迁移。
+   - `POSTGRES_AGENT_PASSWORD`（可选，推荐）让 Agent 以只读角色 `rag_agent` 连接，无法修改任何数据。
+     未设置时 Agent 回退到超级用户并记录警告。
+
    > **优先级：进程环境变量 > `config.yml`**（嵌套键用双下划线，如
    > `GENERATION__API_KEY`）。密钥等应用配置以 `config.yml` 为准，不再需要导出密钥。
 
@@ -93,6 +101,9 @@
    默认运行已发布的镜像。如果你修改了代码，请加 `--build`——参见
    [已发布镜像与本地代码](#已发布镜像与本地代码)。
 
+   全新数据库上，在 Indexer 的第一次构建发布之前 Agent 处于未就绪状态（`/health` 返回 `503`），
+   之后会自动变为就绪。
+
 ### 验证安装
 
 ```bash
@@ -101,6 +112,10 @@ docker compose ps
 
 # 查看日志
 docker compose logs -f
+
+# Indexer 发布的快照，以及 Agent 的就绪状态
+docker compose exec indexer python -m src.snapshots list
+docker compose exec agent curl -s http://localhost:8000/health
 ```
 
 ### 测试与覆盖率
@@ -117,6 +132,13 @@ uv run pytest --cov
 ```bash
 cd agent  # 或 indexer / frontend
 uv run pytest --cov
+```
+
+快照构建/发布与快照选择的测试需要带 pgvector 的 PostgreSQL，否则会被跳过。请指向一个
+允许当前用户创建数据库的服务器（每个测试使用各自的临时数据库）：
+
+```bash
+PGTEST_HOST=localhost PGTEST_PORT=5432 PGTEST_USER=postgres PGTEST_PASSWORD=postgres uv run pytest
 ```
 
 ## 发布版本
@@ -163,14 +185,26 @@ docker compose up -d --build agent web
 git tag v0.1.0 && git push origin v0.1.0
 ```
 
-> 发布说明应重点写明运维相关变更：新增/更名的环境变量、数据库 schema 变更
-> （如 `EMBEDDING_DIM`，参见 [indexer/README.md](indexer/README.md) 中的
-> 操作手册）、以及是否需要重新索引。`storage/postgres/init.sh` 只在全新数据卷
-> 上执行，schema 变更不会自动应用到已有部署。
+> 发布说明应重点写明运维相关变更：新增/更名的环境变量、挂载，以及是否会触发全量构建。
+> 数据库结构由 Indexer 自动创建和接管，不再需要手动迁移。Agent 读取的表发生变化时，
+> 会作为新的快照 `format_version` 与旧格式并行构建。
 
-### 正文哈希 schema 升级
+### 升级到 RAG 快照
 
-Indexer 现在以实际送入分块与 embedding 的规范化 `## 正文` SHA256 判断向量是否失效，同时保留完整源文件哈希。已有数据卷必须在运行新版 Indexer 前按顺序执行 `storage/postgres/migrations/` 中的迁移（`001_body_hashes.sql`，然后是创建阅读器 `rag.transcripts` 表的 `002_transcript_projection.sql`）；生产操作步骤见 [indexer/README.md](indexer/README.md)。`docker-compose.sample.yml` 提供固定小样本，本地运行时必须设置隔离的 `POSTGRES_DATA_DIR` / `INDEXER_DATA_DIR`。
+支持快照的 Indexer 首次启动时会自动接管已有数据库——无需手动步骤，Agent 与 Indexer 的升级顺序不限：
+
+- 已有的 `rag` schema 登记为快照 `legacy`；审计日志移到 `rag_state`，`rag.indexing_history`
+  改名为 `rag.index_state`。
+- 第一次构建是全量构建，复用全部已有向量（通常不调用 embedding，耗时几分钟），并发布第一个常规快照。
+- `legacy` 保留 7 天，期间旧版 Agent 继续可用，也可以用
+  `python -m src.snapshots retire <id>` 回滚数据。
+- 接管后不支持把 **Indexer** 回滚到快照之前的版本；Agent 可以自由回滚，直到 `legacy` 被回收。
+- Indexer 新增对 `POSTGRES_DATA_DIR` 的只读挂载（磁盘预检），`POSTGRES_AGENT_PASSWORD` 为可选项——
+  二者都已写入 `docker-compose.yml`。
+
+详见 [indexer/README.md](indexer/README.md#从旧版-schema-升级) 与
+[设计文档](docs/designs/20261007_rag-snapshot-architecture.md)。`docker-compose.sample.yml`
+提供固定小样本，本地运行时必须设置隔离的 `POSTGRES_DATA_DIR` / `INDEXER_DATA_DIR`。
 
 ## 服务专属文档
 
@@ -182,7 +216,7 @@ Indexer 现在以实际送入分块与 embedding 的规范化 `## 正文` SHA256
 
 数据在重启后持久保存：
 
-- **PostgreSQL 数据**（chunks 与 embedding）：绑定挂载到 `./storage/postgres/volume`
+- **PostgreSQL 数据**（RAG 快照、注册表、审计日志）：绑定挂载到 `./storage/postgres/volume`
 - **服务日志**：Docker 命名卷 `bedtimenews_indexer_logs` 与 `bedtimenews_agent_logs`
 
 ## 项目结构
@@ -209,9 +243,11 @@ BedtimeNews-Agent/
 │   ├── README.md
 │   ├── README.en.md
 │   └── README.es-ES.md
-├── docs/diagrams/      # SVG 架构图与工作流图
-├── storage/            # 数据库初始化脚本
-│   └── postgres/
+├── docs/
+│   ├── designs/        # 设计文档
+│   └── diagrams/       # SVG 架构图与工作流图
+├── storage/
+│   └── postgres/       # init.sh（启用 pgvector）；migrations/ 仅作历史参考
 ├── docker-compose.yml  # 服务编排
 ├── config.yml          # 应用与密钥配置（不在 git 中，由 example 复制）
 ├── config.example.yml  # 应用配置模板

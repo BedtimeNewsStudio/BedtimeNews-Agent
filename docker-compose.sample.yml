@@ -1,5 +1,7 @@
 # Local-only deterministic sample overlay. Set POSTGRES_DATA_DIR and
-# INDEXER_DATA_DIR to isolated host directories before invoking Compose.
+# INDEXER_DATA_DIR to isolated host directories before invoking Compose; the
+# indexer's read-only /pgdata disk-precheck mount follows POSTGRES_DATA_DIR,
+# so it watches the sample database's filesystem.
 services:
   postgres:
     container_name: bedtimenews-sample-postgres

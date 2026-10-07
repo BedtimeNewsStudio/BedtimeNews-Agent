@@ -11,6 +11,15 @@ This directory is mounted as `/data` inside the indexer Docker container.
 
 - All contents except this README file are ignored in git
 
+## Run lock
+
+`.indexer.lock` in this directory is the indexer's run lock: every run (the
+scheduled one, a manual `python -m src.snapshots build`, or a second container
+sharing this directory) holds an exclusive `flock` on it for its whole
+duration, so only one run touches the git checkout and the database at a time.
+Do not delete or create it by hand; a stale file is harmless (the lock is
+released when the holding process exits).
+
 ## Note
 
 Do not manually add or modify files to this directory - they will be managed by the indexer service.
