@@ -100,11 +100,21 @@ PUBLIC_BASE_URL = _normalize_public_base_url(
 # instead of paying a new connection pool + TCP handshake per chat.
 _client: httpx.AsyncClient | None = None
 
+# The agent's uvicorn drops idle keep-alive connections after 5s (its default
+# timeout_keep_alive). httpx also defaults to 5s, so a request could pick a
+# pooled connection the agent was closing at that moment and fail with
+# "Server disconnected without sending a response". Expiring ours first avoids
+# that race; _get_upstream retries the rare leftover case for idempotent GETs.
+UPSTREAM_KEEPALIVE_EXPIRY = 3.0
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     global _client
-    _client = httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=10.0))
+    _client = httpx.AsyncClient(
+        timeout=httpx.Timeout(120.0, connect=10.0),
+        limits=httpx.Limits(keepalive_expiry=UPSTREAM_KEEPALIVE_EXPIRY),
+    )
     try:
         yield
     finally:
@@ -294,13 +304,27 @@ def _generated_response(
     )
 
 
+async def _get_upstream(
+    client: httpx.AsyncClient, url: str, headers: dict | None = None
+) -> httpx.Response:
+    """GET from the agent, retrying once if a reused connection was already closed.
+
+    Safe to retry because these reads are idempotent. Other transport errors
+    propagate so callers can answer with a controlled 503.
+    """
+    try:
+        return await client.get(url, headers=headers)
+    except httpx.RemoteProtocolError:
+        return await client.get(url, headers=headers)
+
+
 async def _fetch_upstream_json(url: str) -> dict:
     client = _client
     if client is None:
         raise _UpstreamError(503, "文稿服务尚未就绪")
     try:
-        response = await client.get(url)
-    except (httpx.TimeoutException, httpx.NetworkError) as exc:
+        response = await _get_upstream(client, url)
+    except httpx.TransportError as exc:
         raise _UpstreamError(503, "文稿服务暂时不可用") from exc
     if response.status_code == 404:
         raise _UpstreamError(404, "文稿不存在")
@@ -727,8 +751,8 @@ async def _proxy_transcript_json(request: Request, upstream_url: str) -> Respons
     if etag := request.headers.get("if-none-match"):
         headers["If-None-Match"] = etag
     try:
-        response = await client.get(upstream_url, headers=headers)
-    except httpx.TimeoutException, httpx.NetworkError:
+        response = await _get_upstream(client, upstream_url, headers=headers)
+    except httpx.TransportError:
         return JSONResponse(
             {"detail": "文稿服务暂时不可用"},
             status_code=503,

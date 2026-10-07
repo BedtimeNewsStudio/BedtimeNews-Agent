@@ -367,6 +367,68 @@ def test_upstream_timeout_returns_controlled_503_page(client):
     assert "文稿服务暂时不可用" in response.text
 
 
+class _FlakyJsonClient(_FakeJsonClient):
+    """Raises `error` for the first `failures` GETs, then returns `response`."""
+
+    def __init__(self, response, error, failures):
+        super().__init__(response=response)
+        self.flaky_error = error
+        self.failures = failures
+
+    async def get(self, url, **kwargs):
+        self.calls.append((url, kwargs))
+        if len(self.calls) <= self.failures:
+            raise self.flaky_error
+        return self.response
+
+
+def _stale_connection():
+    return httpx.RemoteProtocolError("Server disconnected without sending a response.")
+
+
+def test_transcript_page_retries_once_on_stale_upstream_connection(client):
+    upstream = _FlakyJsonClient(
+        _json_upstream(200, _article_payload()), _stale_connection(), failures=1
+    )
+    server._client = upstream
+
+    response = client.get("/transcripts/ShuiQianXiaoXi/0501-0600/0588.md")
+
+    assert response.status_code == 200
+    assert len(upstream.calls) == 2
+
+
+def test_persistent_upstream_disconnect_is_a_controlled_503_not_500(client):
+    server._client = _FlakyJsonClient(
+        _json_upstream(200, _article_payload()), _stale_connection(), failures=99
+    )
+
+    page = client.get("/transcripts/ShuiQianXiaoXi/0501-0600/0588.md")
+    api = client.get("/api/transcripts/ShuiQianXiaoXi/0501-0600/0588.md")
+
+    assert page.status_code == 503
+    assert "文稿服务暂时不可用" in page.text
+    assert api.status_code == 503
+    assert api.json() == {"detail": "文稿服务暂时不可用"}
+
+
+def test_api_transcript_proxy_retries_once_on_stale_upstream_connection(client):
+    upstream = _FlakyJsonClient(
+        _json_upstream(200, {"items": []}), _stale_connection(), failures=1
+    )
+    server._client = upstream
+
+    response = client.get("/api/transcripts")
+
+    assert response.status_code == 200
+    assert len(upstream.calls) == 2
+
+
+def test_upstream_client_expires_idle_connections_before_the_agent_does():
+    # uvicorn's default timeout_keep_alive is 5s; ours must be shorter.
+    assert server.UPSTREAM_KEEPALIVE_EXPIRY < 5
+
+
 def test_robots_txt_advertises_sitemap_and_revalidates(client):
     first = client.get("/robots.txt")
 
