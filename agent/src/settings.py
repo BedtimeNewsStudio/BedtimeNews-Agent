@@ -30,6 +30,9 @@ class EndpointConfig(BaseModel):
     base_url: str = ""  # empty -> client default (api.openai.com)
     model: str = ""
     fast_model: str = ""  # cheap calls (relevance grading); empty -> model
+    # embedding group only: explicit vector-space id. Empty -> "<model>@<dim>".
+    # Must equal the space the indexer built the snapshot in.
+    space_id: str = ""
 
     def client_kwargs(self, label: str) -> dict:
         """Keyword args for an OpenAI-compatible client built from this group."""
@@ -80,6 +83,16 @@ class Settings(BaseSettings):
     postgres_db: str = "postgres_db"
     postgres_user: str = "postgres_user"
     postgres_password: str = "postgres_password"
+    # Password of the read-only `rag_agent` role maintained by the indexer.
+    # Set -> connect as rag_agent; empty -> fall back to postgres_user (warned).
+    postgres_agent_password: str = ""
+
+    # Dimension of the query embeddings (EMBEDDING_DIM in .env). Together with
+    # embedding.model it names the vector space a readable snapshot must match.
+    embedding_dim: int = 2560
+    # Pin one snapshot id (troubleshooting / long-term pinning). Empty ->
+    # follow the newest readable snapshot.
+    rag_snapshot: str = ""
 
     # Vector search configuration
     match_threshold: float = 0.4

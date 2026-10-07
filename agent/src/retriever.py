@@ -10,6 +10,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 from .cache import LRUCache, hash_query
 from .models import ChunkResult, RetrieveRequest, RetrieveResponse
 from .settings import settings
+from .snapshots import Snapshot, snapshot_manager
 from .vector_db import search_similar_chunks
 
 logger = logging.getLogger(__name__)
@@ -35,10 +36,13 @@ class _Retriever:
         )
         self._result_cache = LRUCache(capacity=1000)
 
-    def retrieve(self, request: RetrieveRequest) -> RetrieveResponse:
-        """Perform semantic retrieval based on the request."""
+    def retrieve(
+        self, request: RetrieveRequest, snapshot: Snapshot | None = None
+    ) -> RetrieveResponse:
+        """Perform semantic retrieval against one snapshot (default: current)."""
+        snapshot = snapshot or snapshot_manager.require()
         # Check cache first
-        cache_key = _cache_key(request)
+        cache_key = _cache_key(request, snapshot)
         cached_result = self._result_cache.get(cache_key)
         if cached_result is not None:
             return cast(RetrieveResponse, cached_result)
@@ -46,6 +50,7 @@ class _Retriever:
         query_embedding = self._generate_embedding(request.query)
 
         documents = search_similar_chunks(
+            snapshot.schema_name,
             query_embedding=query_embedding,
             match_threshold=request.match_threshold,
             match_count=request.match_count,
@@ -64,22 +69,26 @@ class _Retriever:
         self._result_cache.put(cache_key, response)
         return response
 
-    def retrieve_batch(self, requests: list[RetrieveRequest]) -> list[RetrieveResponse]:
+    def retrieve_batch(
+        self, requests: list[RetrieveRequest], snapshot: Snapshot | None = None
+    ) -> list[RetrieveResponse]:
         """
         Perform semantic retrieval for multiple queries efficiently.
 
         Generates all embeddings in a single batch API call, then runs
         DB searches in parallel using a thread pool. Results are cached
-        individually for future single-query cache hits.
+        individually for future single-query cache hits. Every search reads
+        the same ``snapshot`` (default: the current one).
         """
         if not requests:
             return []
+        snapshot = snapshot or snapshot_manager.require()
 
         # Check cache for each request and identify uncached ones
         cached_responses: list[RetrieveResponse | None] = []
         uncached_indices: list[int] = []
         for i, request in enumerate(requests):
-            cached = self._result_cache.get(_cache_key(request))
+            cached = self._result_cache.get(_cache_key(request, snapshot))
             if cached is not None:
                 cached_responses.append(cast(RetrieveResponse, cached))
             else:
@@ -98,6 +107,7 @@ class _Retriever:
             request: RetrieveRequest, query_embedding: list[float]
         ) -> RetrieveResponse:
             documents = search_similar_chunks(
+                snapshot.schema_name,
                 query_embedding=query_embedding,
                 match_threshold=request.match_threshold,
                 match_count=request.match_count,
@@ -127,7 +137,7 @@ class _Retriever:
 
         # Cache new results and merge into response list
         for idx, response in zip(uncached_indices, new_responses, strict=False):
-            self._result_cache.put(_cache_key(requests[idx]), response)
+            self._result_cache.put(_cache_key(requests[idx], snapshot), response)
             cached_responses[idx] = response
 
         return cached_responses  # type: ignore[return-value]
@@ -169,8 +179,11 @@ class _Retriever:
         return self._embeddings.embed_documents(texts)
 
 
-def _cache_key(request: RetrieveRequest) -> str:
+def _cache_key(request: RetrieveRequest, snapshot: Snapshot) -> str:
+    # The snapshot id is part of the key: after a switch, entries from the
+    # previous snapshot become unreachable instead of serving stale results.
     return hash_query(
+        snapshot.snapshot_id,
         request.query,
         request.match_threshold,
         request.match_count,

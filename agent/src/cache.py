@@ -8,6 +8,7 @@ from typing import Any
 
 
 def hash_query(
+    snapshot_id: str,
     query: str,
     match_threshold: float,
     match_count: int,
@@ -19,6 +20,7 @@ def hash_query(
     Generate cache key for query parameters.
 
     Args:
+        snapshot_id: The snapshot the results were read from
         query: Search query string
         match_threshold: Similarity threshold
         match_count: Maximum results count
@@ -33,7 +35,7 @@ def hash_query(
     # key — otherwise e.g. a text-less or filtered cached response could be
     # served to a caller that requested something broader.
     key_str = (
-        f"{query}:{match_threshold}:{match_count}:{include_text}:{include_heading}"
+        f"{snapshot_id}:{query}:{match_threshold}:{match_count}:{include_text}:{include_heading}"
         f":{sorted(doc_id_filter) if doc_id_filter else None}"
     )
     return hashlib.md5(key_str.encode()).hexdigest()

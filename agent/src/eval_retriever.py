@@ -50,6 +50,7 @@ from .eval_queries import (
 from .models import RetrieveRequest
 from .retriever import retriever
 from .settings import settings
+from .snapshots import snapshot_manager
 
 LABELLED_QUERIES_FILE = Path(__file__).with_name("eval_retriever_labels.json")
 
@@ -134,6 +135,11 @@ def main():
     )
 
     args = parser.parse_args()
+
+    # Outside the API server nothing polls the snapshot registry: select the
+    # current snapshot once, so every query of this run reads the same one.
+    snapshot_manager.refresh()
+    snapshot_manager.require()
 
     if args.list_categories:
         print("\nAvailable query categories:")

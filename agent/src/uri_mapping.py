@@ -1,8 +1,8 @@
 """Fallback 标准化标题 derivation from a document URI.
 
-Titles normally reach the agent from rag.documents, which the indexer fills from
-the upstream URI映射.md. This module covers the gap: a chunk indexed before the
-title sync ran, or a transcript upstream added but has not yet listed. It
+Titles normally reach the agent from the snapshot's documents table, which the
+indexer fills from the upstream URI映射.md. This module covers the gap: a
+transcript upstream added but has not yet listed in URI映射.md. It
 implements only the general rule — the 29 documented exceptions cannot be
 derived from their URI at all, and for those the URI itself is shown instead.
 """

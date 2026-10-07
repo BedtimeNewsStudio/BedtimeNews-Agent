@@ -10,22 +10,24 @@ class _Payload(BaseModel):
 
 class TestHashQuery:
     def test_deterministic(self):
-        a = hash_query("q", 0.5, 10)
-        b = hash_query("q", 0.5, 10)
+        a = hash_query("s1", "q", 0.5, 10)
+        b = hash_query("s1", "q", 0.5, 10)
         assert a == b
 
     def test_each_parameter_affects_key(self):
-        base = hash_query("q", 0.5, 10, include_text=True, include_heading=True)
-        assert hash_query("other", 0.5, 10) != base
-        assert hash_query("q", 0.6, 10) != base
-        assert hash_query("q", 0.5, 11) != base
-        assert hash_query("q", 0.5, 10, include_text=False) != base
-        assert hash_query("q", 0.5, 10, include_heading=False) != base
-        assert hash_query("q", 0.5, 10, doc_id_filter=["main/1"]) != base
+        base = hash_query("s1", "q", 0.5, 10, include_text=True, include_heading=True)
+        assert hash_query("s1", "other", 0.5, 10) != base
+        assert hash_query("s1", "q", 0.6, 10) != base
+        assert hash_query("s1", "q", 0.5, 11) != base
+        assert hash_query("s1", "q", 0.5, 10, include_text=False) != base
+        assert hash_query("s1", "q", 0.5, 10, include_heading=False) != base
+        assert hash_query("s1", "q", 0.5, 10, doc_id_filter=["main/1"]) != base
+        # A snapshot switch must make old entries unreachable.
+        assert hash_query("s2", "q", 0.5, 10) != base
 
     def test_doc_id_filter_order_insensitive(self):
-        a = hash_query("q", 0.5, 10, doc_id_filter=["a", "b"])
-        b = hash_query("q", 0.5, 10, doc_id_filter=["b", "a"])
+        a = hash_query("s1", "q", 0.5, 10, doc_id_filter=["a", "b"])
+        b = hash_query("s1", "q", 0.5, 10, doc_id_filter=["b", "a"])
         assert a == b
 
 

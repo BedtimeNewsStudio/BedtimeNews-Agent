@@ -34,6 +34,7 @@ from typing import Any
 
 from .agent import agent_query, agent_stream_query
 from .eval_queries import ALL_QUERIES, CATEGORY_NAMES_CN, FLAT_QUERIES
+from .snapshots import snapshot_manager
 
 
 def main():
@@ -75,6 +76,11 @@ def main():
     )
 
     args = parser.parse_args()
+
+    # Outside the API server nothing polls the snapshot registry: select the
+    # current snapshot once, so every query of this run reads the same one.
+    snapshot_manager.refresh()
+    snapshot_manager.require()
 
     if args.list_categories:
         print("\nAvailable query categories:")

@@ -9,6 +9,10 @@ Public API:
             -> AsyncIterator[dict]
         Process a user question and yield streaming events.
 
+Both take the current RAG snapshot once, when the request starts, and use it
+for the whole request. Both raise ``SnapshotUnavailable`` when no readable
+snapshot is selected.
+
 Usage:
     from .agent import agent_query, agent_stream_query
 
@@ -28,6 +32,7 @@ from typing import Any
 from langchain_core.messages.ai import AIMessageChunk
 
 from .graph import AgentState, build_citation_urls, create_initial_state, graph
+from .snapshots import Snapshot, snapshot_manager
 
 # Graph nodes -> step types emitted to streaming clients.
 _NODE_STEP_TYPES = {
@@ -45,18 +50,24 @@ _NODE_STEP_TYPES = {
 # ============================================================================
 
 
-def agent_query(question: str, history: list[dict] | None = None) -> dict:
+def agent_query(
+    question: str,
+    history: list[dict] | None = None,
+    snapshot: Snapshot | None = None,
+) -> dict:
     """
     Process a user question through the agentic workflow.
 
     Args:
         question: User's question
         history: Prior turns, oldest first, each {question, answer, grounded}
+        snapshot: Snapshot to read (default: the current one)
 
     Returns:
         Dict with the answer and any suggested follow-up questions
     """
-    initial_state: AgentState = create_initial_state(question, history)
+    snapshot = snapshot or snapshot_manager.require()
+    initial_state: AgentState = create_initial_state(question, snapshot, history)
     final_state = graph.invoke(input=initial_state)
     return {
         "answer": final_state.get("final_answer", ""),
@@ -66,7 +77,9 @@ def agent_query(question: str, history: list[dict] | None = None) -> dict:
 
 
 async def agent_stream_query(
-    question: str, history: list[dict] | None = None
+    question: str,
+    history: list[dict] | None = None,
+    snapshot: Snapshot | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
     """
     Stream answer chunks and intermediate reasoning steps from the agentic RAG workflow.
@@ -127,7 +140,8 @@ async def agent_stream_query(
     Note:
         This function provides full pipeline visibility for debugging and user feedback.
     """
-    initial_state = create_initial_state(question, history)
+    snapshot = snapshot or snapshot_manager.require()
+    initial_state = create_initial_state(question, snapshot, history)
 
     # Track which steps we've emitted to avoid duplicates
     emitted_steps = set()

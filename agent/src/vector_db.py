@@ -1,18 +1,30 @@
-"""Vector Database Operations for RAG System.
+"""Read-only PostgreSQL + pgvector queries against one RAG snapshot.
 
-Provides module-level functions for PostgreSQL + pgvector operations with connection pooling.
+Every query takes the snapshot schema (``rag_s<id>`` or the legacy ``rag``)
+explicitly and composes it with ``psycopg2.sql.Identifier``; ``search_path``
+is never used, because pooled connections are reused across requests and a
+leftover session setting would silently point a query at the wrong snapshot.
+
+The agent connects as the read-only role ``rag_agent`` when
+``postgres_agent_password`` is set; otherwise it falls back to the database
+superuser and warns.
 """
 
 import logging
 import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 from functools import wraps
 from typing import Any
 
 import psycopg2
+from psycopg2 import sql
 from psycopg2.extras import RealDictCursor
 from psycopg2.pool import ThreadedConnectionPool
 
 from .settings import settings
+
+AGENT_ROLE = "rag_agent"
 
 logger = logging.getLogger(__name__)
 
@@ -69,15 +81,16 @@ def _get_connection_pool() -> ThreadedConnectionPool:
     if _connection_pool is None:
         with _pool_lock:
             if _connection_pool is None:
+                user, password = _credentials()
                 try:
                     _connection_pool = ThreadedConnectionPool(
-                        minconn=5,
+                        minconn=1,
                         maxconn=20,
                         host=settings.postgres_host,
                         port=settings.postgres_port,
                         database=settings.postgres_db,
-                        user=settings.postgres_user,
-                        password=settings.postgres_password,
+                        user=user,
+                        password=password,
                         connect_timeout=10,
                         keepalives=1,
                         keepalives_idle=30,
@@ -85,12 +98,25 @@ def _get_connection_pool() -> ThreadedConnectionPool:
                         keepalives_count=5,
                     )
                     logger.info(
-                        "Connection pool created: minconn=5, maxconn=20 with keepalives"
+                        "Connection pool created as %s: maxconn=20 with keepalives",
+                        user,
                     )
                 except Exception:
                     logger.exception("Failed to create connection pool")
                     raise
     return _connection_pool
+
+
+def _credentials() -> tuple[str, str]:
+    if settings.postgres_agent_password:
+        return AGENT_ROLE, settings.postgres_agent_password
+    logger.warning(
+        "POSTGRES_AGENT_PASSWORD is not set: connecting as %s, which can write. "
+        "Set it to use the read-only %s role.",
+        settings.postgres_user,
+        AGENT_ROLE,
+    )
+    return settings.postgres_user, settings.postgres_password
 
 
 def close_connection_pool() -> None:
@@ -164,8 +190,20 @@ class _Connection:
         return self._cursor
 
 
+@contextmanager
+def read_cursor() -> Iterator[Any]:
+    """A dict cursor in a short read transaction (used by the snapshot poller)."""
+    with _Connection() as conn:
+        yield conn.cursor()
+
+
+def _table(schema: str, table: str) -> sql.Composed:
+    return sql.SQL("{}.{}").format(sql.Identifier(schema), sql.Identifier(table))
+
+
 @retry_on_transient_error()
 def search_similar_chunks(
+    schema: str,
     query_embedding: list[float],
     match_threshold: float,
     match_count: int,
@@ -176,8 +214,9 @@ def search_similar_chunks(
     Search for similar chunks using vector similarity.
 
     Args:
+        schema: the snapshot schema to read
         query_embedding: embedding vector; its dimension must match the
-            `embedding halfvec(N)` column (sized from EMBEDDING_DIM at DB init)
+            snapshot's vector space (its `embedding halfvec(N)` column)
         match_threshold: Minimum cosine similarity threshold
         match_count: Maximum number of results to return
         doc_id_filter: Optional list of doc_ids to restrict search
@@ -193,14 +232,14 @@ def search_similar_chunks(
     # indexed before the title sync caught up) must still be retrievable, with
     # the caller falling back to a rule-derived label.
     params: list[Any] = [query_embedding]
-    doc_filter_sql = ""
+    doc_filter_sql = sql.SQL("")
     if doc_id_filter:
-        placeholders = ",".join(["%s"] * len(doc_id_filter))
-        doc_filter_sql = f"AND c.doc_id IN ({placeholders})"
-        params.extend(doc_id_filter)
+        doc_filter_sql = sql.SQL("AND c.doc_id = ANY(%s)")
+        params.append(list(doc_id_filter))
     params.extend([query_embedding, match_count, match_threshold])
 
-    query = f"""
+    query = sql.SQL(
+        """
         SELECT * FROM (
             SELECT
                 c.chunk_id,
@@ -208,18 +247,24 @@ def search_similar_chunks(
                 d.title,
                 c.chunk_index,
                 c.heading,
-                {"c.text," if include_text else ""}
+                {text_column}
                 c.word_count,
                 1 - (c.embedding <=> %s::halfvec) AS similarity
-            FROM rag.document_chunks c
-            LEFT JOIN rag.documents d ON d.doc_id = c.doc_id
-            WHERE c.embedding IS NOT NULL {doc_filter_sql}
+            FROM {chunks} c
+            LEFT JOIN {documents} d ON d.doc_id = c.doc_id
+            WHERE c.embedding IS NOT NULL {doc_filter}
             ORDER BY c.embedding <=> %s::halfvec
             LIMIT %s
         ) nearest
         WHERE similarity >= %s
         ORDER BY similarity DESC, chunk_id
-    """
+        """
+    ).format(
+        text_column=sql.SQL("c.text," if include_text else ""),
+        chunks=_table(schema, "document_chunks"),
+        documents=_table(schema, "documents"),
+        doc_filter=doc_filter_sql,
+    )
 
     with _Connection() as conn:
         cursor = conn.cursor()
@@ -229,13 +274,14 @@ def search_similar_chunks(
 
 
 @retry_on_transient_error()
-def fetch_chunk_texts(chunk_ids: list[str]) -> dict[str, str]:
+def fetch_chunk_texts(schema: str, chunk_ids: list[str]) -> dict[str, str]:
     """
     Fetch full text for specific chunks by their IDs.
 
     Used to lazily load text only for relevant documents after grading.
 
     Args:
+        schema: the snapshot schema to read
         chunk_ids: List of chunk_id values to fetch text for
 
     Returns:
@@ -244,50 +290,51 @@ def fetch_chunk_texts(chunk_ids: list[str]) -> dict[str, str]:
     if not chunk_ids:
         return {}
 
-    placeholders = ",".join(["%s"] * len(chunk_ids))
-    query = f"""
-        SELECT chunk_id, text
-        FROM rag.document_chunks
-        WHERE chunk_id IN ({placeholders})
-    """
+    query = sql.SQL(
+        "SELECT chunk_id, text FROM {chunks} WHERE chunk_id = ANY(%s)"
+    ).format(chunks=_table(schema, "document_chunks"))
 
     with _Connection() as conn:
         cursor = conn.cursor()
-        cursor.execute(query, chunk_ids)
+        cursor.execute(query, (list(chunk_ids),))
         return {row["chunk_id"]: row["text"] for row in cursor.fetchall()}
 
 
 @retry_on_transient_error()
-def list_transcripts() -> list[dict[str, Any]]:
+def list_transcripts(schema: str) -> list[dict[str, Any]]:
     """Return deterministic reader-navigation metadata for every transcript."""
     with _Connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            """
-            SELECT doc_id, canonical_title, source_title, channel,
-                   publication_date, source_hash, updated_at
-            FROM rag.transcripts
-            -- Newest first within each channel; undated episodes sink to the end.
-            ORDER BY channel,
-                     publication_date DESC NULLS LAST,
-                     doc_id DESC;
-            """
+            sql.SQL(
+                """
+                SELECT doc_id, canonical_title, source_title, channel,
+                       publication_date, source_hash, updated_at
+                FROM {transcripts}
+                -- Newest first within each channel; undated episodes sink to the end.
+                ORDER BY channel,
+                         publication_date DESC NULLS LAST,
+                         doc_id DESC;
+                """
+            ).format(transcripts=_table(schema, "transcripts"))
         )
         return [dict(row) for row in cursor.fetchall()]
 
 
 @retry_on_transient_error()
-def get_transcript(doc_id: str) -> dict[str, Any] | None:
+def get_transcript(schema: str, doc_id: str) -> dict[str, Any] | None:
     """Return one sanitized reader projection by exact canonical URI."""
     with _Connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            """
-            SELECT doc_id, canonical_title, source_title, channel,
-                   publication_date, body_html, source_hash, updated_at
-            FROM rag.transcripts
-            WHERE doc_id = %s;
-            """,
+            sql.SQL(
+                """
+                SELECT doc_id, canonical_title, source_title, channel,
+                       publication_date, body_html, source_hash, updated_at
+                FROM {transcripts}
+                WHERE doc_id = %s;
+                """
+            ).format(transcripts=_table(schema, "transcripts")),
             (doc_id,),
         )
         row = cursor.fetchone()

@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from .chat import nonstream_chat, stream_chat
 from .models import ChatRequest, ChatResponse
 from .settings import settings
+from .snapshots import SnapshotUnavailable, snapshot_manager
 from .vector_db import (
     close_connection_pool,
     get_transcript,
@@ -34,12 +35,35 @@ async def lifespan(_app: FastAPI):
     logger.info(
         f"Using models: FAST={settings.generation.fast_model or settings.generation.model}, GENERATION={settings.generation.model}"
     )
+    # Select the snapshot now and keep following the registry every 15 s.
+    # A database that is down does not stop startup: the agent stays up, not
+    # ready (/health 503), and the poller reconnects.
+    await asyncio.to_thread(snapshot_manager.start)
     yield
     logger.info("Shutting down")
+    await asyncio.to_thread(snapshot_manager.stop)
     close_connection_pool()
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+@app.get("/health")
+async def health() -> JSONResponse:
+    """Readiness: database reachable and a readable snapshot selected.
+
+    Served from the snapshot poller's last result (at most 15 s old); it
+    neither queries the database nor calls a model. indexer_status is
+    informational and does not affect readiness: an old snapshot still serves.
+    """
+    ready, body = snapshot_manager.health()
+    return JSONResponse(
+        jsonable_encoder(body),
+        status_code=status.HTTP_200_OK
+        if ready
+        else status.HTTP_503_SERVICE_UNAVAILABLE,
+        headers={"Cache-Control": "no-cache"},
+    )
 
 
 # ============================================================================
@@ -91,6 +115,11 @@ async def chat(request: ChatRequest):
         # The RAG pipeline is synchronous (seconds of LLM calls); run it in a
         # worker thread so it doesn't block the event loop for other requests.
         return await asyncio.to_thread(nonstream_chat, request)
+    except SnapshotUnavailable as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Knowledge base unavailable: {e}",
+        ) from e
     except Exception as e:
         logger.exception("Chat error")
         raise HTTPException(
@@ -132,7 +161,8 @@ def _conditional_json(request: Request, payload, etag: str) -> Response:
 async def transcript_index(request: Request) -> Response:
     """Reader-navigation metadata reconstructed from upstream Markdown."""
     try:
-        items = await asyncio.to_thread(list_transcripts)
+        snapshot = snapshot_manager.require()
+        items = await asyncio.to_thread(list_transcripts, snapshot.schema_name)
     except Exception as exc:
         logger.exception("Transcript index unavailable")
         raise HTTPException(
@@ -148,7 +178,10 @@ async def transcript_detail(doc_id: str, request: Request) -> Response:
     """One sanitized reader document selected only by its exact DB URI."""
     canonical = _validate_transcript_uri(doc_id)
     try:
-        article = await asyncio.to_thread(get_transcript, canonical)
+        snapshot = snapshot_manager.require()
+        article = await asyncio.to_thread(
+            get_transcript, snapshot.schema_name, canonical
+        )
     except Exception as exc:
         logger.exception("Transcript unavailable: %s", canonical)
         raise HTTPException(

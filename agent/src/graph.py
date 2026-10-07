@@ -76,6 +76,7 @@ from langgraph.graph.state import CompiledStateGraph
 from .models import RetrieveRequest
 from .retriever import retriever
 from .settings import settings
+from .snapshots import Snapshot
 from .uri_mapping import derive_title
 from .vector_db import fetch_chunk_texts
 
@@ -139,6 +140,11 @@ class AgentState(TypedDict):
     """
 
     question: str  # User input for this turn, as typed
+
+    # The RAG snapshot this request reads, taken once when the request starts:
+    # every retrieval of one answer sees the same data even if a new snapshot
+    # is published meanwhile.
+    snapshot: Snapshot
 
     history: list[dict]  # Prior turns: {question, answer, grounded}
 
@@ -554,7 +560,7 @@ def _retrieve_node(state: AgentState) -> AgentState:
 
     # Batch retrieve all queries at once (more efficient)
     batch_start = time.perf_counter()
-    all_responses = retriever.retrieve_batch(all_requests)
+    all_responses = retriever.retrieve_batch(all_requests, state["snapshot"])
     batch_time = time.perf_counter() - batch_start
 
     # Convert ChunkResults to LangChain Documents
@@ -597,7 +603,7 @@ def _retrieve_node(state: AgentState) -> AgentState:
     if top_chunks:
         chunk_ids = [cid for doc in top_chunks if (cid := doc.metadata.get("chunk_id"))]
         if chunk_ids:
-            text_map = fetch_chunk_texts(chunk_ids)
+            text_map = fetch_chunk_texts(state["snapshot"].schema_name, chunk_ids)
             for doc in top_chunks:
                 cid = doc.metadata.get("chunk_id")
                 if cid and cid in text_map:
@@ -791,7 +797,7 @@ def _answer_generate_node(state: AgentState) -> AgentState:
         if not doc.page_content and (cid := doc.metadata.get("chunk_id"))
     ]
     if missing:
-        text_map = fetch_chunk_texts(missing)
+        text_map = fetch_chunk_texts(state["snapshot"].schema_name, missing)
         for doc in documents:
             cid = doc.metadata.get("chunk_id")
             if cid and cid in text_map:
@@ -1183,7 +1189,7 @@ def _citation_url(doc_id: str) -> str:
 def _display_title(doc_id: str, title: str | None = None) -> str:
     """Reader-facing label for a document.
 
-    Prefers the 标准化标题 carried from rag.documents, falls back to deriving it
+    Prefers the 标准化标题 carried from the snapshot's documents table, falls back to deriving it
     from the URI, and finally shows the URI itself — an ugly label on a working
     link beats dropping the reference.
     """
@@ -1248,10 +1254,11 @@ graph = _create_agent_graph()
 
 
 def create_initial_state(
-    question: str, history: list[dict] | None = None
+    question: str, snapshot: Snapshot, history: list[dict] | None = None
 ) -> AgentState:
     return {
         "question": question,
+        "snapshot": snapshot,
         "history": history or [],
         "standalone_question": "",
         "followups": [],

@@ -6,12 +6,19 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from src import main
+from src.snapshots import Snapshot, snapshot_manager
+
+SNAPSHOT = Snapshot("s1", "rag_s1", 1, "test-embedding-model@2560")
 
 
 @pytest.fixture
-def client():
+def client(monkeypatch):
+    # No database in unit tests: skip the poller, serve a fixed snapshot.
+    monkeypatch.setattr(snapshot_manager, "start", lambda: None)
+    snapshot_manager.set_for_tests(SNAPSHOT)
     with TestClient(main.app) as test_client:
         yield test_client
+    snapshot_manager.set_for_tests(None, "reset")
 
 
 def _metadata():
@@ -27,7 +34,7 @@ def _metadata():
 
 
 def test_transcript_index_is_ordered_json_with_revalidation(client, monkeypatch):
-    monkeypatch.setattr(main, "list_transcripts", lambda: [_metadata()])
+    monkeypatch.setattr(main, "list_transcripts", lambda _schema: [_metadata()])
 
     response = client.get("/transcripts")
     assert response.status_code == 200
@@ -42,7 +49,7 @@ def test_transcript_index_is_ordered_json_with_revalidation(client, monkeypatch)
 
 def test_transcript_detail_returns_sanitized_projection(client, monkeypatch):
     article = _metadata() | {"body_html": "<h2>正文</h2><p>内容</p>"}
-    monkeypatch.setattr(main, "get_transcript", lambda doc_id: article)
+    monkeypatch.setattr(main, "get_transcript", lambda _schema, doc_id: article)
 
     response = client.get("/transcripts/ShuiQianXiaoXi/0501-0600/0588.md")
 
@@ -53,7 +60,7 @@ def test_transcript_detail_returns_sanitized_projection(client, monkeypatch):
 
 def test_detail_etag_changes_when_only_canonical_title_changes(client, monkeypatch):
     article = _metadata() | {"body_html": "<p>内容</p>"}
-    monkeypatch.setattr(main, "get_transcript", lambda _doc_id: article)
+    monkeypatch.setattr(main, "get_transcript", lambda _schema, _doc_id: article)
     first = client.get("/transcripts/ShuiQianXiaoXi/0501-0600/0588.md")
 
     article["canonical_title"] = "睡前消息588（更正）"
@@ -63,7 +70,7 @@ def test_detail_etag_changes_when_only_canonical_title_changes(client, monkeypat
 
 
 def test_unknown_transcript_is_404(client, monkeypatch):
-    monkeypatch.setattr(main, "get_transcript", lambda _doc_id: None)
+    monkeypatch.setattr(main, "get_transcript", lambda _schema, _doc_id: None)
     assert client.get("/transcripts/unknown/missing.md").status_code == 404
 
 
@@ -93,3 +100,22 @@ def test_database_failure_is_controlled_503(client, monkeypatch, path, name):
 
     assert response.status_code == 503
     assert response.json() == {"detail": "Transcript service unavailable"}
+
+
+def test_no_snapshot_is_controlled_503(client):
+    snapshot_manager.set_for_tests(None, "no published snapshot")
+    assert client.get("/transcripts").status_code == 503
+    assert client.get("/transcripts/channel/document.md").status_code == 503
+
+
+def test_health_reports_snapshot_and_readiness(client):
+    response = client.get("/health")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ready"] is True
+    assert body["snapshot"]["id"] == "s1"
+
+    snapshot_manager.set_for_tests(None, "no published snapshot")
+    response = client.get("/health")
+    assert response.status_code == 503
+    assert response.json()["reason"] == "no published snapshot"

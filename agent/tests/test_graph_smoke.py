@@ -24,6 +24,7 @@ from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from src import agent as agent_mod
 from src import graph as graph_mod
 from src.models import ChunkResult, RetrieveResponse
+from src.snapshots import Snapshot, snapshot_manager
 
 # What the model is instructed to write: the document's URI, nothing else. The
 # titled link the reader sees is produced by the repair pass, not by the model.
@@ -53,7 +54,8 @@ def _fake_chunk(i: int) -> ChunkResult:
 
 
 class _FakeRetriever:
-    def retrieve_batch(self, requests):
+    def retrieve_batch(self, requests, snapshot):
+        assert snapshot.snapshot_id == "s1", "retrieval must read the pinned snapshot"
         return [
             RetrieveResponse(
                 query=r.query,
@@ -63,6 +65,13 @@ class _FakeRetriever:
             )
             for r in requests
         ]
+
+
+@pytest.fixture(autouse=True)
+def pinned_snapshot():
+    snapshot_manager.set_for_tests(Snapshot("s1", "rag_s1", 1, "space"))
+    yield
+    snapshot_manager.set_for_tests(None, "reset")
 
 
 @pytest.fixture
@@ -78,7 +87,7 @@ def stub_pipeline(monkeypatch):
     monkeypatch.setattr(
         graph_mod,
         "fetch_chunk_texts",
-        lambda ids: {i: f"关于鹤岗的正文内容 {i}" for i in ids},
+        lambda _schema, ids: {i: f"关于鹤岗的正文内容 {i}" for i in ids},
     )
 
 
@@ -143,9 +152,9 @@ def test_condense_rewrites_a_follow_up_against_history(monkeypatch):
     seen_queries = []
 
     class _RecordingRetriever(_FakeRetriever):
-        def retrieve_batch(self, requests):
+        def retrieve_batch(self, requests, snapshot):
             seen_queries.extend(r.query for r in requests)
-            return super().retrieve_batch(requests)
+            return super().retrieve_batch(requests, snapshot)
 
     # condense -> standalone question, then route / rewrite / grade.
     fast = GenericFakeChatModel(
@@ -157,7 +166,7 @@ def test_condense_rewrites_a_follow_up_against_history(monkeypatch):
     )
     monkeypatch.setattr(graph_mod, "retriever", _RecordingRetriever())
     monkeypatch.setattr(
-        graph_mod, "fetch_chunk_texts", lambda ids: {i: "正文" for i in ids}
+        graph_mod, "fetch_chunk_texts", lambda _schema, ids: {i: "正文" for i in ids}
     )
 
     history = [
@@ -213,7 +222,7 @@ def test_uncited_answer_gets_a_source_list(monkeypatch):
     )
     monkeypatch.setattr(graph_mod, "retriever", _FakeRetriever())
     monkeypatch.setattr(
-        graph_mod, "fetch_chunk_texts", lambda ids: {i: "正文" for i in ids}
+        graph_mod, "fetch_chunk_texts", lambda _schema, ids: {i: "正文" for i in ids}
     )
 
     events = _collect("SHEIN出海为什么成功？")
