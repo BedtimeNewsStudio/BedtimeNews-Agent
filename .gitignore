@@ -47,3 +47,6 @@ Thumbs.db
 
 # PostgreSQL volume
 storage/postgres/volume/
+
+# Session-scoped scratch (drafts, plans); never tracked
+.localonly/
