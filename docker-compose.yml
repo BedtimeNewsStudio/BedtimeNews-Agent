@@ -2,6 +2,11 @@ services:
   postgres:
     image: pgvector/pgvector:pg18
     container_name: bedtimenews-postgres
+    # Parallel HNSW index builds (every snapshot build) allocate their working
+    # memory in /dev/shm, ~265 MB for the full corpus; Docker's 64 MB default
+    # fails them with "could not resize shared memory segment". A ceiling, not
+    # a reservation: the memory is only used while an index is being built.
+    shm_size: 1g
     env_file: .env
     environment:
       POSTGRES_HOST_AUTH_METHOD: scram-sha-256
