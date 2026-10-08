@@ -101,7 +101,8 @@ El frontend:
 | GET    | `/api/transcripts`                    | Índice de transcripciones (proxy)                |
 | GET    | `/api/transcripts/{doc_id}`           | Una transcripción (proxy)                        |
 | POST   | `/chat`                               | Hace proxy del flujo SSE del agente al navegador |
-| GET    | `/healthz`                            | Comprobación de vitalidad                        |
+| GET    | `/healthz`                            | Vitalidad de `web` por sí solo (nunca llama al agente): `status`, `version`, `instance` |
+| GET    | `/readyz`                             | Disponibilidad de esta instancia: código de estado del `/health` del agente (200 / 503), cuerpo recortado |
 | GET    | `/index.html`                         | Redirección `308` a `/`                          |
 | GET    | `/robots.txt`                         | Permite todo; apunta al sitemap                  |
 | GET    | `/sitemap.xml`                        | Inicio, listas por programa y cada transcripción |
@@ -147,15 +148,46 @@ AGENT_BACKEND_HOST=localhost AGENT_BACKEND_PORT=8000 \
 | -------------------- | ----------- | -------------------------------------------- |
 | `AGENT_BACKEND_HOST` | `agent`     | Nombre del servicio agente en la red Docker  |
 | `AGENT_BACKEND_PORT` | `8000`      | Puerto del agente                            |
-| `FRONTEND_PORT`      | `8080`      | Puerto del host donde se publica el frontend |
-| `APP_VERSION`        | (vacío)     | Versión en la cabecera; compose la toma de `IMAGE_TAG` (`latest`/vacío recurre a la versión del paquete) |
+| `APP_PORT` / `FRONTEND_PORT` | `8080` | Puerto del host donde se publica el frontend: `APP_PORT` por instancia (blue-green), o `FRONTEND_PORT` de `.env` si no se define |
+| `APP_VERSION`        | (vacío)     | Versión en la cabecera y en `/healthz`; compose la toma de `APP_IMAGE_TAG`, o de `IMAGE_TAG` si no se define (`latest`/vacío recurre a la versión del paquete) |
+| `APP_INSTANCE`       | `local`     | Etiqueta de instancia que informa `/healthz` (el nombre del proyecto compose en despliegues blue-green) |
 | `PUBLIC_BASE_URL`    | `https://bedtime.blog` | Origen de las URL canónicas, del sitemap y de robots |
+
+### Endpoints de salud
+
+Ambos son públicos a través del proxy de borde, como cualquier otra ruta:
+
+- `GET /healthz` lo responde `web` por sí solo y nunca llama al agente:
+  `{"status":"ok","version":"0.4.0","instance":"bedtimenews-app-green"}`. Que el
+  agente o la base de datos fallen no debe hacer que un orquestador reinicie `web`.
+- `GET /readyz` llama al `/health` del agente de esta instancia (3 s de
+  timeout) y devuelve su código de estado: 200 si el agente alcanza la base de
+  datos y sirve un snapshot, si no 503. El cuerpo se recorta a `ready`,
+  `reason` (si no está listo) y el `id`, `format_version` y `embedding_space`
+  del snapshot; el cuerpo completo del agente, que incluye el último error del
+  indexador, nunca se reenvía. Las herramientas de despliegue deciden el
+  cambio de tráfico con él.
+
+El archivo compose comprueba la salud de `web` con `/healthz` (con `urllib` de
+Python: la imagen no incluye `curl`).
+
+### Parada ordenada
+
+Con SIGTERM, uvicorn deja de aceptar conexiones y permite que las peticiones en
+curso, incluido un `/chat` en streaming (como mucho el límite de 240 s del
+agente), terminen durante hasta 270 s; el `stop_grace_period` de compose es de
+300 s. Por eso un `docker compose stop` o una recreación en el sitio espera
+hasta 5 minutos mientras haya un stream abierto.
 
 ## Depuración
 
 ```bash
 # Logs
 docker compose logs -f web
+# Los nombres de contenedor siguen al proyecto compose (p. ej. bedtimenews-app-green-web-1);
+# usa el nombre del servicio:
+docker compose ps web
+curl -s localhost:8080/readyz
 
 # Conectividad del backend desde dentro del contenedor (la imagen slim no
 # tiene ping/curl; usa el Python + httpx incluidos en su lugar)

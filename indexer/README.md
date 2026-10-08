@@ -296,6 +296,12 @@ docker compose exec agent curl -s localhost:8000/health
 
 旧快照在 7 天内仍可读取，回滚只需恢复旧配置并重启 Agent。若模型不变、只是不想混用另一个提供方的向量，改为（在 indexer 与 agent 中一致地）设置 `embedding.space_id`。
 
+**采用蓝绿部署时**（生产环境；参见[蓝绿部署设计](../docs/designs/20261008_blue-green-deployment.md)第 5 节），第 4 步不会中断服务：第 2 步**只**重建 indexer（`docker compose -p bedtimenews-agent -f compose.data.yml up -d indexer`）；正在运行的应用实例（蓝）继续服务旧向量空间，因为其 Agent 在启动时已加载配置。新快照发布后，部署一个新的应用实例（绿），它以新配置启动并选择新快照，再把代理切换过去。从第 2 步到切换期间（约半小时）蓝的数据冻结（旧谱系不再有新构建）。
+
+### 生产环境：数据层
+
+生产环境中服务栈分为两层：`compose.data.yml`（postgres + indexer，项目 `bedtimenews-agent`，原地升级），以及每个应用实例一个 `compose.app.yml` 项目。在那里操作 indexer 或 postgres 的命令需要加 `-p bedtimenews-agent -f compose.data.yml`，或依赖 VM 上 `.env` 中的防护设置 `COMPOSE_FILE=compose.data.yml`——它使不带 `-f` 的 `docker compose ...` 只作用于数据层。切勿对 `bedtimenews-agent` 执行 `down -v`，也不要为了应用实例在那里执行 `docker compose down`：应用实例用 `docker compose -p <实例> -f compose.app.yml down -v` 退役。使用总入口 `docker-compose.yml` 的自托管用户可直接照本文命令操作。
+
 ## 数据备份与恢复
 
 ### 快照不是备份
@@ -321,6 +327,9 @@ PostgreSQL 数据卷存放在代码库中被 gitignore 的目录里，可以用�
 
 ```bash
 docker compose down
+# 生产环境（两层）：先停止每个应用实例，再停数据层——不带 -v：
+#   docker compose -p <实例> -f compose.app.yml stop
+#   docker compose -p bedtimenews-agent -f compose.data.yml down
 ```
 
 **（可选）查看数据卷大小（未压缩）**：

@@ -298,6 +298,12 @@ docker compose exec agent curl -s localhost:8000/health
 
 The old snapshot stays readable for 7 days, so rolling back is restoring the old configuration and restarting the agent. To keep the same model but stop mixing vectors from a different provider, set `embedding.space_id` (identically for indexer and agent) instead.
 
+**With blue-green deployments** (production; see the [blue-green design](../docs/designs/20261008_blue-green-deployment.md), section 5), step 4 involves no interruption: recreate **only** the indexer in step 2 (`docker compose -p bedtimenews-agent -f compose.data.yml up -d indexer`); the running application instance (blue) keeps serving the old space, because its agent loaded its configuration at startup. Once the new snapshot is published, deploy a new application instance (green), which starts with the new configuration and selects the new snapshot, and switch the proxy to it. Blue's data is frozen from step 2 until the switch (the old lineage gets no new builds), about half an hour.
+
+### Production: the data layer
+
+In production the stack is two layers: `compose.data.yml` (postgres + indexer, project `bedtimenews-agent`, upgraded in place) and one `compose.app.yml` project per application instance. Commands on the indexer or postgres there need `-p bedtimenews-agent -f compose.data.yml`, or rely on the VM's `.env` guard `COMPOSE_FILE=compose.data.yml`, which makes a plain `docker compose ...` act on the data layer only. Never run `down -v` on `bedtimenews-agent`, and never run `docker compose down` there on an application instance's behalf: application instances are retired with `docker compose -p <instance> -f compose.app.yml down -v`. Self-hosters using the umbrella `docker-compose.yml` run every command here as written.
+
 ## Data Backup and Restore
 
 ### Snapshots are not backups
@@ -323,6 +329,10 @@ The PostgreSQL data volume is stored in a gitignored directory in the codebase. 
 
 ```bash
 docker compose down
+# Production (two layers): stop every application instance first, then the
+# data layer — without -v:
+#   docker compose -p <instance> -f compose.app.yml stop
+#   docker compose -p bedtimenews-agent -f compose.data.yml down
 ```
 
 **(Optional) Check volume size (uncompressed)**:

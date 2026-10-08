@@ -152,6 +152,15 @@ El flujo también puede contener `answer_final` cuando el post-procesamiento
 modificó la respuesta transmitida, `error` en caso de fallo, y comentarios de
 latido `: ping` durante las etapas silenciosas del pipeline.
 
+**Límite de tiempo.** Un `/chat` puede durar como mucho 240 segundos
+(`CHAT_TIME_LIMIT_S` en `src/chat.py`). Un stream que lo alcanza termina con un
+evento `error` (`回答超时，请缩小问题范围后重试。`) seguido de `[DONE]`; una
+petición sin streaming recibe `504`. Es la capa más interna de los tiempos de
+parada (límite de 240 s < 270 s de parada ordenada de uvicorn < 300 s de
+`stop_grace_period` de compose < 5 minutos de drenaje del proxy), así que
+detener o sustituir el agente nunca corta una respuesta; ver
+[el diseño blue-green](../docs/designs/20261008_blue-green-deployment.md).
+
 ### GET /transcripts
 
 Índice de navegación del lector a partir de la tabla `transcripts` del snapshot actual:
@@ -207,6 +216,12 @@ ni llama a ningún modelo.
 sirviendo); úsalo para alertas, p. ej. 3 fallos consecutivos o más de 3 horas
 sin ejecución. El archivo compose usa `/health` como comprobación de salud del
 contenedor del agente.
+
+El cuerpo completo es solo interno (el agente no se publica). `web` expone
+públicamente una forma recortada como `GET /readyz`: el mismo código de estado,
+pero solo `ready`, `reason` y el `id`, `format_version` y `embedding_space` del
+snapshot, nunca `indexer_status` (su `last_error` puede contener texto de
+errores internos).
 
 ## Evaluación
 
@@ -300,7 +315,7 @@ embedding:
   consulta el manual "Cambiar el Modelo de Embedding" en
   `indexer/README.es-ES.md`.
 
-**Base de datos y snapshots** (variables de entorno que `docker-compose.yml`
+**Base de datos y snapshots** (variables de entorno que `compose.app.yml`
 toma de `.env`):
 
 - `POSTGRES_AGENT_PASSWORD`: conectar con el rol de solo lectura `rag_agent`
@@ -366,6 +381,21 @@ puerto 8080, sin TLS (la exposición pública y la terminación TLS se gestionan
 fuera de este repositorio). Proxies `/chat` al agente a través de la red
 interna de Docker; el agente mismo nunca se expone al host.
 
+El agente está en dos redes: la red privada de su instancia de aplicación,
+compartida solo con el `web` de esa instancia (donde `agent` resuelve solo a
+este agente), y la red de la capa de datos, para alcanzar `postgres`. Durante
+un despliegue blue-green el agente de cada instancia está en la red de datos,
+así que allí el alias `agent` resuelve a todos ellos: **nada en la red de la
+capa de datos puede llamar a `agent`** (postgres y el indexador nunca lo
+hacen). Ver `compose.app.yml`.
+
+**Parada ordenada.** Con SIGTERM, uvicorn (iniciado con `exec`, así que recibe
+la señal como PID 1) deja de aceptar conexiones y permite que las peticiones en
+curso, incluidos los streams, terminen durante hasta 270 s; el
+`stop_grace_period` de compose es de 300 s. Por eso un `docker compose stop` o
+una recreación en el sitio espera hasta 5 minutos mientras haya un stream
+abierto.
+
 ### Depuración
 
 ```bash
@@ -374,6 +404,10 @@ docker compose logs -f agent
 
 # Acceder al contenedor
 docker compose exec agent sh
+
+# Los nombres de contenedor siguen al proyecto compose (p. ej.
+# bedtimenews-app-green-agent-1); usa el nombre del servicio:
+docker compose ps agent
 
 # Disponibilidad y snapshot servido
 docker compose exec agent curl -s http://localhost:8000/health

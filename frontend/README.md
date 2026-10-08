@@ -75,7 +75,8 @@ Frontend：
 | GET  | `/api/transcripts`                    | 文稿索引（代理 agent）         |
 | GET  | `/api/transcripts/{doc_id}`           | 单篇文稿（代理 agent）         |
 | POST | `/chat`                               | 将 agent 的 SSE 流代理给浏览器 |
-| GET  | `/healthz`                            | 存活检查                       |
+| GET  | `/healthz`                            | 仅 `web` 自身的存活检查（从不调用 Agent）：`status`、`version`、`instance` |
+| GET  | `/readyz`                             | 本实例的就绪检查：Agent `/health` 的状态码（200 / 503），响应体经裁剪 |
 | GET  | `/index.html`                         | `308` 重定向到 `/`             |
 | GET  | `/robots.txt`                         | 允许全部抓取，并指向 sitemap   |
 | GET  | `/sitemap.xml`                        | 首页、各栏目列表及全部文稿     |
@@ -120,15 +121,36 @@ AGENT_BACKEND_HOST=localhost AGENT_BACKEND_PORT=8000 \
 | -------------------- | ------- | ---------------------------- |
 | `AGENT_BACKEND_HOST` | `agent` | Docker 网络上的 agent 服务名 |
 | `AGENT_BACKEND_PORT` | `8000`  | Agent 端口                   |
-| `FRONTEND_PORT`      | `8080`  | Frontend 发布到的宿主机端口  |
-| `APP_VERSION`        | （空）  | 页头显示的版本；compose 取自 `IMAGE_TAG`（`latest`/空时回退为包版本） |
+| `APP_PORT` / `FRONTEND_PORT` | `8080` | Frontend 发布到的宿主机端口：蓝绿部署时每个实例用 `APP_PORT`，未设置时回退为 `.env` 中的 `FRONTEND_PORT` |
+| `APP_VERSION`        | （空）  | 页头与 `/healthz` 显示的版本；compose 取自 `APP_IMAGE_TAG`，未设置时回退为 `IMAGE_TAG`（`latest`/空时回退为包版本） |
+| `APP_INSTANCE`       | `local` | `/healthz` 报告的实例标签（蓝绿部署时为 compose 项目名） |
 | `PUBLIC_BASE_URL`    | `https://bedtime.blog` | canonical、sitemap 与 robots 中 URL 的源站 |
+
+### 健康检查端点
+
+两者都和其它路径一样经边缘代理对外公开：
+
+- `GET /healthz` 只由 `web` 自身应答，从不调用 Agent：
+  `{"status":"ok","version":"0.4.0","instance":"bedtimenews-app-green"}`。Agent 或数据库故障不应导致编排工具重启 `web`。
+- `GET /readyz` 调用本实例 Agent 的 `/health`（超时 3 秒）并返回其状态码：Agent 可连接数据库且有可服务的快照时为 200，否则为 503。
+  响应体裁剪为 `ready`、`reason`（未就绪时）以及快照的 `id`、`format_version`、`embedding_space`；
+  Agent 的完整响应体（含 Indexer 最近的错误文本）从不转发。部署工具据此决定是否切流量。
+
+compose 文件以 `/healthz` 作为 `web` 的健康检查（镜像中没有 `curl`，因此使用 Python 的 `urllib`）。
+
+### 优雅停止
+
+收到 SIGTERM 后 uvicorn 停止接受新连接，并让进行中的请求（包括流式 `/chat`，最长为 Agent 的 240 秒上限）最多再运行 270 秒；
+compose 的 `stop_grace_period` 为 300 秒。因此有流尚未结束时，`docker compose stop` 或原地重建最多会等待 5 分钟。
 
 ## 调试
 
 ```bash
 # 日志
 docker compose logs -f web
+# 容器名随 compose 项目而定（如 bedtimenews-app-green-web-1），请按服务名操作：
+docker compose ps web
+curl -s localhost:8080/readyz
 
 # 从容器内检查后端连通性（slim 镜像没有 ping/curl；
 # 用自带的 Python + httpx 代替）

@@ -72,7 +72,7 @@ termination are handled outside this repo.
 
 ### Prerequisites
 
-- Docker
+- Docker with Docker Compose 2.20 or later (the compose files use `include`)
 - API keys for the generation and embedding endpoints — filled into
   `config.yml` (any OpenAI-compatible vendor; the default template uses
   DeepSeek for chat and SiliconFlow Qwen3 embeddings as the example)
@@ -146,6 +146,10 @@ docker compose logs -f
 # Snapshots published by the indexer, and the agent's readiness
 docker compose exec indexer python -m src.snapshots list
 docker compose exec agent curl -s http://localhost:8000/health
+
+# Readiness of the whole stack through the web service (200 once a snapshot is
+# served, 503 before; the body names the snapshot)
+curl -s localhost:8080/readyz
 ```
 
 ### Tests and Coverage
@@ -183,7 +187,10 @@ Tagged releases publish prebuilt multi-arch (amd64 + arm64) images to GHCR via
 - `ghcr.io/bedtimenewsstudio/bedtimenews-agent-frontend`
 
 To deploy a published release, pin a version with `IMAGE_TAG` in `.env` (default
-`latest`) and pull:
+`latest`) and pull. `IMAGE_TAG` pins the indexer and, by fallback, the
+application (`agent` and `web`); `APP_IMAGE_TAG` overrides the application's
+version alone, which is how a blue-green deployment runs two versions side by
+side (see [Zero-downtime upgrades](#zero-downtime-upgrades)):
 
 ```bash
 # in .env: IMAGE_TAG=0.1.0
@@ -210,7 +217,10 @@ docker compose up -d --build agent web
 
 Note that a locally built image and a published release share the same tag, so
 whichever was created last wins. `docker compose pull` overwrites a local build,
-and `--build` overwrites a pulled release.
+and `--build` overwrites a pulled release. A source build for a blue-green
+application instance therefore uses a distinct tag (e.g.
+`APP_IMAGE_TAG=0.4.0-<sha>`) and passes `--build` in the same `up`, or compose
+tries to pull a tag that does not exist.
 
 To cut a release, push a `v*` tag (image tags drop the leading `v`):
 
@@ -239,12 +249,47 @@ either order:
 - Rolling the **indexer** back to a pre-snapshot version after adoption is not
   supported; the agent can be rolled back freely until `legacy` is collected.
 - The indexer gains a read-only mount of `POSTGRES_DATA_DIR` (disk precheck)
-  and `POSTGRES_AGENT_PASSWORD` is optional — both are in `docker-compose.yml`.
+  and `POSTGRES_AGENT_PASSWORD` is optional — both are in the compose files (`compose.data.yml`, `compose.app.yml`).
 
 Details: [indexer/README.en.md](indexer/README.en.md#upgrading-from-the-pre-snapshot-schema)
 and the [design document](docs/designs/20261007_rag-snapshot-architecture.md).
 The deterministic local subset is available through `docker-compose.sample.yml`
 and requires isolated `POSTGRES_DATA_DIR` / `INDEXER_DATA_DIR` paths.
+
+### Zero-downtime upgrades
+
+The stack is two layers
+([design](docs/designs/20261008_blue-green-deployment.md)):
+
+| Layer       | Compose file       | Services            | Upgrade                                  |
+| ----------- | ------------------ | ------------------- | ---------------------------------------- |
+| Data        | `compose.data.yml` | `postgres`, indexer | In place                                 |
+| Application | `compose.app.yml`  | `agent`, `web`      | Blue-green: one compose project per instance |
+
+`docker-compose.yml` includes both and is what `docker compose up -d` runs for
+self-hosting; nothing changes there. A blue-green upgrade starts the new
+version as a second application project on another port, next to the running
+one and against the same database, waits for its `/readyz`, switches the edge
+proxy, lets the old instance drain, and retires it with `down -v`. Because
+served data is immutable snapshots that each agent selects by itself, two
+versions can run at once without any schema-compatibility rules.
+
+What the project provides to a deployment tool: per-instance inputs
+(`APP_IMAGE_TAG`, `APP_PORT`, `APP_INSTANCE`, `BEDTIMENEWS_NET_NAME`,
+`BEDTIMENEWS_NET_EXTERNAL`, optionally `RAG_SNAPSHOT`, `EMBEDDING_DIM`,
+`APP_CONFIG_FILE`), passed on the command line and never written to `.env`;
+`GET /healthz` (liveness of `web`, with version and instance) and `GET /readyz`
+(readiness, with the snapshot); and graceful shutdown that lets open `/chat`
+streams finish. What it requires: an edge proxy that switches upstreams
+atomically, lets in-flight streams complete, and reports in-flight requests
+per upstream (Caddy does all three), and a deployment tool that follows the
+steps in section 3 of the design. In production, the VM's `.env` sets
+`COMPOSE_FILE=compose.data.yml` so that a plain `docker compose ...` only ever
+touches the data layer.
+
+Self-hosters who simply restart in place lose nothing, but a stop or recreate
+of `agent` or `web` now waits up to 5 minutes while a chat stream is open (each
+`/chat` is limited to 240 s; uvicorn waits 270 s; compose 300 s).
 
 ## Service-Specific Documentation
 
@@ -257,7 +302,7 @@ and requires isolated `POSTGRES_DATA_DIR` / `INDEXER_DATA_DIR` paths.
 Data is persisted across restarts:
 
 - **PostgreSQL data** (RAG snapshots, registry, audit log): bind-mounted to `./storage/postgres/volume`
-- **Service logs**: Docker named volumes `bedtimenews_indexer_logs` and `bedtimenews_agent_logs`
+- **Service logs**: Docker named volumes `bedtimenews_indexer_logs` (data layer) and `bedtimenews_agent_logs` (one per application project, so two instances never share a log file)
 
 ## Project Structure
 
@@ -288,7 +333,10 @@ BedtimeNews-Agent/
 │   └── diagrams/       # SVG architecture and workflow diagrams
 ├── storage/
 │   └── postgres/       # init.sh (enables pgvector); migrations/ is historical only
-├── docker-compose.yml  # Service orchestration
+├── docker-compose.yml  # Umbrella: includes both layers (self-hosting, development)
+├── compose.data.yml    # Data layer: postgres + indexer (upgraded in place)
+├── compose.app.yml     # Application layer: agent + web (one project per instance)
+├── docker-compose.sample.yml  # Local-only sample overlay
 ├── config.yml          # App + secrets config (not in git, copied from the example)
 ├── config.example.yml  # App config template
 ├── .env                # Deployment wiring (not in git, copied from .env.example)

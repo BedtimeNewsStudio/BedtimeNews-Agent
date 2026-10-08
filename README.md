@@ -58,7 +58,7 @@
 
 ### 前置要求
 
-- Docker
+- Docker 及 Docker Compose 2.20 或更高版本（compose 文件使用了 `include`）
 - 生成与嵌入端点的 API 密钥——填入 `config.yml`（任意 OpenAI-compatible 供应商；
   模板默认以 DeepSeek 对话、SiliconFlow Qwen3 embedding 为例）
 
@@ -127,6 +127,9 @@ docker compose logs -f
 # Indexer 发布的快照，以及 Agent 的就绪状态
 docker compose exec indexer python -m src.snapshots list
 docker compose exec agent curl -s http://localhost:8000/health
+
+# 经 web 服务查看整个服务栈的就绪状态（有快照可服务后为 200，此前为 503；响应体给出快照）
+curl -s localhost:8080/readyz
 ```
 
 ### 测试与覆盖率
@@ -162,7 +165,8 @@ PGTEST_HOST=localhost PGTEST_PORT=5432 PGTEST_USER=postgres PGTEST_PASSWORD=post
 - `ghcr.io/bedtimenewsstudio/bedtimenews-agent-frontend`
 
 要部署已发布的版本，先在 `.env` 中用 `IMAGE_TAG` 固定版本（默认 `latest`），
-再拉取镜像：
+再拉取镜像。`IMAGE_TAG` 固定 indexer 的版本，并作为应用（`agent` 与 `web`）的回退版本；
+`APP_IMAGE_TAG` 只覆盖应用的版本，蓝绿部署正是借此让两个版本并行运行（参见[零停机升级](#零停机升级)）：
 
 ```bash
 # .env 中： IMAGE_TAG=0.1.0
@@ -188,7 +192,8 @@ docker compose up -d --build agent web
 ```
 
 注意本地构建的镜像与已发布的版本共用同一个标签，后创建的会覆盖先前的：
-`docker compose pull` 会覆盖本地构建，`--build` 会覆盖拉取到的发布版本。
+`docker compose pull` 会覆盖本地构建，`--build` 会覆盖拉取到的发布版本。因此蓝绿部署中从源码构建的应用实例
+要使用独立的 tag（如 `APP_IMAGE_TAG=0.4.0-<sha>`），并在同一次 `up` 中加 `--build`，否则 compose 会去拉取一个不存在的 tag。
 
 发布新版本：推送 `v*` 标签即可（镜像标签会去掉前缀 `v`）：
 
@@ -211,11 +216,35 @@ git tag v0.1.0 && git push origin v0.1.0
   `python -m src.snapshots retire <id>` 回滚数据。
 - 接管后不支持把 **Indexer** 回滚到快照之前的版本；Agent 可以自由回滚，直到 `legacy` 被回收。
 - Indexer 新增对 `POSTGRES_DATA_DIR` 的只读挂载（磁盘预检），`POSTGRES_AGENT_PASSWORD` 为可选项——
-  二者都已写入 `docker-compose.yml`。
+  二者都已写入 compose 文件（`compose.data.yml`、`compose.app.yml`）。
 
 详见 [indexer/README.md](indexer/README.md#从旧版-schema-升级) 与
 [设计文档](docs/designs/20261007_rag-snapshot-architecture.md)。`docker-compose.sample.yml`
 提供固定小样本，本地运行时必须设置隔离的 `POSTGRES_DATA_DIR` / `INDEXER_DATA_DIR`。
+
+### 零停机升级
+
+服务栈分为两层（[设计文档](docs/designs/20261008_blue-green-deployment.md)）：
+
+| 层     | Compose 文件       | 服务                | 升级方式                            |
+| ------ | ------------------ | ------------------- | ----------------------------------- |
+| 数据层 | `compose.data.yml` | `postgres`、indexer | 原地升级                            |
+| 应用层 | `compose.app.yml`  | `agent`、`web`      | 蓝绿部署：每个实例一个 compose 项目 |
+
+`docker-compose.yml` 包含这两层，自托管时 `docker compose up -d` 运行的就是它，用法不变。蓝绿升级时，
+新版本作为第二个应用项目在另一个端口上启动，与正在运行的实例共用同一个数据库；待其 `/readyz` 就绪后切换边缘代理，
+让旧实例排空，再用 `down -v` 退役。由于对外服务的数据是各 Agent 自行选择的不可变快照，两个版本可以同时运行，
+无需任何 schema 兼容规则。
+
+本项目向部署工具提供：按实例传入的参数（`APP_IMAGE_TAG`、`APP_PORT`、`APP_INSTANCE`、`BEDTIMENEWS_NET_NAME`、
+`BEDTIMENEWS_NET_EXTERNAL`，以及可选的 `RAG_SNAPSHOT`、`EMBEDDING_DIM`、`APP_CONFIG_FILE`），在命令行传入、
+从不写入 `.env`；`GET /healthz`（`web` 的存活状态，含版本与实例）与 `GET /readyz`（就绪状态，含快照）；
+以及让进行中的 `/chat` 流完整结束的优雅停止。对外的要求：边缘代理能原子地切换上游、让进行中的流完成、
+并按上游报告进行中的请求数（Caddy 三者都满足）；部署工具按设计文档第 3 节的步骤执行。生产环境中，VM 的
+`.env` 设置 `COMPOSE_FILE=compose.data.yml`，使不带 `-f` 的 `docker compose ...` 只作用于数据层。
+
+只做原地重启的自托管用户不会有任何损失，但有聊天流尚未结束时，`agent` 或 `web` 的停止或重建最多会等待 5 分钟
+（每个 `/chat` 上限 240 秒；uvicorn 等待 270 秒；compose 等待 300 秒）。
 
 ## 服务专属文档
 
@@ -228,7 +257,7 @@ git tag v0.1.0 && git push origin v0.1.0
 数据在重启后持久保存：
 
 - **PostgreSQL 数据**（RAG 快照、注册表、审计日志）：绑定挂载到 `./storage/postgres/volume`
-- **服务日志**：Docker 命名卷 `bedtimenews_indexer_logs` 与 `bedtimenews_agent_logs`
+- **服务日志**：Docker 命名卷 `bedtimenews_indexer_logs`（数据层）与 `bedtimenews_agent_logs`（每个应用项目各一个，两个实例不会共用日志文件）
 
 ## 项目结构
 
@@ -259,7 +288,10 @@ BedtimeNews-Agent/
 │   └── diagrams/       # SVG 架构图与工作流图
 ├── storage/
 │   └── postgres/       # init.sh（启用 pgvector）；migrations/ 仅作历史参考
-├── docker-compose.yml  # 服务编排
+├── docker-compose.yml  # 总入口：包含两层（自托管、开发）
+├── compose.data.yml    # 数据层：postgres + indexer（原地升级）
+├── compose.app.yml     # 应用层：agent + web（每个实例一个项目）
+├── docker-compose.sample.yml  # 仅限本地的小样本覆盖文件
 ├── config.yml          # 应用与密钥配置（不在 git 中，由 example 复制）
 ├── config.example.yml  # 应用配置模板
 ├── .env                # 部署布线配置（不在 git 中，由 .env.example 复制）

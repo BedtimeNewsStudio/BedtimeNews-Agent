@@ -299,6 +299,12 @@ docker compose exec agent curl -s localhost:8000/health
 
 El snapshot anterior sigue siendo legible durante 7 días, así que revertir es restaurar la configuración anterior y reiniciar el agente. Para mantener el mismo modelo pero dejar de mezclar vectores de otro proveedor, define `embedding.space_id` (igual en indexador y agente).
 
+**Con despliegues blue-green** (producción; ver el [diseño blue-green](../docs/designs/20261008_blue-green-deployment.md), sección 5), el paso 4 no interrumpe el servicio: en el paso 2 recrea **solo** el indexador (`docker compose -p bedtimenews-agent -f compose.data.yml up -d indexer`); la instancia de aplicación en marcha (blue) sigue sirviendo el espacio antiguo, porque su agente cargó la configuración al arrancar. Cuando se publique el nuevo snapshot, despliega una nueva instancia (green), que arranca con la nueva configuración y selecciona el nuevo snapshot, y cambia el proxy a ella. Los datos de blue quedan congelados desde el paso 2 hasta el cambio (el linaje antiguo no recibe construcciones nuevas), unos treinta minutos.
+
+### Producción: la capa de datos
+
+En producción la pila tiene dos capas: `compose.data.yml` (postgres + indexador, proyecto `bedtimenews-agent`, actualizado en el sitio) y un proyecto `compose.app.yml` por instancia de aplicación. Allí los comandos sobre el indexador o postgres necesitan `-p bedtimenews-agent -f compose.data.yml`, o confiar en la protección `COMPOSE_FILE=compose.data.yml` del `.env` de la VM, que hace que un `docker compose ...` sin `-f` actúe solo sobre la capa de datos. Nunca ejecutes `down -v` sobre `bedtimenews-agent`, ni `docker compose down` allí en nombre de una instancia de aplicación: las instancias se retiran con `docker compose -p <instancia> -f compose.app.yml down -v`. Quien autoaloja con el `docker-compose.yml` paraguas ejecuta todos los comandos tal como están escritos.
+
 ## Copia de Seguridad y Restauración de Datos
 
 ### Los snapshots no son copias de seguridad
@@ -324,6 +330,10 @@ El volumen de datos de PostgreSQL se guarda en un directorio ignorado por git de
 
 ```bash
 docker compose down
+# Producción (dos capas): detén primero cada instancia de aplicación y después
+# la capa de datos, sin -v:
+#   docker compose -p <instancia> -f compose.app.yml stop
+#   docker compose -p bedtimenews-agent -f compose.data.yml down
 ```
 
 **(Opcional) Comprobar el tamaño del volumen (sin comprimir)**:

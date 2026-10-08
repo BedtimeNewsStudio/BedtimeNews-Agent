@@ -129,6 +129,12 @@ data: [DONE]
 后处理修改了已流式输出的回答时，流中还会出现 `answer_final`；失败时出现
 `error`；流水线静默阶段会发送 `: ping` 心跳注释。
 
+**时间上限。** 单次 `/chat` 最长运行 240 秒（`src/chat.py` 中的 `CHAT_TIME_LIMIT_S`）。流式请求到达上限时以
+`error` 事件（`回答超时，请缩小问题范围后重试。`）加 `[DONE]` 结束；非流式请求返回 `504`。
+该上限是各层停止时限中最内的一层（240 秒上限 < 270 秒 uvicorn 优雅停止 < 300 秒 compose
+`stop_grace_period` < 5 分钟代理排空），因此停止或替换 Agent 不会截断回答；参见
+[蓝绿部署设计](../docs/designs/20261008_blue-green-deployment.md)。
+
 ### GET /transcripts
 
 阅读器导航索引，来自当前快照的 `transcripts` 表：
@@ -176,6 +182,10 @@ data: [DONE]
 
 `indexer_status` 不影响就绪状态（旧快照仍可服务），可用于告警，例如连续 3 次失败或超过
 3 小时没有运行。compose 文件以 `/health` 作为 Agent 容器的健康检查。
+
+完整响应体只在内部可见（Agent 不对外发布）。`web` 以 `GET /readyz` 对外提供裁剪后的形式——状态码相同，
+但只含 `ready`、`reason` 以及快照的 `id`、`format_version`、`embedding_space`，从不包含
+`indexer_status`（其 `last_error` 可能含有内部错误文本）。
 
 ## 评估
 
@@ -261,7 +271,7 @@ embedding:
   `Qwen/Qwen3-Embedding-4B`），设置了 `embedding.space_id` 时以其为准。换模型时需由
   Indexer 先构建新快照——参见 `indexer/README.md` 中的“更换 Embedding 模型”操作手册。
 
-**数据库与快照设置**（环境变量，由 `docker-compose.yml` 从 `.env` 传入）：
+**数据库与快照设置**（环境变量，由 `compose.app.yml` 从 `.env` 传入）：
 
 - `POSTGRES_AGENT_PASSWORD`：以只读角色 `rag_agent` 连接（推荐）。未设置时回退到
   `POSTGRES_USER` 并记录警告
@@ -320,6 +330,15 @@ Web 前端是唯一发布到宿主机的服务——纯 HTTP，端口 8080，无
 暴露与 TLS 终止由本仓库之外处理）。前端通过内部 Docker 网络将 `/chat`
 代理给 agent；agent 本身从不暴露给宿主机。
 
+Agent 同时在两个网络上：所属应用实例的私有网络（只与本实例的 `web` 共享，`agent` 在此只解析到本 Agent），
+以及数据层网络（用于连接 `postgres`）。蓝绿部署期间每个实例的 Agent 都在数据层网络上，该网络上的别名
+`agent` 会解析到所有实例：**数据层网络上的任何服务都不得调用 `agent`**（postgres 与 indexer 从不调用）。
+参见 `compose.app.yml`。
+
+**优雅停止。** 收到 SIGTERM 时，uvicorn（以 `exec` 启动，作为 PID 1 直接收到信号）停止接受新连接，并让进行中的请求
+（包括流式请求）最多再运行 270 秒；compose 的 `stop_grace_period` 为 300 秒。因此有流尚未结束时，
+`docker compose stop` 或原地重建最多会等待 5 分钟。
+
 ### 调试
 
 ```bash
@@ -328,6 +347,9 @@ docker compose logs -f agent
 
 # 进入容器
 docker compose exec agent sh
+
+# 容器名随 compose 项目而定（如 bedtimenews-app-green-agent-1），请按服务名操作：
+docker compose ps agent
 
 # 就绪状态与正在服务的快照
 docker compose exec agent curl -s http://localhost:8000/health

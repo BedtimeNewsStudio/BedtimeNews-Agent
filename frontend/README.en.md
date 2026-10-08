@@ -86,7 +86,8 @@ The frontend:
 | GET    | `/api/transcripts`                    | Transcript index (proxied)           |
 | GET    | `/api/transcripts/{doc_id}`           | One transcript (proxied)             |
 | POST   | `/chat`                               | Proxies the agent SSE stream         |
-| GET    | `/healthz`                            | Liveness check                       |
+| GET    | `/healthz`                            | Liveness of `web` alone (never calls the agent): `status`, `version`, `instance` |
+| GET    | `/readyz`                             | Readiness of this instance: status code of the agent's `/health` (200 / 503), trimmed body |
 | GET    | `/index.html`                         | `308` redirect to `/`                |
 | GET    | `/robots.txt`                         | Allows all; points at the sitemap    |
 | GET    | `/sitemap.xml`                        | Home, channel lists, every transcript |
@@ -131,15 +132,45 @@ AGENT_BACKEND_HOST=localhost AGENT_BACKEND_PORT=8000 \
 | -------------------- | ------- | ---------------------------------------- |
 | `AGENT_BACKEND_HOST` | `agent` | Agent service name on the Docker network |
 | `AGENT_BACKEND_PORT` | `8000`  | Agent port                               |
-| `FRONTEND_PORT`      | `8080`  | Host port the frontend is published on   |
-| `APP_VERSION`        | (empty) | Masthead version; compose sets it from `IMAGE_TAG` (`latest`/empty falls back to the package version) |
+| `APP_PORT` / `FRONTEND_PORT` | `8080` | Host port the frontend is published on: `APP_PORT` per instance (blue-green), falling back to `FRONTEND_PORT` in `.env` |
+| `APP_VERSION`        | (empty) | Masthead and `/healthz` version; compose sets it from `APP_IMAGE_TAG`, falling back to `IMAGE_TAG` (`latest`/empty falls back to the package version) |
+| `APP_INSTANCE`       | `local` | Instance label reported by `/healthz` (the compose project name in blue-green deployments) |
 | `PUBLIC_BASE_URL`    | `https://bedtime.blog` | Origin for canonical, sitemap and robots URLs |
+
+### Health endpoints
+
+Both are public through the edge proxy, like every other path:
+
+- `GET /healthz` answers from `web` alone and never calls the agent:
+  `{"status":"ok","version":"0.4.0","instance":"bedtimenews-app-green"}`. A
+  dead agent or database must not make an orchestrator restart `web`.
+- `GET /readyz` calls this instance's agent `/health` (3 s timeout) and returns
+  its status code: 200 when the agent reaches the database and serves a
+  snapshot, otherwise 503. The body is trimmed to `ready`, `reason` (when not
+  ready) and the snapshot's `id`, `format_version` and `embedding_space`; the
+  agent's full body, which includes the indexer's last error text, is never
+  forwarded. Deployment tools gate traffic on it.
+
+The compose file health-checks `web` on `/healthz` (with Python's `urllib`:
+the image has no `curl`).
+
+### Graceful shutdown
+
+On SIGTERM uvicorn stops accepting connections and lets in-flight requests,
+including a streaming `/chat` (at most the agent's 240 s limit), finish for up
+to 270 s; compose's `stop_grace_period` is 300 s. A `docker compose stop` or an
+in-place recreate therefore waits up to 5 minutes while a stream is open.
 
 ## Debugging
 
 ```bash
 # Logs
 docker compose logs -f web
+
+# Container names follow the compose project (e.g. bedtimenews-app-green-web-1),
+# so address the service rather than a fixed name:
+docker compose ps web
+curl -s localhost:8080/readyz
 
 # Backend connectivity from inside the container (the slim image has no
 # ping/curl; use the bundled Python + httpx instead)

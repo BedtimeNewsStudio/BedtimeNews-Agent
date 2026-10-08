@@ -147,6 +147,15 @@ silent pipeline stages.
 Without a readable snapshot, the non-streaming response is `503`; a streaming
 response carries an `error` event.
 
+**Time limit.** One `/chat` may run for at most 240 seconds
+(`CHAT_TIME_LIMIT_S` in `src/chat.py`). A stream that reaches it ends with an
+`error` event (`回答超时，请缩小问题范围后重试。`) followed by `[DONE]`; a
+non-streaming request gets `504`. The limit is the innermost of the shutdown
+layers (240 s limit < 270 s uvicorn graceful shutdown < 300 s compose
+`stop_grace_period` < 5-minute proxy drain), so stopping or replacing the
+agent never cuts an answer short; see
+[the blue-green design](../docs/designs/20261008_blue-green-deployment.md).
+
 ### GET /transcripts
 
 Reader navigation index from the current snapshot's `transcripts` table:
@@ -199,6 +208,12 @@ old): it does not query the database or call a model.
 `indexer_status` does not affect readiness (an older snapshot still serves); use
 it for alerting, e.g. 3 consecutive failures or no run for more than 3 hours.
 The compose file uses `/health` as the agent's container healthcheck.
+
+The full body stays internal (the agent is not published). `web` exposes a
+trimmed form publicly as `GET /readyz` — the same status code, but only
+`ready`, `reason` and the snapshot's `id`, `format_version` and
+`embedding_space`, never `indexer_status` (its `last_error` can contain
+internal error text).
 
 ## Evaluation
 
@@ -288,7 +303,7 @@ embedding:
   Changing the model means the indexer builds a new snapshot first — see the
   "Changing the Embedding Model" runbook in `indexer/README.en.md`.
 
-**Database and snapshot settings** (environment, set by `docker-compose.yml`
+**Database and snapshot settings** (environment, set by `compose.app.yml`
 from `.env`):
 
 - `POSTGRES_AGENT_PASSWORD`: connect as the read-only `rag_agent` role
@@ -349,6 +364,19 @@ The web frontend is the only service published to the host — plain HTTP on por
 repo). It proxies `/chat` to the agent over the internal Docker network; the
 agent itself is never exposed to the host.
 
+The agent is on two networks: its application instance's private network,
+shared only with that instance's `web` (where `agent` resolves to this agent
+alone), and the data layer's network, to reach `postgres`. During a blue-green
+deployment every instance's agent is on the data-layer network, so the alias
+`agent` there resolves to all of them: **nothing on the data-layer network may
+call `agent`** (postgres and the indexer never do). See `compose.app.yml`.
+
+**Graceful shutdown.** On SIGTERM uvicorn (started with `exec`, so it receives
+the signal as PID 1) stops accepting connections and lets in-flight requests,
+including streams, finish for up to 270 s; compose's `stop_grace_period` is
+300 s. A `docker compose stop` or in-place recreate therefore waits up to 5
+minutes while a stream is open.
+
 ### Debugging
 
 ```bash
@@ -358,7 +386,9 @@ docker compose logs -f agent
 # Access container
 docker compose exec agent sh
 
-# Readiness and the snapshot being served
+# Readiness and the snapshot being served. Container names follow the compose
+# project (e.g. bedtimenews-app-green-agent-1), so address the service:
+docker compose ps agent
 docker compose exec agent curl -s http://localhost:8000/health
 
 # Test database connection (helper lives in the indexer service)

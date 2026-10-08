@@ -50,7 +50,7 @@ Goals:
 Non-goals:
 
 - Replacing PostgreSQL or pgvector.
-- Running multiple application instances or switching traffic between them (blue-green deployment builds on this design but is out of scope here).
+- Running multiple application instances or switching traffic between them (blue-green deployment builds on this design but is out of scope here; see [Application-Layer Blue-Green Deployment](20261008_blue-green-deployment.md)).
 - PostgreSQL major-version upgrades.
 
 ## 4. Architecture
@@ -246,6 +246,7 @@ A "lineage" is the set of snapshots sharing both `pipeline_fingerprint` and `emb
 | `retired` snapshots are kept for 24 hours                                                                                  | So a mistaken retirement can be undone                                                                                               |
 | **Grace period**: no snapshot is deleted within 10 minutes of being superseded or retired                                  | Protects in-flight requests. The agent switches to a new snapshot within 15 s and `/chat` runs at most 240 s, so 10 minutes is ample |
 
+- The 240 s bound on `/chat` that the grace period relies on is enforced by the agent's overall chat time limit (`agent/src/chat.py`, [blue-green design](20261008_blue-green-deployment.md) section 4.3).
 - Deletion runs `SET lock_timeout = '5s'`, then `DROP SCHEMA ... CASCADE`, and removes the registry row. Failing to get the lock means a query is still reading the snapshot; it is retried on the next run.
 - GC runs inside a write transaction holding the database advisory lock, so it never runs concurrently with a build and cannot delete a base snapshot that is in use.
 
