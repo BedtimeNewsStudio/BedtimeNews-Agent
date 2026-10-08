@@ -1,6 +1,17 @@
 # 睡前消息知识库
 
-[中文](README.md) | [English](README.en.md) | [Español](README.es-ES.md)
+<p align="center">
+  <a href="https://github.com/BedtimeNewsStudio/BedtimeNews-Agent/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/BedtimeNewsStudio/BedtimeNews-Agent/ci.yml?branch=main&amp;label=CI&amp;logo=githubactions&amp;logoColor=white&amp;style=for-the-badge&amp;labelColor=1f2328"></a>
+  <a href="https://github.com/BedtimeNewsStudio/BedtimeNews-Agent/actions/workflows/release.yml"><img alt="Release" src="https://img.shields.io/github/actions/workflow/status/BedtimeNewsStudio/BedtimeNews-Agent/release.yml?label=release&amp;logo=githubactions&amp;logoColor=white&amp;style=for-the-badge&amp;labelColor=1f2328"></a>
+  <a href="https://github.com/orgs/BedtimeNewsStudio/packages?repo_name=BedtimeNews-Agent"><img alt="ghcr.io" src="https://img.shields.io/github/v/tag/BedtimeNewsStudio/BedtimeNews-Agent?sort=semver&amp;label=ghcr.io&amp;logo=docker&amp;logoColor=white&amp;color=2563eb&amp;style=for-the-badge&amp;labelColor=1f2328"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/github/license/BedtimeNewsStudio/BedtimeNews-Agent?color=6e7781&amp;style=for-the-badge&amp;labelColor=1f2328"></a>
+</p>
+
+<p align="center">
+  <a href="README.md">中文</a> |
+  <a href="README.en.md">English</a> |
+  <a href="README.es-ES.md">Español</a>
+</p>
 
 睡前消息知识库网站：既能向智能体提问，也能在站内浏览与阅读全部节目文稿。
 问答由智能 RAG（检索增强生成）系统提供——自动路由、语义搜索、检索文稿
