@@ -65,8 +65,9 @@ The frontend:
 
 ## Components
 
-- **server.py** — FastAPI: `static/`, `/api/starters`, transcript API proxy,
-  `/chat` SSE proxy, SPA routes for `/transcripts`
+- **server.py** — FastAPI: `static/`, server-rendered home, channel and
+  transcript pages, `/api/starters`, transcript API proxy, `/chat` SSE proxy,
+  robots/sitemap/short links, health endpoints
 - **starters.py** — sample-question data (categories + questions)
 - **static/index.html** — markup, theme boot, mobile tab bar, turn templates
 - **static/styles.css** — solid tokens and desktop/mobile layout
@@ -80,12 +81,13 @@ The frontend:
 
 | Method | Path                                  | Purpose                              |
 | ------ | ------------------------------------- | ------------------------------------ |
-| GET    | `/`                                   | SPA (`static/index.html`)            |
-| GET    | `/transcripts`, `/transcripts/{path}` | Same SPA (client routes)             |
+| GET    | `/`                                   | Home page: the SPA shell (`static/index.html`) rendered with canonical/SEO metadata |
+| GET    | `/transcripts?channel={channel}`      | Server-rendered channel list (`/transcripts` without a channel: `308` to `/`) |
+| GET    | `/transcripts/{doc_id}`               | Server-rendered transcript page      |
 | GET    | `/api/starters`                       | Sample questions JSON (`categories`) |
 | GET    | `/api/transcripts`                    | Transcript index (proxied)           |
-| GET    | `/api/transcripts/{doc_id}`           | One transcript (proxied)             |
-| POST   | `/chat`                               | Proxies the agent SSE stream         |
+| GET    | `/api/transcripts/{doc_id}`           | One transcript (proxied; a malformed `doc_id` is a `404` without calling the agent) |
+| POST   | `/chat`                               | Proxies the agent SSE stream (body over 128 KiB: `413`) |
 | GET    | `/healthz`                            | Liveness of `web` alone (never calls the agent): `status`, `version`, `instance` |
 | GET    | `/readyz`                             | Readiness of this instance: status code of the agent's `/health` (200 / 503), trimmed body |
 | GET    | `/index.html`                         | `308` redirect to `/`                |
@@ -153,6 +155,20 @@ Both are public through the edge proxy, like every other path:
 
 The compose file health-checks `web` on `/healthz` (with Python's `urllib`:
 the image has no `curl`).
+
+### Hardening
+
+- Only the paths above are served: FastAPI's `/docs`, `/redoc` and
+  `/openapi.json` are disabled, and the transcript proxy only forwards a
+  validated transcript URI, so no other agent endpoint is reachable from
+  outside.
+- `/chat` reads at most 128 KiB of request body (`413` beyond that); the agent
+  validates the question and history limits.
+- Upstream failures reach the browser as a generic message; details are only
+  logged.
+- Every response carries a Content-Security-Policy (`frame-ancestors 'none'`,
+  `object-src 'none'`, `base-uri 'none'`, ...), `X-Content-Type-Options`,
+  `X-Frame-Options` and `Referrer-Policy`.
 
 ### Graceful shutdown
 

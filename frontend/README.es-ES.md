@@ -77,9 +77,10 @@ El frontend:
 
 ## Componentes
 
-- **server.py** — aplicación FastAPI: sirve `static/`, expone
+- **server.py** — aplicación FastAPI: sirve `static/`, renderiza en el
+  servidor la página de inicio, las de programa y las de transcripción, expone
   `/api/starters`, proxy de las APIs de transcripciones, proxy del SSE de
-  `/chat`, rutas SPA para `/transcripts`
+  `/chat`, robots/sitemap/enlaces cortos y endpoints de salud
 - **starters.py** — datos de preguntas de muestra (categorías + preguntas)
 - **static/index.html** — marcado de la página, script de arranque de tema,
   barra de pestañas móvil, plantillas de turnos
@@ -95,12 +96,13 @@ El frontend:
 
 | Método | Ruta                                  | Propósito                                        |
 | ------ | ------------------------------------- | ------------------------------------------------ |
-| GET    | `/`                                   | SPA (`static/index.html`)                        |
-| GET    | `/transcripts`, `/transcripts/{path}` | La misma SPA (rutas del cliente)                 |
+| GET    | `/`                                   | Inicio: el armazón de la SPA (`static/index.html`) con metadatos canónicos/SEO |
+| GET    | `/transcripts?channel={channel}`      | Lista de un programa renderizada en el servidor (`/transcripts` sin programa: `308` a `/`) |
+| GET    | `/transcripts/{doc_id}`               | Página de transcripción renderizada en el servidor |
 | GET    | `/api/starters`                       | JSON de preguntas de muestra (`categories`)      |
 | GET    | `/api/transcripts`                    | Índice de transcripciones (proxy)                |
-| GET    | `/api/transcripts/{doc_id}`           | Una transcripción (proxy)                        |
-| POST   | `/chat`                               | Hace proxy del flujo SSE del agente al navegador |
+| GET    | `/api/transcripts/{doc_id}`           | Una transcripción (proxy; un `doc_id` mal formado da `404` sin llamar al agente) |
+| POST   | `/chat`                               | Hace proxy del flujo SSE del agente al navegador (cuerpo de más de 128 KiB: `413`) |
 | GET    | `/healthz`                            | Vitalidad de `web` por sí solo (nunca llama al agente): `status`, `version`, `instance` |
 | GET    | `/readyz`                             | Disponibilidad de esta instancia: código de estado del `/health` del agente (200 / 503), cuerpo recortado |
 | GET    | `/index.html`                         | Redirección `308` a `/`                          |
@@ -170,6 +172,20 @@ Ambos son públicos a través del proxy de borde, como cualquier otra ruta:
 
 El archivo compose comprueba la salud de `web` con `/healthz` (con `urllib` de
 Python: la imagen no incluye `curl`).
+
+### Endurecimiento
+
+- Solo se sirven las rutas de la tabla: `/docs`, `/redoc` y `/openapi.json` de
+  FastAPI están desactivados, y el proxy de transcripciones solo reenvía una
+  URI de transcripción validada, de modo que ningún otro endpoint del agente es
+  accesible desde fuera.
+- `/chat` lee como máximo 128 KiB de cuerpo (`413` si se supera); el agente
+  valida los límites de la pregunta y del historial.
+- Los fallos del upstream llegan al navegador como un mensaje genérico; los
+  detalles solo se registran en el log.
+- Cada respuesta lleva Content-Security-Policy (`frame-ancestors 'none'`,
+  `object-src 'none'`, `base-uri 'none'`, ...), `X-Content-Type-Options`,
+  `X-Frame-Options` y `Referrer-Policy`.
 
 ### Parada ordenada
 

@@ -22,7 +22,8 @@ ENV PYTHONUNBUFFERED=1 \
 
 USER app
 
-# Plain HTTP port, published to the host by docker-compose (FRONTEND_PORT).
+# Plain HTTP port, published to the host by compose (APP_PORT, falling back to
+# FRONTEND_PORT).
 # TLS termination and public exposure are handled outside this repo.
 EXPOSE 8080
 

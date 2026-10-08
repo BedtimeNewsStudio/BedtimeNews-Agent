@@ -55,8 +55,9 @@ Frontend：
 
 ## 组件
 
-- **server.py** — FastAPI：托管 `static/`、`/api/starters`、文稿 API 代理、
-  `/chat` SSE 代理、SPA 的 `/transcripts` 路由
+- **server.py** — FastAPI：托管 `static/`，服务端渲染首页、栏目页与文稿页，
+  `/api/starters`、文稿 API 代理、`/chat` SSE 代理、robots/sitemap/短链接、
+  健康检查端点
 - **starters.py** — 示例问题数据（类别 + 问题）
 - **static/index.html** — 标记、主题引导脚本、底栏 tab、对话模板
 - **static/styles.css** — 纯色设计令牌与桌面/手机布局
@@ -69,12 +70,13 @@ Frontend：
 
 | 方法 | 路径                                  | 用途                           |
 | ---- | ------------------------------------- | ------------------------------ |
-| GET  | `/`                                   | SPA（`static/index.html`）     |
-| GET  | `/transcripts`、`/transcripts/{path}` | 同上（浏览器路由）             |
+| GET  | `/`                                   | 首页：带规范链接与 SEO 元数据渲染的 SPA 外壳（`static/index.html`） |
+| GET  | `/transcripts?channel={channel}`      | 服务端渲染的栏目列表（不带 channel 的 `/transcripts`：`308` 到 `/`） |
+| GET  | `/transcripts/{doc_id}`               | 服务端渲染的文稿页             |
 | GET  | `/api/starters`                       | 示例问题 JSON（`categories`）  |
 | GET  | `/api/transcripts`                    | 文稿索引（代理 agent）         |
-| GET  | `/api/transcripts/{doc_id}`           | 单篇文稿（代理 agent）         |
-| POST | `/chat`                               | 将 agent 的 SSE 流代理给浏览器 |
+| GET  | `/api/transcripts/{doc_id}`           | 单篇文稿（代理 agent；格式不合法的 `doc_id` 直接返回 `404`，不调用 agent） |
+| POST | `/chat`                               | 将 agent 的 SSE 流代理给浏览器（请求体超过 128 KiB：`413`） |
 | GET  | `/healthz`                            | 仅 `web` 自身的存活检查（从不调用 Agent）：`status`、`version`、`instance` |
 | GET  | `/readyz`                             | 本实例的就绪检查：Agent `/health` 的状态码（200 / 503），响应体经裁剪 |
 | GET  | `/index.html`                         | `308` 重定向到 `/`             |
@@ -137,6 +139,16 @@ AGENT_BACKEND_HOST=localhost AGENT_BACKEND_PORT=8000 \
   Agent 的完整响应体（含 Indexer 最近的错误文本）从不转发。部署工具据此决定是否切流量。
 
 compose 文件以 `/healthz` 作为 `web` 的健康检查（镜像中没有 `curl`，因此使用 Python 的 `urllib`）。
+
+### 安全加固
+
+- 只提供上表中的路径：FastAPI 的 `/docs`、`/redoc` 与 `/openapi.json` 已关闭；
+  文稿代理只转发校验过的文稿 URI，因此外部无法访问 agent 的其他端点。
+- `/chat` 最多读取 128 KiB 请求体（超出返回 `413`）；问题与历史的长度由 agent 校验。
+- 上游故障只以通用提示返回给浏览器，细节仅写入日志。
+- 每个响应都带有 Content-Security-Policy（`frame-ancestors 'none'`、
+  `object-src 'none'`、`base-uri 'none'` 等）、`X-Content-Type-Options`、
+  `X-Frame-Options` 与 `Referrer-Policy`。
 
 ### 优雅停止
 

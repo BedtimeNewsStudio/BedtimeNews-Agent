@@ -3,9 +3,13 @@ Frontend server for the BedtimeNews Agentic RAG chat.
 
 Responsibilities:
 - Serve the static single-page UI from ./static
+- Server-render the transcript pages (/, /transcripts?channel=…,
+  /transcripts/<URI>), robots.txt, sitemap.xml and short links (/s/<id>)
 - Expose the sample questions as JSON at /api/starters
-- Proxy the chat stream at /chat to the internal agent backend, which is not
-  reachable from outside the Docker network
+- Proxy the chat stream (/chat) and the transcript APIs (/api/transcripts…)
+  to the internal agent backend, which is not reachable from outside the
+  Docker network
+- Report liveness (/healthz) and readiness (/readyz)
 
 The agent's /chat endpoint speaks Server-Sent Events:
     data: {"type": "step", "step": "...", "content": "..."}
@@ -21,6 +25,7 @@ We stream those bytes straight through to the browser.
 
 import hashlib
 import json
+import logging
 import os
 import re
 import time
@@ -48,6 +53,8 @@ from fastapi.staticfiles import StaticFiles
 from starlette.responses import Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from starters import CATEGORIES
+
+logger = logging.getLogger(__name__)
 
 AGENT_BACKEND_HOST = os.environ.get("AGENT_BACKEND_HOST", "agent")
 AGENT_BACKEND_PORT = os.environ.get("AGENT_BACKEND_PORT", "8000")
@@ -122,7 +129,15 @@ async def lifespan(_app: FastAPI):
         _client = None
 
 
-app = FastAPI(title="睡前消息知识库", lifespan=lifespan)
+# No interactive API docs: every path here is public, and the generated
+# /docs, /redoc and /openapi.json pages serve no reader.
+app = FastAPI(
+    title="睡前消息知识库",
+    lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
 
 # Compress text assets. Starlette excludes text/event-stream from compression,
 # which is what keeps the /chat stream flushing event-by-event.
@@ -133,11 +148,14 @@ app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)
 async def security_headers(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
+    # Legacy twin of CSP frame-ancestors 'none', for browsers without it.
+    response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; script-src 'self' 'unsafe-inline'; "
         "style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; "
-        "connect-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'none'"
+        "connect-src 'self'; frame-src 'none'; frame-ancestors 'none'; "
+        "object-src 'none'; base-uri 'none'; form-action 'self'"
     )
     return response
 
@@ -268,10 +286,6 @@ def _short_id_for(doc_id: str) -> str:
     if len(code) < SHORT_ID_LENGTH:
         code = _BASE58_ALPHABET[0] * (SHORT_ID_LENGTH - len(code)) + code
     return code[-SHORT_ID_LENGTH:]
-
-
-def _short_path(doc_id: str) -> str:
-    return f"/s/{_short_id_for(doc_id)}"
 
 
 def _etag_for_bytes(content: bytes) -> str:
@@ -777,10 +791,31 @@ async def get_starters() -> JSONResponse:
     return JSONResponse({"categories": CATEGORIES})
 
 
-@app.post("/chat")
-async def chat(request: Request) -> StreamingResponse:
+# A ChatRequest holds at most a 2000-character question and eight prior
+# turns of 2000 + 1000 characters: well under 128 KiB of UTF-8. Anything
+# larger is not a chat request and is refused before it reaches the agent.
+MAX_CHAT_BODY_BYTES = 128 * 1024
+
+
+async def _read_capped_body(request: Request, limit: int) -> bytes | None:
+    """The request body, or None as soon as it exceeds ``limit`` bytes."""
+    declared = request.headers.get("content-length", "")
+    if declared.isdigit() and int(declared) > limit:
+        return None
+    body = bytearray()
+    async for part in request.stream():
+        body += part
+        if len(body) > limit:
+            return None
+    return bytes(body)
+
+
+@app.post("/chat", response_model=None)
+async def chat(request: Request) -> Response:
     """Proxy the chat SSE stream from the internal agent to the browser."""
-    body = await request.body()
+    body = await _read_capped_body(request, MAX_CHAT_BODY_BYTES)
+    if body is None:
+        return JSONResponse({"detail": "问题过长。"}, status_code=413)
 
     async def event_stream() -> AsyncGenerator[bytes]:
         client = _client
@@ -808,8 +843,11 @@ async def chat(request: Request) -> StreamingResponse:
                 yield _sse_error(f"服务错误（代码 {code}），请稍后重试。")
         except httpx.TimeoutException:
             yield _sse_error("信号超时，请稍后重试。")
-        except Exception as exc:  # noqa: BLE001 - surface anything to the client
-            yield _sse_error(f"信号中断：{exc}，请稍后重试。")
+        except Exception:  # noqa: BLE001 - the client still gets a terminal event
+            # The exception text stays in the log: it can name internal hosts
+            # and ports, which a public error message must not.
+            logger.exception("Chat stream from the agent failed")
+            yield _sse_error("信号中断，请稍后重试。")
 
     return StreamingResponse(
         event_stream(),
@@ -860,8 +898,20 @@ async def transcript_index(request: Request) -> Response:
 
 @app.get("/api/transcripts/{doc_id:path}")
 async def transcript_detail(doc_id: str, request: Request) -> Response:
-    encoded = quote(doc_id, safe="/")
-    return await _proxy_transcript_json(request, f"{TRANSCRIPTS_ENDPOINT}/{encoded}")
+    # Validate before building the upstream URL: a path such as "../health"
+    # would otherwise be normalized by httpx into a request for another agent
+    # endpoint, reachable from the public internet through this proxy.
+    try:
+        canonical = _validate_transcript_uri(doc_id)
+    except ValueError:
+        return JSONResponse(
+            {"detail": "文稿不存在"},
+            status_code=404,
+            headers={"Cache-Control": "no-cache"},
+        )
+    return await _proxy_transcript_json(
+        request, f"{TRANSCRIPTS_ENDPOINT}/{quote(canonical, safe='/')}"
+    )
 
 
 @app.get("/", include_in_schema=False)

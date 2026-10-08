@@ -708,3 +708,86 @@ def test_readyz_never_trusts_a_200_without_ready(client):
 
     assert response.status_code == 503
     assert response.json()["ready"] is False
+
+
+# --- hardening -----------------------------------------------------------------
+
+
+class _RecordingGetClient:
+    def __init__(self):
+        self.urls = []
+
+    async def get(self, url, **_kwargs):
+        self.urls.append(str(url))
+        return httpx.Response(
+            200, json={"leak": True}, request=httpx.Request("GET", str(url))
+        )
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/transcripts/..%2Fhealth",
+        "/api/transcripts/%2E%2E/health",
+        "/api/transcripts/a/..%2F..%2Fhealth",
+        "/api/transcripts/channel/not-markdown.txt",
+    ],
+)
+def test_transcript_api_never_proxies_a_non_canonical_uri(client, path):
+    # httpx normalizes dot segments, so an unvalidated "../health" would reach
+    # the agent's internal /health (with indexer error text) from the internet.
+    fake = _RecordingGetClient()
+    server._client = fake
+
+    response = client.get(path)
+
+    assert response.status_code == 404
+    assert fake.urls == []
+
+
+def test_transcript_api_proxies_a_canonical_uri(client):
+    fake = _RecordingGetClient()
+    server._client = fake
+
+    response = client.get("/api/transcripts/ShuiQianXiaoXi/0501-0600/0588.md")
+
+    assert response.status_code == 200
+    assert fake.urls == [
+        f"{server.TRANSCRIPTS_ENDPOINT}/ShuiQianXiaoXi/0501-0600/0588.md"
+    ]
+
+
+@pytest.mark.parametrize("path", ["/docs", "/redoc", "/openapi.json"])
+def test_no_generated_api_docs_are_public(client, path):
+    assert client.get(path).status_code == 404
+
+
+def test_chat_refuses_an_oversized_body_without_calling_the_agent(client):
+    server._client = _FakeUpstreamClient(
+        error=AssertionError("the agent must not be called")
+    )
+    question = "问" * (server.MAX_CHAT_BODY_BYTES // 3 + 10)
+
+    response = client.post("/chat", json={"question": question})
+
+    assert response.status_code == 413
+
+
+def test_chat_does_not_leak_unexpected_error_text(client):
+    server._client = _FakeUpstreamClient(
+        error=RuntimeError("connect to http://agent:8000 failed: secret detail")
+    )
+
+    response = client.post("/chat", json={"question": "test"})
+
+    assert _error_event(response) == {
+        "type": "error",
+        "content": "信号中断，请稍后重试。",
+    }
+    assert "agent:8000" not in response.text
+
+
+def test_pages_cannot_be_framed(client):
+    headers = client.get("/healthz").headers
+    assert "frame-ancestors 'none'" in headers["content-security-policy"]
+    assert headers["x-frame-options"] == "DENY"
