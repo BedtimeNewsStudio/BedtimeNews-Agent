@@ -1,0 +1,107 @@
+# ============================================================================
+# Data layer: postgres + indexer. Upgraded IN PLACE, one instance per host.
+#
+#   Self-hosting / development:  docker compose up -d        (docker-compose.yml
+#                                includes this file and compose.app.yml)
+#   Production:                  docker compose -p bedtimenews-agent -f compose.data.yml up -d
+#
+# The application layer (agent + web, compose.app.yml) runs as one compose
+# project per instance next to this one for blue-green deployments; see
+# docs/designs/20261008_blue-green-deployment.md.
+#
+# Rules for this file:
+# - NEVER `down -v` the data-layer project: it owns the database.
+# - Keep the production project name `bedtimenews-agent` and the network key
+#   `bedtimenews_net`: together they name the existing network
+#   `bedtimenews-agent_bedtimenews_net`, which application instances join.
+#   Renaming either would recreate the network, and with it postgres.
+# - postgres lists its environment explicitly instead of `env_file: .env`. With
+#   env_file, every variable in .env becomes part of postgres's container
+#   configuration, so ANY .env edit (an IMAGE_TAG bump, the COMPOSE_FILE guard)
+#   would recreate postgres on the next `up`, taking the database away from
+#   every application instance for a few seconds.
+# ============================================================================
+services:
+  postgres:
+    image: pgvector/pgvector:pg18
+    container_name: bedtimenews-postgres
+    # Parallel HNSW index builds (every snapshot build) allocate their working
+    # memory in /dev/shm, ~265 MB for the full corpus; Docker's 64 MB default
+    # fails them with "could not resize shared memory segment". A ceiling, not
+    # a reservation: the memory is only used while an index is being built.
+    shm_size: 1g
+    # Only what the image and init.sh read (see the header for why this is not
+    # env_file: .env).
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-postgres_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+    volumes:
+      - ${POSTGRES_DATA_DIR:-./storage/postgres/volume}:/var/lib/postgresql
+      # init.sh only enables pgvector, on first init of an empty data volume.
+      # All RAG schemas (rag_meta, rag_state, the rag_s<id> snapshots) and the
+      # read-only rag_agent role are created by the indexer.
+      - ./storage/postgres/init.sh:/docker-entrypoint-initdb.d/init.sh
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres_user} -d ${POSTGRES_DB:-postgres_db}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - bedtimenews_net
+
+  # The indexer carries both `image:` and `build:`, and `image:` is what
+  # decides what runs. `docker compose up` never builds on its own: it reuses
+  # the tagged image if it is already local, otherwise it PULLS the published
+  # one from GHCR — even from a source checkout, and even with local edits. Use
+  # `docker compose up --build` (or `docker compose build`) to run your own
+  # code. IMAGE_TAG in .env pins the indexer's version (default: latest).
+  indexer:
+    image: ghcr.io/bedtimenewsstudio/bedtimenews-agent-indexer:${IMAGE_TAG:-latest}
+    build:
+      context: ./indexer
+      dockerfile: Dockerfile
+    container_name: bedtimenews-indexer
+    # On stop, the indexer cancels a running build; Postgres rolls the build
+    # transaction back, so nothing half-built is left behind.
+    stop_grace_period: 30s
+    environment:
+      # App settings come from config.yml (mounted read-only below); the
+      # environment only relocates the file and wires deployment paths.
+      CONFIG_YAML: /run/config/config.yml
+      INDEX_CONFIG_FILE: /app/index_config.yml
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB:-postgres_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      # Read-only rag_agent role: created by the indexer; LOGIN only when set.
+      POSTGRES_AGENT_PASSWORD: ${POSTGRES_AGENT_PASSWORD:-}
+      # Dimension of the vector space snapshots are built in.
+      EMBEDDING_DIM: ${EMBEDDING_DIM:-2560}
+    volumes:
+      - ./config.yml:/run/config/config.yml:ro
+      - ${INDEXER_DATA_DIR:-./indexer/data}:/data
+      - bedtimenews_indexer_logs:/var/log/indexer
+      # Read-only view of the Postgres data directory, used only to check free
+      # disk space before a build (a full disk would take the database down).
+      - ${POSTGRES_DATA_DIR:-./storage/postgres/volume}:/pgdata:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - bedtimenews_net
+
+volumes:
+  bedtimenews_indexer_logs:
+    driver: local
+
+networks:
+  # Shared with every application instance's agent (compose.app.yml declares
+  # the same key). Keep this definition as is: changing it recreates the
+  # network in production.
+  bedtimenews_net:
+    driver: bridge

@@ -11,7 +11,7 @@ from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
-from .chat import nonstream_chat, stream_chat
+from .chat import ChatTimeout, nonstream_chat_with_limit, stream_chat
 from .models import ChatRequest, ChatResponse
 from .settings import settings
 from .snapshots import SnapshotUnavailable, snapshot_manager
@@ -112,9 +112,14 @@ async def chat(request: ChatRequest):
         )
 
     try:
-        # The RAG pipeline is synchronous (seconds of LLM calls); run it in a
-        # worker thread so it doesn't block the event loop for other requests.
-        return await asyncio.to_thread(nonstream_chat, request)
+        # The RAG pipeline is synchronous (seconds of LLM calls); it runs in a
+        # worker thread so it doesn't block the event loop for other requests,
+        # bounded by the overall /chat limit (chat.CHAT_TIME_LIMIT_S).
+        return await nonstream_chat_with_limit(request)
+    except ChatTimeout as e:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail=str(e)
+        ) from e
     except SnapshotUnavailable as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

@@ -1,7 +1,11 @@
-# Local-only deterministic sample overlay. Set POSTGRES_DATA_DIR and
-# INDEXER_DATA_DIR to isolated host directories before invoking Compose; the
-# indexer's read-only /pgdata disk-precheck mount follows POSTGRES_DATA_DIR,
-# so it watches the sample database's filesystem.
+# Local-only deterministic sample overlay on top of the umbrella file:
+#   docker compose -f docker-compose.yml -f docker-compose.sample.yml up -d
+# The services it overrides come from compose.data.yml / compose.app.yml via
+# the umbrella's `include`; overrides apply to them as before. Set
+# POSTGRES_DATA_DIR and INDEXER_DATA_DIR to isolated host directories before
+# invoking Compose; the indexer's read-only /pgdata disk-precheck mount follows
+# POSTGRES_DATA_DIR, so it watches the sample database's filesystem. The fixed
+# container names below are fine for a single sample instance.
 services:
   postgres:
     container_name: bedtimenews-sample-postgres

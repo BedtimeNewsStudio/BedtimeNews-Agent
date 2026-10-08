@@ -18,6 +18,42 @@ logger = logging.getLogger(__name__)
 # "data: ", so the comment is invisible to the UI.
 HEARTBEAT_INTERVAL_S = 1.0
 
+# Overall limit for one /chat request, streaming or not. The longest stream
+# seen in production is about 2.5 minutes. Each shutdown layer outside this one
+# is longer than the one inside it, so a stopping process always lets an
+# in-flight answer finish (docs/designs/20261008_blue-green-deployment.md, 4.3):
+#
+#   240 s  this limit: the stream ends with an SSE error event
+#   270 s  uvicorn --timeout-graceful-shutdown (agent and web Dockerfiles)
+#   300 s  compose stop_grace_period for agent and web (SIGKILL after that)
+#   5 min  the edge proxy's drain cap during a blue-green switch
+#
+# Snapshot garbage collection also relies on it: a superseded snapshot is kept
+# for 10 minutes, longer than any request pinned to it can run
+# (docs/designs/20261007_rag-snapshot-architecture.md, 6.8).
+CHAT_TIME_LIMIT_S = 240.0
+CHAT_TIMEOUT_MESSAGE = "回答超时，请缩小问题范围后重试。"
+
+
+class ChatTimeout(TimeoutError):
+    """A non-streaming /chat exceeded CHAT_TIME_LIMIT_S."""
+
+
+async def nonstream_chat_with_limit(request: ChatRequest) -> ChatResponse:
+    """Run the synchronous pipeline in a worker thread, bounded by the limit.
+
+    A thread cannot be cancelled: on timeout the caller gets ChatTimeout at
+    once, while the abandoned worker finishes its current model call and its
+    result is discarded.
+    """
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(nonstream_chat, request), timeout=CHAT_TIME_LIMIT_S
+        )
+    except TimeoutError as exc:
+        logger.warning("Chat exceeded the %.0f s limit", CHAT_TIME_LIMIT_S)
+        raise ChatTimeout(CHAT_TIMEOUT_MESSAGE) from exc
+
 
 def nonstream_chat(request: ChatRequest) -> ChatResponse:
     history = [turn.model_dump() for turn in request.history]
@@ -54,7 +90,8 @@ async def stream_chat(request: ChatRequest) -> AsyncGenerator[str]:
         their payloads.
 
     Error Handling:
-        If an exception occurs during streaming, yields an error event:
+        If the request runs longer than CHAT_TIME_LIMIT_S, or an exception
+        occurs during streaming, yields an error event and ends the stream:
         {
             "type": "error",
             "content": "error message"
@@ -81,15 +118,26 @@ async def stream_chat(request: ChatRequest) -> AsyncGenerator[str]:
         finally:
             await queue.put(("done", None))
 
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + CHAT_TIME_LIMIT_S
     task = asyncio.create_task(produce())
     try:
         while True:
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                logger.warning(
+                    "Chat stream exceeded the %.0f s limit", CHAT_TIME_LIMIT_S
+                )
+                error_event = {"type": "error", "content": CHAT_TIMEOUT_MESSAGE}
+                yield f"data: {json.dumps(error_event, ensure_ascii=False)}\n\n"
+                break
             try:
                 kind, payload = await asyncio.wait_for(
-                    queue.get(), timeout=HEARTBEAT_INTERVAL_S
+                    queue.get(), timeout=min(HEARTBEAT_INTERVAL_S, remaining)
                 )
             except TimeoutError:
-                yield ": ping\n\n"
+                if loop.time() < deadline:
+                    yield ": ping\n\n"
                 continue
 
             # ensure_ascii=False: the stream is already UTF-8, and escaping CJK

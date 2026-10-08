@@ -585,3 +585,126 @@ def test_short_link_returns_503_when_upstream_is_down(client):
     )
 
     assert response.status_code == 503
+
+
+# --- /healthz and /readyz (blue-green design 2.3) ----------------------------
+
+
+class _FakeHealthClient:
+    def __init__(self, response=None, error=None):
+        self.response = response
+        self.error = error
+        self.calls = []
+
+    async def get(self, url, **kwargs):
+        self.calls.append((url, kwargs))
+        if self.error:
+            raise self.error
+        return self.response
+
+
+def _health_response(status_code, payload):
+    request = httpx.Request("GET", server.HEALTH_ENDPOINT)
+    return httpx.Response(status_code, json=payload, request=request)
+
+
+AGENT_HEALTH = {
+    "ready": True,
+    "snapshot": {
+        "id": "s20261007t091512z_a1b2c3d",
+        "schema": "rag_s20261007t091512z_a1b2c3d",
+        "format_version": 1,
+        "embedding_space": "Qwen/Qwen3-Embedding-4B@2560",
+        "published_at": "2026-10-07T09:15:40Z",
+        "data_age_seconds": 60,
+        "source_commit": "a1b2c3d",
+    },
+    "embedding_space": "Qwen/Qwen3-Embedding-4B@2560",
+    "supported_formats": [1],
+    "indexer_status": {
+        "last_result": "failed",
+        "last_error": "OperationalError: password authentication failed for postgres_user",
+        "consecutive_failures": 3,
+    },
+}
+
+
+def test_healthz_reports_instance_and_never_calls_the_agent(client, monkeypatch):
+    monkeypatch.setattr(server, "APP_INSTANCE", "bedtimenews-app-green")
+    fake = _FakeHealthClient(error=AssertionError("healthz must not call the agent"))
+    server._client = fake
+
+    response = client.get("/healthz")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "ok",
+        "version": server.APP_VERSION,
+        "instance": "bedtimenews-app-green",
+    }
+    assert fake.calls == []
+
+
+def test_readyz_forwards_readiness_with_a_trimmed_body(client):
+    fake = _FakeHealthClient(_health_response(200, AGENT_HEALTH))
+    server._client = fake
+
+    response = client.get("/readyz")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "ready": True,
+        "snapshot": {
+            "id": "s20261007t091512z_a1b2c3d",
+            "format_version": 1,
+            "embedding_space": "Qwen/Qwen3-Embedding-4B@2560",
+        },
+    }
+    assert "password" not in response.text and "indexer_status" not in response.text
+    assert response.headers["cache-control"] == "no-store"
+    assert fake.calls[0][0] == server.HEALTH_ENDPOINT
+    assert fake.calls[0][1]["timeout"] == server.READY_TIMEOUT_S
+
+
+def test_readyz_is_503_when_the_agent_is_not_ready(client):
+    body = AGENT_HEALTH | {
+        "ready": False,
+        "snapshot": None,
+        "reason": "no published snapshot",
+    }
+    server._client = _FakeHealthClient(_health_response(503, body))
+
+    response = client.get("/readyz")
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "ready": False,
+        "snapshot": None,
+        "reason": "no published snapshot",
+    }
+    assert "indexer_status" not in response.text
+
+
+@pytest.mark.parametrize(
+    "error", [httpx.ConnectError("refused"), httpx.ReadTimeout("slow")]
+)
+def test_readyz_is_503_when_the_agent_is_unreachable(client, error):
+    server._client = _FakeHealthClient(error=error)
+
+    response = client.get("/readyz")
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "ready": False,
+        "snapshot": None,
+        "reason": "agent unreachable",
+    }
+
+
+def test_readyz_never_trusts_a_200_without_ready(client):
+    server._client = _FakeHealthClient(_health_response(200, {"unexpected": True}))
+
+    response = client.get("/readyz")
+
+    assert response.status_code == 503
+    assert response.json()["ready"] is False

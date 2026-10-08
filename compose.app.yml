@@ -1,0 +1,138 @@
+# ============================================================================
+# Application layer: agent + web. ONE compose project per instance; blue-green
+# deployments run two instances side by side against the same data layer.
+# See docs/designs/20261008_blue-green-deployment.md (sections 2 and 3).
+#
+#   Self-hosting / development:  docker compose up -d   (docker-compose.yml
+#                                includes this file and compose.data.yml)
+#   Production (one instance):
+#     APP_IMAGE_TAG=0.5.0 APP_PORT=18081 APP_INSTANCE=bedtimenews-app-green \
+#     BEDTIMENEWS_NET_NAME=bedtimenews-agent_bedtimenews_net \
+#     BEDTIMENEWS_NET_EXTERNAL=true \
+#     docker compose -p bedtimenews-app-green -f compose.app.yml up -d [--build]
+#   Retire an instance:
+#     docker compose -p bedtimenews-app-blue -f compose.app.yml down -v
+#     (removes only that instance's containers, private network and log
+#     volume; the data-layer network is external to it and stays)
+#
+# Per-instance inputs, passed on the command line by the deployment tool and
+# NEVER written to the shared .env (an argument-less command would then bring
+# that version back). The fallbacks are for self-hosting only:
+#   -p / COMPOSE_PROJECT_NAME  instance identity
+#   APP_IMAGE_TAG              agent + web image version   (fallback: IMAGE_TAG, else latest)
+#   APP_PORT                   host port web publishes     (fallback: FRONTEND_PORT, else 8080)
+#   APP_INSTANCE               label reported by /healthz  (fallback: local)
+#   BEDTIMENEWS_NET_NAME       data-layer network name     (fallback: this project's own)
+#   BEDTIMENEWS_NET_EXTERNAL   true = join the data layer's network (fallback: false)
+#   RAG_SNAPSHOT               optional: pin this instance to one snapshot id
+#   EMBEDDING_DIM              optional: query-vector dimension (fallback: .env, else 2560)
+#   APP_CONFIG_FILE            optional: host path of this instance's config.yml
+#                              (fallback: ./config.yml)
+#
+# agent and web carry both `image:` and `build:`; `image:` decides what runs.
+# `up` never builds on its own: it reuses or PULLS the tagged image. For a
+# source build give the instance a distinct tag (e.g. 0.5.0-<sha>) and pass
+# --build in the same `up`, or compose tries to pull a tag that does not exist.
+# ============================================================================
+services:
+  agent:
+    image: ghcr.io/bedtimenewsstudio/bedtimenews-agent-agent:${APP_IMAGE_TAG:-${IMAGE_TAG:-latest}}
+    build:
+      context: ./agent
+      dockerfile: Dockerfile
+    # No container_name: names follow the project (e.g.
+    # bedtimenews-app-green-agent-1), so two instances can run at once.
+    # No depends_on postgres either: a service cannot depend on one in another
+    # project. The agent starts without a database, reports not ready on
+    # /health and reconnects by itself.
+    environment:
+      CONFIG_YAML: /run/config/config.yml
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB:-postgres_db}
+      # Set -> connect as the read-only rag_agent role. Unset -> fall back to
+      # the superuser below (logged as a warning).
+      POSTGRES_AGENT_PASSWORD: ${POSTGRES_AGENT_PASSWORD:-}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      # Query-vector dimension; with embedding.model it names the vector space
+      # a snapshot must be in for this agent to read it.
+      EMBEDDING_DIM: ${EMBEDDING_DIM:-2560}
+      # Optional: pin one snapshot id instead of following the newest one.
+      RAG_SNAPSHOT: ${RAG_SNAPSHOT:-}
+    volumes:
+      - ${APP_CONFIG_FILE:-./config.yml}:/run/config/config.yml:ro
+      # Per project, so two instances never write the same log file.
+      - bedtimenews_agent_logs:/var/log/agent
+    # Ready = database reachable and a readable snapshot selected (/health).
+    healthcheck:
+      test: [ "CMD", "curl", "-fsS", "http://localhost:8000/health" ]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    # Longer than uvicorn's 270 s graceful shutdown (agent/Dockerfile), which
+    # is longer than the 240 s /chat limit: a stop lets open streams finish.
+    # A stop or in-place recreate therefore waits up to 5 minutes while a
+    # stream is open.
+    stop_grace_period: 300s
+    restart: unless-stopped
+    networks:
+      # This instance's private network, shared with its web only.
+      default: {}
+      # The data layer's network, to reach postgres. Every instance's agent is
+      # on it, so the alias `agent` there resolves to all of them: nothing on
+      # this network may call `agent` (postgres and the indexer never do).
+      bedtimenews_net: {}
+
+  # Plain HTTP on APP_PORT — no TLS. Public exposure, TLS termination and the
+  # blue-green switch are handled by the edge proxy, outside this repo.
+  web:
+    image: ghcr.io/bedtimenewsstudio/bedtimenews-agent-frontend:${APP_IMAGE_TAG:-${IMAGE_TAG:-latest}}
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    environment:
+      # Shown in the masthead and reported by /healthz: the version actually
+      # deployed beats whatever version the source tree happens to declare.
+      APP_VERSION: ${APP_IMAGE_TAG:-${IMAGE_TAG:-}}
+      APP_INSTANCE: ${APP_INSTANCE:-local}
+      # Resolves on the private network only, i.e. to this instance's agent.
+      AGENT_BACKEND_HOST: agent
+      AGENT_BACKEND_PORT: "8000"
+      PUBLIC_BASE_URL: https://bedtime.blog
+    ports:
+      - "${APP_PORT:-${FRONTEND_PORT:-8080}}:8080"
+    # Liveness of web alone (/healthz never calls the agent). The image has no
+    # curl, so the check uses Python's standard library.
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3)" ]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    # Also orders shutdown: `down` stops web before agent, so web's open
+    # streams finish while its agent is still running.
+    depends_on:
+      - agent
+    stop_grace_period: 300s
+    restart: unless-stopped
+    networks:
+      - default
+
+volumes:
+  bedtimenews_agent_logs:
+    driver: local
+
+networks:
+  # Same key as in compose.data.yml. In the umbrella (docker-compose.yml) both
+  # declarations resolve to one network, created once. As a separate project
+  # (BEDTIMENEWS_NET_EXTERNAL=true) this instance joins the data layer's
+  # existing network. Two alternatives do NOT work: a second key that resolves
+  # to the same name makes a repeated umbrella `up -d` try to recreate the
+  # network while containers are attached; and always declaring it external
+  # breaks a fresh umbrella install, because Compose checks that external
+  # networks exist before creating the project's own.
+  bedtimenews_net:
+    name: ${BEDTIMENEWS_NET_NAME:-${COMPOSE_PROJECT_NAME}_bedtimenews_net}
+    external: ${BEDTIMENEWS_NET_EXTERNAL:-false}

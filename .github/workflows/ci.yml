@@ -34,6 +34,28 @@ jobs:
       - name: Run ruff format check
         run: uv run --no-sync ruff format --check .
 
+  # The stack is split into compose.data.yml + compose.app.yml, joined by the
+  # docker-compose.yml umbrella (`include`). Check every way it is invoked
+  # still resolves: self-hosting, the sample overlay, and the two production
+  # layers with an application instance joining the data layer's network.
+  compose:
+    name: compose config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Validate compose layouts
+        run: |
+          cp .env.example .env
+          touch config.yml
+          docker compose version
+          docker compose config --quiet
+          docker compose -f docker-compose.yml -f docker-compose.sample.yml config --quiet
+          docker compose -p bedtimenews-agent -f compose.data.yml config --quiet
+          APP_IMAGE_TAG=ci APP_PORT=18081 APP_INSTANCE=bedtimenews-app-ci \
+          BEDTIMENEWS_NET_NAME=bedtimenews-agent_bedtimenews_net BEDTIMENEWS_NET_EXTERNAL=true \
+            docker compose -p bedtimenews-app-ci -f compose.app.yml config --quiet
+
   pytest:
     name: pytest
     runs-on: ubuntu-latest

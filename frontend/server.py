@@ -683,9 +683,92 @@ def _render_sitemap(items: list[dict]) -> str:
     )
 
 
+# Instance label of this deployment (the compose project name in blue-green
+# deployments), reported by /healthz so a deployment tool can tell instances
+# apart. Defaults to "local" for a single self-hosted instance.
+APP_INSTANCE = os.environ.get("APP_INSTANCE", "").strip() or "local"
+
+# /readyz waits at most this long for the agent's /health, which is served
+# from memory and answers in milliseconds when the agent is up.
+READY_TIMEOUT_S = 3.0
+HEALTH_ENDPOINT = f"{AGENT_BASE_URL}/health"
+
+
 @app.get("/healthz")
 async def healthz() -> JSONResponse:
-    return JSONResponse({"status": "ok", "version": APP_VERSION})
+    """Liveness of this web process alone.
+
+    It never calls the agent: a proxy or orchestrator restarting `web` because
+    the agent or database is down would only make things worse. Readiness of
+    the whole instance is /readyz.
+    """
+    return JSONResponse(
+        {"status": "ok", "version": APP_VERSION, "instance": APP_INSTANCE},
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+def _trimmed_readiness(payload: object) -> dict:
+    """Keep only what a public caller may see of the agent's /health body.
+
+    The full body includes indexer_status.last_error, which can carry internal
+    error text, so it is never forwarded; /readyz is reachable through the
+    public proxy like every other path on web.
+    """
+    body = payload if isinstance(payload, dict) else {}
+    snapshot = body.get("snapshot") if isinstance(body.get("snapshot"), dict) else None
+    trimmed: dict = {
+        "ready": bool(body.get("ready")),
+        "snapshot": (
+            {
+                key: snapshot.get(key)
+                for key in ("id", "format_version", "embedding_space")
+            }
+            if snapshot
+            else None
+        ),
+    }
+    if not trimmed["ready"]:
+        reason = body.get("reason")
+        trimmed["reason"] = reason if isinstance(reason, str) else "agent not ready"
+    return trimmed
+
+
+@app.get("/readyz")
+async def readyz() -> JSONResponse:
+    """Readiness of this instance: the status code of its agent's /health.
+
+    200 when the agent reaches the database and has a readable RAG snapshot
+    selected, otherwise 503. The body is trimmed (see _trimmed_readiness).
+    Deployment tools gate traffic on this; it is cheap to poll because the
+    agent serves /health from memory.
+    """
+    headers = {"Cache-Control": "no-store"}
+    client = _client
+    if client is None:
+        return JSONResponse(
+            {"ready": False, "snapshot": None, "reason": "web is starting"},
+            status_code=503,
+            headers=headers,
+        )
+    try:
+        response = await client.get(HEALTH_ENDPOINT, timeout=READY_TIMEOUT_S)
+    except httpx.HTTPError:
+        return JSONResponse(
+            {"ready": False, "snapshot": None, "reason": "agent unreachable"},
+            status_code=503,
+            headers=headers,
+        )
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = {}
+    trimmed = _trimmed_readiness(payload)
+    ready = response.status_code == 200 and trimmed["ready"]
+    if not ready:
+        trimmed["ready"] = False
+        trimmed.setdefault("reason", f"agent /health returned {response.status_code}")
+    return JSONResponse(trimmed, status_code=200 if ready else 503, headers=headers)
 
 
 @app.get("/api/starters")
