@@ -55,7 +55,10 @@ PostgreSQL + pgvector.
 
 **Componentes:**
 
-- **[Frontend](frontend/README.es-ES.md)**: Interfaz de chat personalizada (HTML/CSS/JS estático servido por una pequeña aplicación FastAPI)
+- **[Frontend](frontend/README.es-ES.md)**: Interfaz personalizada de chat y
+  lectura de transcripciones (HTML/CSS/JS estático servido por una pequeña
+  aplicación FastAPI; aloja la lista y el lector de transcripciones, con el
+  contenido servido desde la base de datos del índice)
 - **[Agente](agent/README.es-ES.md)**: Servicio RAG agente basado en LangGraph
 - **[Indexador](indexer/README.es-ES.md)**: Pipeline automatizado de incrustación de documentos
 - **Base de Datos**: PostgreSQL con extensión pgvector como base de datos
@@ -64,6 +67,10 @@ PostgreSQL + pgvector.
   por construcción, registrado en `rag_meta`); el agente lee el snapshot
   compatible más reciente mediante el rol de solo lectura `rag_agent` y cambia a
   uno nuevo en 15 segundos
+
+Alcance de la indexación: solo se indexa la sección `## 正文` (cuerpo) de cada
+transcripción; `## 附录` (apéndice: correcciones y notas de verificación) y la
+línea de metadatos `**发布日期**` quedan fuera de la recuperación.
 
 La pila sirve HTTP puro en el puerto 8080 — sin TLS. La exposición pública y la
 terminación TLS se gestionan fuera de este repositorio.
@@ -258,28 +265,39 @@ Quien autoaloja y simplemente reinicia en el sitio no pierde nada, pero detener 
 Los datos se persisten entre reinicios:
 
 - **Datos de PostgreSQL** (snapshots RAG, registro, registro de auditoría): montados en enlace a `./storage/postgres/volume`
-- **Logs de servicios**: volúmenes nombrados de Docker `bedtimenews_indexer_logs` (capa de datos) y `bedtimenews_agent_logs` (uno por proyecto de aplicación, así dos instancias nunca comparten un archivo de log)
+- **Logs de servicios**: el log de ejecuciones del indexador está en el volumen nombrado de Docker `bedtimenews_indexer_logs` (capa de datos); el agente y web solo escriben en stdout (`docker compose logs`). `bedtimenews_agent_logs` (uno por proyecto de aplicación) solo guarda los resultados de `eval_retriever` cuando la ruta del repositorio no es escribible
 
 ## Estructura del Proyecto
 
 ```plaintext
 BedtimeNews-Agent/
+├── .github/workflows/  # CI (ruff, configuración de compose, pytest), publicación, auto-merge de Dependabot
 ├── agent/              # Servicio RAG agente LangGraph
 │   ├── src/
+│   ├── tests/
+│   ├── eval_results/   # Historial de evaluación de la recuperación (eval_retriever)
+│   ├── pyproject.toml
 │   ├── Dockerfile
 │   ├── README.md
 │   ├── README.en.md
 │   └── README.es-ES.md
 ├── frontend/           # Interfaz web personalizada (estático + FastAPI)
-│   ├── server.py       # FastAPI: sirve UI estática + proxy de /chat SSE y las APIs de transcripciones
+│   ├── server.py       # FastAPI: UI estática, páginas renderizadas en el servidor, proxy de /chat SSE y de las APIs de transcripciones, robots/sitemap/enlaces cortos, /healthz y /readyz
 │   ├── starters.py     # Datos de preguntas de muestra
-│   ├── static/         # index.html, styles.css, app.js, logo
+│   ├── static/         # index.html, styles.css, app.js, markdown-it, logo, verificación del sitio de Bing
+│   ├── tests/
+│   ├── pyproject.toml
 │   ├── Dockerfile
 │   ├── README.md
 │   ├── README.en.md
 │   └── README.es-ES.md
 ├── indexer/            # Pipeline de incrustación de documentos
 │   ├── src/
+│   ├── tests/
+│   ├── data/           # INDEXER_DATA_DIR por defecto: clon de las transcripciones y bloqueo de ejecución
+│   ├── index_config.yml         # Qué archivos de transcripción se indexan
+│   ├── index_config.sample.yml  # Subconjunto local fijo de muestra
+│   ├── pyproject.toml
 │   ├── Dockerfile
 │   ├── README.md
 │   ├── README.en.md
@@ -297,6 +315,10 @@ BedtimeNews-Agent/
 ├── config.example.yml  # Plantilla de config de aplicación
 ├── .env                # Cableado de despliegue (no en git, copiado de .env.example)
 ├── .env.example        # Plantilla de cableado
+├── pyproject.toml      # Raíz del workspace uv (herramientas de desarrollo, config de ruff)
+├── uv.lock
+├── conftest.py         # Ejecuta pytest una vez por componente desde la raíz
+├── LICENSE
 ├── THIRD_PARTY_NOTICES.md  # Licencias de componentes de terceros
 ├── README.md           # README predeterminado (中文)
 ├── README.en.md        # README en inglés

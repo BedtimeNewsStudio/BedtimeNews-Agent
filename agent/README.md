@@ -275,7 +275,7 @@ embedding:
   `Qwen/Qwen3-Embedding-4B`），设置了 `embedding.space_id` 时以其为准。换模型时需由
   Indexer 先构建新快照——参见 `indexer/README.md` 中的“更换 Embedding 模型”操作手册。
 
-**数据库与快照设置**（环境变量，由 `compose.app.yml` 从 `.env` 传入）：
+**数据库与快照设置**（环境变量，由 `compose.app.yml` 传入：前两项来自 `.env`，`RAG_SNAPSHOT` 按实例在命令行传入）：
 
 - `POSTGRES_AGENT_PASSWORD`：以只读角色 `rag_agent` 连接（推荐）。未设置时回退到
   `POSTGRES_USER` 并记录警告

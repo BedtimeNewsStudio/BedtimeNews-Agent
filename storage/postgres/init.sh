@@ -10,7 +10,7 @@
 #   rag_agent   read-only role the agent connects as
 # The vector dimension is no longer fixed here: each snapshot's embedding
 # column is sized for the vector space it was built in (EMBEDDING_DIM). See
-# "Database Schema" in indexer/README.md.
+# "Database Schema" in indexer/README.en.md.
 # ============================================================================
 set -euo pipefail
 

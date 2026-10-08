@@ -75,6 +75,7 @@ The frontend:
   Markdown
 - **static/markdown-it.min.js** — vendored Markdown renderer (MIT), on demand
 - **static/bedtimenews.webp** — favicon / brand logo
+- **static/BingSiteAuth.xml** — Bing Webmaster Tools site verification
 - **pyproject.toml** — `fastapi`, `uvicorn`, `httpx`
 
 ## Endpoints
@@ -158,7 +159,7 @@ the image has no `curl`).
 
 ### Hardening
 
-- Only the paths above are served: FastAPI's `/docs`, `/redoc` and
+- Only the paths above and the files in `static/` are served: FastAPI's `/docs`, `/redoc` and
   `/openapi.json` are disabled, and the transcript proxy only forwards a
   validated transcript URI, so no other agent endpoint is reachable from
   outside.

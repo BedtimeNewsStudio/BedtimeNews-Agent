@@ -64,6 +64,7 @@ Frontend：
 - **static/app.js** — 路由、栏目/列表/正文、示例、composer、主题、SSE、Markdown
 - **static/markdown-it.min.js** — 本地 Markdown 渲染器（MIT），按需加载
 - **static/bedtimenews.webp** — favicon / 品牌 logo
+- **static/BingSiteAuth.xml** — Bing 站长工具的站点验证文件
 - **pyproject.toml** — 依赖（`fastapi`、`uvicorn`、`httpx`）
 
 ## 端点
@@ -142,7 +143,7 @@ compose 文件以 `/healthz` 作为 `web` 的健康检查（镜像中没有 `cur
 
 ### 安全加固
 
-- 只提供上表中的路径：FastAPI 的 `/docs`、`/redoc` 与 `/openapi.json` 已关闭；
+- 只提供上表中的路径与 `static/` 中的文件：FastAPI 的 `/docs`、`/redoc` 与 `/openapi.json` 已关闭；
   文稿代理只转发校验过的文稿 URI，因此外部无法访问 agent 的其他端点。
 - `/chat` 最多读取 128 KiB 请求体（超出返回 `413`）；问题与历史的长度由 agent 校验。
 - 上游故障只以通用提示返回给浏览器，细节仅写入日志。

@@ -90,6 +90,7 @@ El frontend:
 - **static/markdown-it.min.js** — renderizador Markdown incluido localmente
   (MIT), cargado bajo demanda
 - **static/bedtimenews.webp** — favicon / logo de marca
+- **static/BingSiteAuth.xml** — verificación del sitio para Bing Webmaster Tools
 - **pyproject.toml** — dependencias (`fastapi`, `uvicorn`, `httpx`)
 
 ## Endpoints
@@ -175,7 +176,7 @@ Python: la imagen no incluye `curl`).
 
 ### Endurecimiento
 
-- Solo se sirven las rutas de la tabla: `/docs`, `/redoc` y `/openapi.json` de
+- Solo se sirven las rutas de la tabla y los archivos de `static/`: `/docs`, `/redoc` y `/openapi.json` de
   FastAPI están desactivados, y el proxy de transcripciones solo reenvía una
   URI de transcripción validada, de modo que ningún otro endpoint del agente es
   accesible desde fuera.

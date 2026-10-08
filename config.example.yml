@@ -35,7 +35,7 @@ generation:
 # therefore not an in-place edit: the indexer builds a new snapshot in the new
 # space (re-embedding the whole corpus) while the old snapshot keeps serving;
 # agents configured with the new model then switch to it.
-# See the "Changing the embedding model" runbook in indexer/README.md.
+# See the "Changing the Embedding Model" runbook in indexer/README.en.md.
 embedding:
   api_key: "" # required
   base_url: "https://api.siliconflow.com/v1"

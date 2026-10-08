@@ -302,28 +302,39 @@ of `agent` or `web` now waits up to 5 minutes while a chat stream is open (each
 Data is persisted across restarts:
 
 - **PostgreSQL data** (RAG snapshots, registry, audit log): bind-mounted to `./storage/postgres/volume`
-- **Service logs**: Docker named volumes `bedtimenews_indexer_logs` (data layer) and `bedtimenews_agent_logs` (one per application project, so two instances never share a log file)
+- **Service logs**: the indexer's run log is in the Docker named volume `bedtimenews_indexer_logs` (data layer); agent and web log to stdout only (`docker compose logs`). `bedtimenews_agent_logs` (one per application project) only holds `eval_retriever` results when the repository path is not writable
 
 ## Project Structure
 
 ```plaintext
 BedtimeNews-Agent/
+├── .github/workflows/  # CI (ruff, compose config, pytest), release, Dependabot auto-merge
 ├── agent/              # LangGraph agentic RAG service
 │   ├── src/
+│   ├── tests/
+│   ├── eval_results/   # Retrieval evaluation history (eval_retriever)
+│   ├── pyproject.toml
 │   ├── Dockerfile
 │   ├── README.md
 │   ├── README.en.md
 │   └── README.es-ES.md
 ├── frontend/           # Custom web UI (static + FastAPI)
-│   ├── server.py       # FastAPI: serves static UI + proxies /chat SSE and transcript APIs
+│   ├── server.py       # FastAPI: static UI, server-rendered pages, /chat SSE and transcript API proxies, robots/sitemap/short links, /healthz and /readyz
 │   ├── starters.py     # Sample questions data
-│   ├── static/         # index.html, styles.css, app.js, logo
+│   ├── static/         # index.html, styles.css, app.js, markdown-it, logo, Bing site verification
+│   ├── tests/
+│   ├── pyproject.toml
 │   ├── Dockerfile
 │   ├── README.md
 │   ├── README.en.md
 │   └── README.es-ES.md
 ├── indexer/            # Document embedding pipeline
 │   ├── src/
+│   ├── tests/
+│   ├── data/           # Default INDEXER_DATA_DIR: transcript clone and run lock
+│   ├── index_config.yml         # Which transcript files are indexed
+│   ├── index_config.sample.yml  # Fixed local sample subset
+│   ├── pyproject.toml
 │   ├── Dockerfile
 │   ├── README.md
 │   ├── README.en.md
@@ -341,6 +352,10 @@ BedtimeNews-Agent/
 ├── config.example.yml  # App config template
 ├── .env                # Deployment wiring (not in git, copied from .env.example)
 ├── .env.example        # Deployment wiring template
+├── pyproject.toml      # uv workspace root (dev tooling, ruff config)
+├── uv.lock
+├── conftest.py         # Runs pytest once per component from the root
+├── LICENSE
 ├── THIRD_PARTY_NOTICES.md  # Third-party component licenses
 ├── README.md           # Project README (中文, default)
 ├── README.en.md        # English README (this file)

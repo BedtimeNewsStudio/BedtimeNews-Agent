@@ -321,8 +321,9 @@ embedding:
   consulta el manual "Cambiar el Modelo de Embedding" en
   `indexer/README.es-ES.md`.
 
-**Base de datos y snapshots** (variables de entorno que `compose.app.yml`
-toma de `.env`):
+**Base de datos y snapshots** (variables de entorno que pasa `compose.app.yml`:
+las dos primeras de `.env`, `RAG_SNAPSHOT` por instancia en la línea de
+comandos):
 
 - `POSTGRES_AGENT_PASSWORD`: conectar con el rol de solo lectura `rag_agent`
   (recomendado). Sin definir → se usa `POSTGRES_USER` con un aviso

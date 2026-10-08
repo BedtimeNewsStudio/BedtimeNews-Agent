@@ -62,7 +62,8 @@ services:
       RAG_SNAPSHOT: ${RAG_SNAPSHOT:-}
     volumes:
       - ${APP_CONFIG_FILE:-./config.yml}:/run/config/config.yml:ro
-      # Per project, so two instances never write the same log file.
+      # Per project. The agent itself logs to stdout; only eval_retriever
+      # writes here (its results, when the source tree is not writable).
       - bedtimenews_agent_logs:/var/log/agent
     # Ready = database reachable and a readable snapshot selected (/health).
     healthcheck:

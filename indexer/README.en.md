@@ -56,7 +56,7 @@ The next run is always computed from the current time: a run that takes longer t
 
 ### Local sample mode
 
-`index_config.sample.yml` names eight deterministic transcripts covering ordinary, fractional, `misc`, and multi-channel URIs. Run it only with `INDEXER_SCOPE=sample`, `INDEX_CONFIG_FILE=/app/index_config.sample.yml`, an isolated data directory, and a `POSTGRES_DB` ending in `_local`; the indexer refuses any other database target. `docker-compose.sample.yml` supplies the service overrides.
+`index_config.sample.yml` names eight deterministic transcripts covering ordinary, fractional, `misc`, and multi-channel URIs. Run it only with `INDEXER_SCOPE=sample`, `INDEX_CONFIG_FILE=/app/index_config.sample.yml`, an isolated data directory, and a `POSTGRES_DB` ending in `_local`; the indexer refuses to build into any other database. `docker-compose.sample.yml` supplies the service overrides (the sample web listens on `SAMPLE_FRONTEND_PORT`, default 18080).
 
 ### Document Filters
 
@@ -118,7 +118,7 @@ docker compose exec indexer python -m src.snapshots retire s20261007t091512z_a1b
 
 ## Debugging Utilities
 
-`stats`, `history` and `inspect` read the current snapshot (the newest published snapshot of the indexer's current lineage); `history` reads its `index_state`. `recent` reads the audit log `rag_state.file_actions`.
+`stats`, `history` and `inspect` read the current snapshot (the newest published snapshot of the indexer's current lineage, falling back to the newest published snapshot of any lineage); `history` reads its `index_state`. `recent` reads the audit log `rag_state.file_actions`.
 
 ### Test Connection
 

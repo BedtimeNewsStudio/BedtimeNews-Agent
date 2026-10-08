@@ -305,8 +305,8 @@ embedding:
   Changing the model means the indexer builds a new snapshot first — see the
   "Changing the Embedding Model" runbook in `indexer/README.en.md`.
 
-**Database and snapshot settings** (environment, set by `compose.app.yml`
-from `.env`):
+**Database and snapshot settings** (environment, set by `compose.app.yml`:
+the first two from `.env`, `RAG_SNAPSHOT` per instance on the command line):
 
 - `POSTGRES_AGENT_PASSWORD`: connect as the read-only `rag_agent` role
   (recommended). Unset → fall back to `POSTGRES_USER` with a warning

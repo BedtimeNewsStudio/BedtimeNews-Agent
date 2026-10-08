@@ -257,28 +257,39 @@ git tag v0.1.0 && git push origin v0.1.0
 数据在重启后持久保存：
 
 - **PostgreSQL 数据**（RAG 快照、注册表、审计日志）：绑定挂载到 `./storage/postgres/volume`
-- **服务日志**：Docker 命名卷 `bedtimenews_indexer_logs`（数据层）与 `bedtimenews_agent_logs`（每个应用项目各一个，两个实例不会共用日志文件）
+- **服务日志**：Indexer 的运行日志在 Docker 命名卷 `bedtimenews_indexer_logs`（数据层）中；Agent 与 Web 只输出到 stdout（`docker compose logs`）。`bedtimenews_agent_logs`（每个应用项目各一个）只在仓库路径不可写时保存 `eval_retriever` 的评估结果
 
 ## 项目结构
 
 ```plaintext
 BedtimeNews-Agent/
+├── .github/workflows/  # CI（ruff、compose 配置、pytest）、发布、Dependabot 自动合并
 ├── agent/              # LangGraph 智能RAG服务
 │   ├── src/
+│   ├── tests/
+│   ├── eval_results/   # 检索评估历史（eval_retriever）
+│   ├── pyproject.toml
 │   ├── Dockerfile
 │   ├── README.md
 │   ├── README.en.md
 │   └── README.es-ES.md
 ├── frontend/           # 自定义 Web UI（静态 + FastAPI）
-│   ├── server.py       # FastAPI：托管静态界面 + 代理 /chat SSE 与文稿 API
+│   ├── server.py       # FastAPI：静态界面、服务端渲染页面、/chat SSE 与文稿 API 代理、robots/sitemap/短链接、/healthz 与 /readyz
 │   ├── starters.py     # 示例提问数据
-│   ├── static/         # index.html、styles.css、app.js、logo
+│   ├── static/         # index.html、styles.css、app.js、markdown-it、logo、Bing 站点验证
+│   ├── tests/
+│   ├── pyproject.toml
 │   ├── Dockerfile
 │   ├── README.md
 │   ├── README.en.md
 │   └── README.es-ES.md
 ├── indexer/            # 文稿 embedding 流水线
 │   ├── src/
+│   ├── tests/
+│   ├── data/           # 默认的 INDEXER_DATA_DIR：文稿仓库克隆与运行锁
+│   ├── index_config.yml         # 选择要索引的文稿文件
+│   ├── index_config.sample.yml  # 固定的本地小样本
+│   ├── pyproject.toml
 │   ├── Dockerfile
 │   ├── README.md
 │   ├── README.en.md
@@ -296,6 +307,10 @@ BedtimeNews-Agent/
 ├── config.example.yml  # 应用配置模板
 ├── .env                # 部署布线配置（不在 git 中，由 .env.example 复制）
 ├── .env.example        # 部署布线模板
+├── pyproject.toml      # uv workspace 根（开发工具、ruff 配置）
+├── uv.lock
+├── conftest.py         # 在仓库根目录按组件分别运行 pytest
+├── LICENSE
 ├── THIRD_PARTY_NOTICES.md  # 第三方组件许可证
 ├── README.md           # 默认自述文件（中文，本文件）
 ├── README.en.md        # 英文版自述文件
