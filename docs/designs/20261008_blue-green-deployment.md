@@ -102,7 +102,8 @@ Deployment tool steps (after the one-time cutover in section 6):
               newest snapshot of the new format or space
 5. Switch     proxy upstream -> P_green
 6. Drain      wait until the proxy reports 0 in-flight requests on P_blue, or 5 minutes have passed
-7. Retire     docker compose -p bedtimenews-app-blue -f compose.app.yml down -v
+7. Retire     docker compose -p bedtimenews-app-blue -f compose.app.yml down -v;
+              then prune images per section 3.2
 8. Record     nothing extra: the proxy configuration written in step 5 is the record
               (commit it where the proxy configuration is version-controlled, as in production)
 Rollback      before step 7: switch the proxy back to P_blue, drain P_green the same way, then down -v green
@@ -127,6 +128,16 @@ The tool refuses to run when the derivation is inconsistent:
 Because the state is read from the system each time, it cannot go stale after a manual switch-back, a failed deploy or a host reboot, and the derivation doubles as a consistency check before anything is changed.
 
 `down -v` is the complete retirement: compose stops `web` before `agent` (`web` depends on `agent`), so blue's `web` finishes its streams while its agent is still running; each gets SIGTERM and up to `stop_grace_period`, then the project is removed. `-v` removes only that instance's log volume, and `down` removes only the project's private network; the data-layer network is external to the application project and stays. **Never** run `down -v` on the data-layer project.
+
+### 3.2 Image retention
+
+Retirement removes containers, the private network and the log volume, but not images: every upgrade leaves the previous `agent` and `web` images on the host, every indexer upgrade the previous indexer image, and every source build its build cache (about 0.65 GB of image per application upgrade and 0.45 GB per indexer upgrade, less after shared layers). Nothing else removes them, so the deployment tool prunes at the end of step 7:
+
+- **Images**: among the repository's own images (`ghcr.io/bedtimenewsstudio/bedtimenews-agent-*`), keep the tag each running container uses and the one deployed before it, separately for the application (`agent` + `web`, one shared tag) and the indexer, and remove every other tag. Keeping the previous tag lets a rollback after step 7 start without a pull or a rebuild.
+- **Build cache**: after a source build, remove build cache unused for a week (`docker builder prune --filter until=168h`); recent cache keeps the next build fast.
+- **Scope**: never a host-wide prune (`docker system prune`, `docker image prune -a`). The host may run other services whose unused images or volumes are kept on purpose.
+
+"Deployed before" is derived like the live state (section 3.1), not stored: it is the newest remaining tag of that image other than the running one, by image creation time.
 
 ## 4. Changes in This Repository
 
@@ -252,6 +263,7 @@ Before the cutover, production ran one compose project, `bedtimenews-agent`, wit
 - Readiness gate: 3 consecutive 200s from `/readyz` at 2-second intervals, within 2 minutes.
 - Chat limit 240 s, uvicorn grace 270 s, Docker grace 300 s; proxy drain cap 5 minutes.
 - Application instances are retired with `down -v`, which removes only their log volume.
+- After each retirement the deployment tool keeps only the running and the previous tag of the repository's images and prunes build cache older than a week; never a host-wide prune (section 3.2).
 - The indexer builds snapshots in one vector space at a time. During a model change blue's data freezes for about half an hour (section 5) instead of the indexer building both spaces in parallel.
 - An embedding model change edits the shared configuration and recreates only the indexer; the running blue keeps its loaded configuration (section 5). No per-instance configuration is required for it.
 
