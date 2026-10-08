@@ -58,7 +58,7 @@
 
 ### 前置要求
 
-- Docker 及 Docker Compose 2.20 或更高版本（compose 文件使用了 `include`）
+- Docker 及 Docker Compose 2.24.6 或更高版本（compose 文件使用了 `include`；更早的版本会拒绝共用的网络声明或对被包含服务的覆盖）
 - 生成与嵌入端点的 API 密钥——填入 `config.yml`（任意 OpenAI-compatible 供应商；
   模板默认以 DeepSeek 对话、SiliconFlow Qwen3 embedding 为例）
 

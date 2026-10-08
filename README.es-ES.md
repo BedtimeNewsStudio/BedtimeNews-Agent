@@ -72,7 +72,7 @@ terminación TLS se gestionan fuera de este repositorio.
 
 ### Requisitos Previos
 
-- Docker con Docker Compose 2.20 o posterior (los archivos compose usan `include`)
+- Docker con Docker Compose 2.24.6 o posterior (los archivos compose usan `include`; versiones anteriores rechazan la declaración de red compartida o las sobrescrituras de servicios incluidos)
 - Claves API para los endpoints de generación y embeddings — se rellenan en
   `config.yml` (cualquier proveedor compatible con OpenAI; la plantilla por
   defecto usa DeepSeek para chat y Qwen3 embeddings de SiliconFlow como ejemplo)

@@ -125,14 +125,17 @@ volumes:
     driver: local
 
 networks:
-  # Same key as in compose.data.yml. In the umbrella (docker-compose.yml) both
-  # declarations resolve to one network, created once. As a separate project
-  # (BEDTIMENEWS_NET_EXTERNAL=true) this instance joins the data layer's
-  # existing network. Two alternatives do NOT work: a second key that resolves
-  # to the same name makes a repeated umbrella `up -d` try to recreate the
-  # network while containers are attached; and always declaring it external
-  # breaks a fresh umbrella install, because Compose checks that external
-  # networks exist before creating the project's own.
+  # Same key AND the same definition as in compose.data.yml: Compose rejects a
+  # resource declared differently by two included files ("conflicts with
+  # imported resource"), so keep the two blocks identical. In the umbrella
+  # (docker-compose.yml) both resolve to one network, created once. As a
+  # separate project (BEDTIMENEWS_NET_EXTERNAL=true) this instance joins the
+  # data layer's existing network. Two alternatives do NOT work: a second key
+  # that resolves to the same name makes a repeated umbrella `up -d` try to
+  # recreate the network while containers are attached; and always declaring
+  # it external breaks a fresh umbrella install, because Compose checks that
+  # external networks exist before creating the project's own.
   bedtimenews_net:
+    driver: bridge
     name: ${BEDTIMENEWS_NET_NAME:-${COMPOSE_PROJECT_NAME}_bedtimenews_net}
     external: ${BEDTIMENEWS_NET_EXTERNAL:-false}

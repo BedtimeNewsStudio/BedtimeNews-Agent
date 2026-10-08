@@ -100,8 +100,20 @@ volumes:
     driver: local
 
 networks:
-  # Shared with every application instance's agent (compose.app.yml declares
-  # the same key). Keep this definition as is: changing it recreates the
-  # network in production.
+  # Shared with every application instance's agent. compose.app.yml declares
+  # the same key with exactly the same definition: Compose (2.24.6+) accepts a
+  # resource declared by two included files only when the definitions are
+  # identical, so keep the two blocks in sync. With BEDTIMENEWS_NET_* unset the
+  # name resolves to Compose's default `<project>_bedtimenews_net` (production:
+  # bedtimenews-agent_bedtimenews_net, the existing network) and the network is
+  # a plain bridge owned by this project. Never set BEDTIMENEWS_NET_* for the
+  # data layer.
+  # Keep `driver: bridge`: Compose labels the network with a hash of its
+  # configuration, and the existing production network was created from a
+  # bare `driver: bridge` declaration. Dropping the driver changes the hash, and
+  # the next `up` would stop postgres to remove and recreate the network.
+  # `name` and `external` do not enter the hash.
   bedtimenews_net:
     driver: bridge
+    name: ${BEDTIMENEWS_NET_NAME:-${COMPOSE_PROJECT_NAME}_bedtimenews_net}
+    external: ${BEDTIMENEWS_NET_EXTERNAL:-false}

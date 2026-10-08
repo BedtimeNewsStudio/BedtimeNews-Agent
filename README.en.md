@@ -72,7 +72,7 @@ termination are handled outside this repo.
 
 ### Prerequisites
 
-- Docker with Docker Compose 2.20 or later (the compose files use `include`)
+- Docker with Docker Compose 2.24.6 or later (the compose files use `include`; older releases reject the shared network declaration or overrides of included services)
 - API keys for the generation and embedding endpoints — filled into
   `config.yml` (any OpenAI-compatible vendor; the default template uses
   DeepSeek for chat and SiliconFlow Qwen3 embeddings as the example)

@@ -2,7 +2,7 @@
 # Umbrella file for self-hosting and local development: the whole stack in one
 # project, exactly as before the split.
 #
-#   docker compose up -d            # needs Docker Compose 2.20+ (`include`)
+#   docker compose up -d            # needs Docker Compose 2.24.6+ (see README)
 #
 # The stack is two layers (docs/designs/20261008_blue-green-deployment.md):
 #   compose.data.yml   postgres + indexer, upgraded in place
