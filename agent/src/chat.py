@@ -8,6 +8,7 @@ from collections.abc import AsyncGenerator
 
 from .agent import agent_query, agent_stream_query
 from .models import ChatRequest, ChatResponse
+from .snapshots import SnapshotUnavailable
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,11 @@ HEARTBEAT_INTERVAL_S = 1.0
 # (docs/designs/20261007_rag-snapshot-architecture.md, 6.8).
 CHAT_TIME_LIMIT_S = 240.0
 CHAT_TIMEOUT_MESSAGE = "回答超时，请缩小问题范围后重试。"
+# Error events reach the browser verbatim, so they carry these fixed messages;
+# the exception itself is logged (it can contain internal URLs, SQL or
+# provider error text).
+CHAT_UNAVAILABLE_MESSAGE = "知识库暂时不可用，请稍后重试。"
+CHAT_FAILED_MESSAGE = "回答生成失败，请稍后重试。"
 
 
 class ChatTimeout(TimeoutError):
@@ -112,9 +118,12 @@ async def stream_chat(request: ChatRequest) -> AsyncGenerator[str]:
             history = [turn.model_dump() for turn in request.history]
             async for event in agent_stream_query(request.question, history):
                 await queue.put(("event", event))
-        except Exception as e:  # noqa: BLE001 - forwarded to the client below
+        except SnapshotUnavailable as e:
+            logger.warning("Chat stream without a readable snapshot: %s", e)
+            await queue.put(("error", CHAT_UNAVAILABLE_MESSAGE))
+        except Exception:  # noqa: BLE001 - reported to the client below
             logger.exception("Error streaming chat response")
-            await queue.put(("error", str(e)))
+            await queue.put(("error", CHAT_FAILED_MESSAGE))
         finally:
             await queue.put(("done", None))
 

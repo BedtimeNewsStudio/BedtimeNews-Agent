@@ -29,7 +29,9 @@ class EndpointConfig(BaseModel):
     api_key: str = ""
     base_url: str = ""  # empty -> client default (api.openai.com)
     model: str = ""
-    fast_model: str = ""  # cheap calls (relevance grading); empty -> model
+    # generation group only: cheap calls (condense, route, rewrite, grading);
+    # empty -> model
+    fast_model: str = ""
     # embedding group only: explicit vector-space id. Empty -> "<model>@<dim>".
     # Must equal the space the indexer built the snapshot in.
     space_id: str = ""

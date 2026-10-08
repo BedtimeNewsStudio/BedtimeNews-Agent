@@ -152,6 +152,12 @@ El flujo también puede contener `answer_final` cuando el post-procesamiento
 modificó la respuesta transmitida, `error` en caso de fallo, y comentarios de
 latido `: ping` durante las etapas silenciosas del pipeline.
 
+Sin un snapshot legible, la respuesta sin streaming es `503` y una respuesta en
+streaming lleva un evento `error` (`知识库暂时不可用，请稍后重试。`); cualquier
+otro fallo es un `500` (`Chat processing failed`) o un evento `error`
+(`回答生成失败，请稍后重试。`). El texto de la excepción solo se registra en el
+log, nunca se devuelve.
+
 **Límite de tiempo.** Un `/chat` puede durar como mucho 240 segundos
 (`CHAT_TIME_LIMIT_S` en `src/chat.py`). Un stream que lo alcanza termina con un
 evento `error` (`回答超时，请缩小问题范围后重试。`) seguido de `[DONE]`; una
@@ -294,7 +300,7 @@ generation:
   api_key: "..."
   base_url: "https://api.deepseek.com"
   model: "deepseek-v4-flash"        # modelo de generación (respuesta final)
-  fast_model: "deepseek-v4-flash"   # modelo rápido (enrutamiento, calificación)
+  fast_model: "deepseek-v4-flash"   # modelo rápido (condensación, enrutamiento, reescritura, calificación)
 
 embedding:
   api_key: "..."

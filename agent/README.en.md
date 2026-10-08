@@ -145,7 +145,9 @@ streamed answer, `error` on failure, and `: ping` heartbeat comments during
 silent pipeline stages.
 
 Without a readable snapshot, the non-streaming response is `503`; a streaming
-response carries an `error` event.
+response carries an `error` event (`知识库暂时不可用，请稍后重试。`). Any other
+failure is a `500` (`Chat processing failed`) or an `error` event
+(`回答生成失败，请稍后重试。`): the exception text is logged, never returned.
 
 **Time limit.** One `/chat` may run for at most 240 seconds
 (`CHAT_TIME_LIMIT_S` in `src/chat.py`). A stream that reaches it ends with an
@@ -284,7 +286,7 @@ generation:
   api_key: "..."
   base_url: "https://api.deepseek.com"
   model: "deepseek-v4-flash"        # generation model (final answer)
-  fast_model: "deepseek-v4-flash"   # fast model (routing, query rewrite, grading)
+  fast_model: "deepseek-v4-flash"   # fast model (condense, routing, query rewrite, grading)
 
 embedding:
   api_key: "..."

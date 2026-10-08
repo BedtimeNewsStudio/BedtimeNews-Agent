@@ -37,7 +37,8 @@ Control Flow Functions:
 
 State Management:
     AgentState (TypedDict) holds all workflow state and evolves through nodes:
-    - Initial state: question, optional history, and retry counters
+    - Initial state: question, optional history, the RAG snapshot pinned for
+      this request, and retry counters
     - After condense: standalone_question resolved
     - After route: needs_retrieval flag set
     - After query_rewrite: rewritten_queries added

@@ -129,6 +129,10 @@ data: [DONE]
 后处理修改了已流式输出的回答时，流中还会出现 `answer_final`；失败时出现
 `error`；流水线静默阶段会发送 `: ping` 心跳注释。
 
+没有可读快照时，非流式请求返回 `503`，流式响应发送 `error` 事件（`知识库暂时不可用，请稍后重试。`）；
+其他失败返回 `500`（`Chat processing failed`）或 `error` 事件（`回答生成失败，请稍后重试。`）。
+异常细节只写入日志，不会返回给客户端。
+
 **时间上限。** 单次 `/chat` 最长运行 240 秒（`src/chat.py` 中的 `CHAT_TIME_LIMIT_S`）。流式请求到达上限时以
 `error` 事件（`回答超时，请缩小问题范围后重试。`）加 `[DONE]` 结束；非流式请求返回 `504`。
 该上限是各层停止时限中最内的一层（240 秒上限 < 270 秒 uvicorn 优雅停止 < 300 秒 compose
@@ -254,7 +258,7 @@ generation:
   api_key: "..."
   base_url: "https://api.deepseek.com"
   model: "deepseek-v4-flash"        # 生成模型（最终回答）
-  fast_model: "deepseek-v4-flash"   # 快速模型（路由、查询改写、评分）
+  fast_model: "deepseek-v4-flash"   # 快速模型（问题改写为独立问题、路由、查询改写、评分）
 
 embedding:
   api_key: "..."

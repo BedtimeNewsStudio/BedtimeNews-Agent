@@ -2,7 +2,7 @@
 
 The indexer publishes immutable snapshots (``rag_s<id>`` schemas) registered
 in ``rag_meta.snapshots``. The agent keeps the snapshot it serves in process
-memory; request handling only reads that value (``current()``) and never
+memory; request handling only reads that value (``require()``) and never
 queries ``rag_meta``. A background thread re-applies the selection rule every
 ``POLL_INTERVAL_S`` seconds and swaps the value atomically, so new requests
 see a newly published (or rolled-back) snapshot without a restart, while a
@@ -204,11 +204,8 @@ class SnapshotManager:
         self._thread: threading.Thread | None = None
 
     # -- request path: memory only ------------------------------------------
-    def current(self) -> Snapshot | None:
-        return self._snapshot  # single reference read: atomic
-
     def require(self) -> Snapshot:
-        snapshot = self._snapshot
+        snapshot = self._snapshot  # single reference read: atomic
         if snapshot is None:
             raise SnapshotUnavailable(self._reason or "no readable snapshot")
         return snapshot

@@ -8,7 +8,7 @@ not an automated test.
 
 Usage:
     # Score the labelled set and append the run to eval_results/retriever.json
-# (repo) or /var/log/agent/eval_results/retriever.json (container)
+    # (repo) or /var/log/agent/eval_results/retriever.json (container)
     docker compose run --rm --build \
       --volume ./agent/eval_results:/app/eval_results \
       agent python -m src.eval_retriever --labelled

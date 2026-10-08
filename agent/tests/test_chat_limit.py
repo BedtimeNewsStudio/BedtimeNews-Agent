@@ -95,3 +95,40 @@ def test_limit_layering_matches_the_deployment_files():
     assert "--timeout-graceful-shutdown" in agent_docker
     assert "270" in agent_docker and '"270"' in web_docker
     assert app_compose.count("stop_grace_period: 300s") == 2
+
+
+def test_stream_errors_reach_the_client_without_internal_detail(monkeypatch):
+    async def broken(_question, _history):
+        yield {"type": "step", "step": "route", "content": "RAG"}
+        raise RuntimeError("could not connect to server at 10.0.0.5:5432")
+
+    monkeypatch.setattr(chat, "agent_stream_query", broken)
+    chunks = _collect(ChatRequest(question="q", stream=True))
+
+    assert _events(chunks)[-1] == {
+        "type": "error",
+        "content": chat.CHAT_FAILED_MESSAGE,
+    }
+    assert "10.0.0.5" not in "".join(chunks)
+
+
+def test_stream_without_a_snapshot_says_the_archive_is_unavailable(monkeypatch):
+    from src.snapshots import SnapshotUnavailable
+
+    async def no_snapshot(_question, _history):
+        raise SnapshotUnavailable("no published snapshot in vector space x")
+        yield  # pragma: no cover - makes this an async generator
+
+    monkeypatch.setattr(chat, "agent_stream_query", no_snapshot)
+    events = _events(_collect(ChatRequest(question="q", stream=True)))
+    assert events == [{"type": "error", "content": chat.CHAT_UNAVAILABLE_MESSAGE}]
+
+
+def test_nonstream_failure_is_a_500_without_internal_detail(client, monkeypatch):
+    def broken(_question, _history):
+        raise RuntimeError("provider said: invalid api key sk-123")
+
+    monkeypatch.setattr(chat, "agent_query", broken)
+    response = client.post("/chat", json={"question": "q"})
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Chat processing failed"}

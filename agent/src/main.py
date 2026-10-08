@@ -126,10 +126,12 @@ async def chat(request: ChatRequest):
             detail=f"Knowledge base unavailable: {e}",
         ) from e
     except Exception as e:
+        # The exception text stays in the log; it can carry upstream URLs,
+        # SQL or provider messages that do not belong in a response.
         logger.exception("Chat error")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Chat processing failed: {str(e)}",
+            detail="Chat processing failed",
         ) from e
 
 
@@ -168,14 +170,21 @@ async def transcript_index(request: Request) -> Response:
     try:
         snapshot = snapshot_manager.require()
         items = await asyncio.to_thread(list_transcripts, snapshot.schema_name)
+    except SnapshotUnavailable as exc:
+        logger.warning("Transcript index unavailable: %s", exc)
+        raise _transcripts_unavailable() from exc
     except Exception as exc:
         logger.exception("Transcript index unavailable")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Transcript service unavailable",
-        ) from exc
+        raise _transcripts_unavailable() from exc
     payload = {"items": items}
     return _conditional_json(request, payload, _etag_for(payload))
+
+
+def _transcripts_unavailable() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Transcript service unavailable",
+    )
 
 
 @app.get("/transcripts/{doc_id:path}")
@@ -187,12 +196,12 @@ async def transcript_detail(doc_id: str, request: Request) -> Response:
         article = await asyncio.to_thread(
             get_transcript, snapshot.schema_name, canonical
         )
+    except SnapshotUnavailable as exc:
+        logger.warning("Transcript unavailable: %s", exc)
+        raise _transcripts_unavailable() from exc
     except Exception as exc:
         logger.exception("Transcript unavailable: %s", canonical)
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Transcript service unavailable",
-        ) from exc
+        raise _transcripts_unavailable() from exc
     if article is None:
         raise HTTPException(status_code=404, detail="Transcript not found")
     return _conditional_json(request, article, _etag_for(article))
