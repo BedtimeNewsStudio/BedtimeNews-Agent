@@ -7,7 +7,7 @@ read the full transcript archive in the same place. Q&A is powered by an
 agentic RAG (Retrieval-Augmented Generation) system — automatic routing,
 semantic search, retrieved-transcript context, and episode citations.
 
-<video src="https://github.com/user-attachments/assets/ce5061b0-a96a-4efa-918f-4b6e68350bcd" controls playsinline width="100%"></video>
+[![Bedtime News Knowledge Base demo video (YouTube)](https://img.youtube.com/vi/9_SlMaqBvcU/maxresdefault.jpg)](https://www.youtube.com/watch?v=9_SlMaqBvcU)
 
 > Video in Chinese. Can't play it? Try the site directly at [bedtime.blog](https://bedtime.blog).
 
