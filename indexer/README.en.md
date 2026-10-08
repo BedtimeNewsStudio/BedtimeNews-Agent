@@ -34,7 +34,7 @@ One run:
 5. **GC, then disk precheck**: refuse to build unless the Postgres data filesystem has at least max(2 GB, 3 × the base snapshot's size) free.
 6. **Phase A** (no transaction): chunk the transcripts to (re)index; reuse vectors by chunk-text hash, call the embedding API only for misses; render reader projections. New vectors stay in memory only.
 7. **Phase B** (one transaction holding the database advisory lock): create `rag_s<id>` → copy the base's four tables (incremental) → delete changed and deleted transcripts → insert chunks (reused vectors are joined server-side) → write `index_state`, titles and reader projections → `ANALYZE` → build the HNSW index → self-check → recheck that the base is still published and still the newest of its lineage → register as `published` → grant `rag_agent` read access → `COMMIT`.
-8. **GC again**, then update `rag_meta.indexer_status`.
+8. **GC again** (a failure here is only logged: the run's result stands), then update `rag_meta.indexer_status`.
 
 Any failure, a killed process or a dropped connection rolls the whole Phase B transaction back: no half-built schema or registry row is ever left, and the published snapshots are untouched. On `SIGTERM` the indexer cancels the running statement and exits (compose allows 30 s).
 
@@ -135,10 +135,10 @@ docker compose exec indexer python -m src.debugger stats
 # Recent file actions
 docker compose exec indexer python -m src.debugger recent --limit 20
 
-# Indexing history for all files
+# Index state: all files in the current snapshot
 docker compose exec indexer python -m src.debugger history
 
-# History for specific file
+# Index state of one file
 docker compose exec indexer python -m src.debugger history ShuiQianXiaoXi/0901-1000/0960.md
 ```
 
@@ -400,8 +400,7 @@ indexer/src/
 ├── change_detector.py   # Source/body hash diff against a snapshot's index_state
 ├── chunker.py           # Semantic chunking (CHUNKER_VERSION)
 ├── embeddings.py        # Embedding generation (OpenAI-compatible client)
-├── vector_db.py         # Read-only queries for the debugger
-├── debugger.py          # Debug utilities
+├── debugger.py          # Read-only debug commands (test, stats, history, recent, inspect, logs)
 ├── transcript_export.py # Reader projection (Markdown -> HTML)
 ├── uri_mapping.py       # URI映射.md title table parser
 ├── models.py            # Data models

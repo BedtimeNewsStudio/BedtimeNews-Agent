@@ -34,7 +34,7 @@
 5. **先 GC，再做磁盘预检**：Postgres 数据所在文件系统的剩余空间必须 ≥ max(2 GB, 3 × 基础快照大小)，否则不构建。
 6. **阶段 A**（事务外）：对需要（重新）索引的文稿分块；按分块文本哈希复用向量，只为未命中的分块调用 embedding API；渲染阅读器投影。新向量只保存在内存中。
 7. **阶段 B**（单个事务，持有数据库 advisory lock）：创建 `rag_s<id>` → 复制基础快照的四张表（增量）→ 删除变化和已删除文稿的行 → 插入分块（复用的向量在服务端关联写入）→ 写入 `index_state`、标题和阅读器投影 → `ANALYZE` → 建 HNSW 索引 → 自检 → 复核基础快照仍为已发布且仍是其谱系中最新 → 登记为 `published` → 授予 `rag_agent` 读权限 → `COMMIT`。
-8. **再次 GC**，然后更新 `rag_meta.indexer_status`。
+8. **再次 GC**（此处失败只记录日志，不改变本次运行的结果），然后更新 `rag_meta.indexer_status`。
 
 任何失败、进程被杀或连接断开都会让阶段 B 的整个事务回滚：不会留下构建一半的 schema 或注册行，已发布的快照不受影响。收到 `SIGTERM` 时 Indexer 取消正在执行的语句并退出（compose 留出 30 秒）。
 
@@ -134,10 +134,10 @@ docker compose exec indexer python -m src.debugger stats
 # 最近的文件操作
 docker compose exec indexer python -m src.debugger recent --limit 20
 
-# 所有文件的索引历史
+# 索引状态：当前快照中的所有文件
 docker compose exec indexer python -m src.debugger history
 
-# 指定文件的历史
+# 指定文件的索引状态
 docker compose exec indexer python -m src.debugger history ShuiQianXiaoXi/0901-1000/0960.md
 ```
 
@@ -397,8 +397,7 @@ indexer/src/
 ├── change_detector.py   # 与快照 index_state 的源文件/正文哈希比对
 ├── chunker.py           # 语义分块（CHUNKER_VERSION）
 ├── embeddings.py        # Embedding 生成（OpenAI 兼容客户端）
-├── vector_db.py         # 调试工具使用的只读查询
-├── debugger.py          # 调试工具
+├── debugger.py          # 只读调试命令（test、stats、history、recent、inspect、logs）
 ├── transcript_export.py # 阅读器投影（Markdown -> HTML）
 ├── uri_mapping.py       # URI映射.md 标题表解析
 ├── models.py            # 数据模型

@@ -1,9 +1,9 @@
 """Shared test fixtures/config for the indexer.
 
-Some modules under test (e.g. change_detector -> vector_db -> settings) import
-`settings` transitively, and `embeddings` builds its OpenAI client at import
-time. Provide dummy endpoint values via environment overrides so those imports
-succeed without a real config.yml; `setdefault` leaves any real value in place.
+Some modules under test (e.g. builder, pipeline) import `settings`
+transitively, and `embeddings` builds its OpenAI client at import time. Provide
+dummy endpoint values via environment overrides so those imports succeed
+without a real config.yml; `setdefault` leaves any real value in place.
 """
 
 import os

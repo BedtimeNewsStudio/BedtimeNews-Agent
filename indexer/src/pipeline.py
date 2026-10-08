@@ -120,7 +120,11 @@ def _locked_run(*, full: bool, sync: bool) -> RunResult:
             published = True
             logger.info("Published snapshot %s: %s", snapshot_id, stats)
             result = RunResult("published", snapshot_id)
-        catalog.collect_garbage(conn)
+        try:
+            catalog.collect_garbage(conn)
+        except Exception:
+            # The run's outcome is already decided; the next run retries GC.
+            logger.exception("GC after the run failed")
     except BuildBusy as exc:
         logger.info("Skipped: %s", exc)
         result = RunResult("skipped_busy", error=str(exc))

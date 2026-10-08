@@ -34,7 +34,7 @@ Una ejecución:
 5. **GC y después comprobación de disco**: no se construye salvo que el sistema de archivos de datos de Postgres tenga libre al menos max(2 GB, 3 × el tamaño del snapshot base).
 6. **Fase A** (sin transacción): fragmenta las transcripciones a (re)indexar; reutiliza vectores por hash del texto del fragmento y llama a la API de embeddings solo para los fallos; renderiza las proyecciones de lectura. Los vectores nuevos solo viven en memoria.
 7. **Fase B** (una transacción con el bloqueo consultivo de la base de datos): crea `rag_s<id>` → copia las cuatro tablas del base (incremental) → borra las transcripciones modificadas y eliminadas → inserta los fragmentos (los vectores reutilizados se unen en el servidor) → escribe `index_state`, títulos y proyecciones de lectura → `ANALYZE` → construye el índice HNSW → autocomprobación → vuelve a comprobar que el base sigue publicado y sigue siendo el más reciente de su linaje → lo registra como `published` → concede lectura a `rag_agent` → `COMMIT`.
-8. **GC de nuevo** y actualización de `rag_meta.indexer_status`.
+8. **GC de nuevo** (un fallo aquí solo se registra en el log: el resultado de la ejecución se mantiene) y actualización de `rag_meta.indexer_status`.
 
 Cualquier fallo, un proceso terminado o una conexión caída revierte toda la transacción de la fase B: nunca queda un esquema a medio construir ni una fila de registro, y los snapshots publicados no se ven afectados. Con `SIGTERM` el indexador cancela la sentencia en curso y termina (compose concede 30 s).
 
@@ -135,10 +135,10 @@ docker compose exec indexer python -m src.debugger stats
 # Acciones de archivo recientes
 docker compose exec indexer python -m src.debugger recent --limit 20
 
-# Historial de indexación de todos los archivos
+# Estado del índice: todos los archivos del snapshot actual
 docker compose exec indexer python -m src.debugger history
 
-# Historial de un archivo concreto
+# Estado del índice de un archivo concreto
 docker compose exec indexer python -m src.debugger history ShuiQianXiaoXi/0901-1000/0960.md
 ```
 
@@ -401,8 +401,7 @@ indexer/src/
 ├── change_detector.py   # Comparación de hashes de origen/cuerpo con el index_state de un snapshot
 ├── chunker.py           # Fragmentación semántica (CHUNKER_VERSION)
 ├── embeddings.py        # Generación de embeddings (cliente compatible con OpenAI)
-├── vector_db.py         # Consultas de solo lectura para el depurador
-├── debugger.py          # Utilidades de depuración
+├── debugger.py          # Comandos de depuración de solo lectura (test, stats, history, recent, inspect, logs)
 ├── transcript_export.py # Proyección de lectura (Markdown -> HTML)
 ├── uri_mapping.py       # Analizador de la tabla de títulos URI映射.md
 ├── models.py            # Modelos de datos

@@ -25,7 +25,7 @@ generation:
   api_key: "" # required
   base_url: "https://api.deepseek.com" # DeepSeek; SiliconFlow: https://api.siliconflow.com/v1
   model: "deepseek-v4-flash" # answer generation
-  fast_model: "deepseek-v4-flash" # cheap calls (routing, grading); empty -> model
+  fast_model: "deepseek-v4-flash" # cheap calls (condense, route, rewrite, grading); empty -> model
 
 # -- Embedding model ---------------------------------------------------------
 # The model and its output dimension (EMBEDDING_DIM in .env) name a vector

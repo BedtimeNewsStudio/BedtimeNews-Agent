@@ -455,6 +455,25 @@ def test_gc_lock_timeout_is_retried_later(corpus, fake_embed, query, monkeypatch
     conn.close()
 
 
+def test_gc_failure_after_publishing_does_not_fail_the_run(
+    corpus, fake_embed, query, monkeypatch
+):
+    real_gc = catalog.collect_garbage
+    calls = []
+
+    def gc_failing_after_publish(conn):
+        calls.append(conn)
+        if len(calls) == 2:  # the GC that follows the publish
+            raise RuntimeError("simulated GC failure")
+        return real_gc(conn)
+
+    monkeypatch.setattr(catalog, "collect_garbage", gc_failing_after_publish)
+    result = build()
+    assert result.result == "published"
+    assert len(calls) == 2
+    assert status(query) == ("published", None, 0)
+
+
 LEGACY_DDL = """
 CREATE SCHEMA rag;
 CREATE TABLE rag.document_chunks (

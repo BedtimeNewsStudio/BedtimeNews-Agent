@@ -1,13 +1,11 @@
-"""Docker container entrypoint for the indexer service.
+"""Container entry point for the indexer service.
 
-Usage:
-    # Wait for the configured schedule, do not run immediately (default)
-    docker compose exec indexer python -m src.entrypoint
+The image runs ``python -m src.entrypoint --run-immediately``: one build at
+startup, then a build at every ``indexer_cron_schedule`` slot. Without the flag
+the first build waits for the first slot.
 
-    # Build immediately, then start scheduled execution
-    docker compose exec indexer python -m src.entrypoint --run-immediately
-
-    # Build once without scheduling (for manual execution)
+For a one-off build in the running container use the ops command instead (a
+second entrypoint would start a second scheduler):
     docker compose exec indexer python -m src.snapshots build
 """
 

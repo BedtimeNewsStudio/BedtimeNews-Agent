@@ -1,8 +1,10 @@
-"""Debugging utilities for the RAG snapshots.
+"""Read-only debugging commands for the RAG snapshots.
 
-stats / history / inspect read the current snapshot (history reads its
-index_state); recent reads rag_state.file_actions. Snapshot operations
-(list, retire, pin, build, ...) live in ``python -m src.snapshots``.
+stats / history / inspect read the current snapshot: the newest published
+snapshot of the indexer's current lineage, falling back to the newest
+published snapshot of any lineage (history reads its index_state). recent
+reads rag_state.file_actions. Nothing here writes; snapshot operations (list,
+retire, pin, build, ...) live in ``python -m src.snapshots``.
 
 Usage (inside Docker container):
     docker compose exec indexer python -m src.debugger test
@@ -19,16 +21,14 @@ Usage (inside Docker container):
 import argparse
 import logging
 import sys
+from typing import Any
 
+from psycopg2 import sql
+from psycopg2.extras import RealDictCursor
+
+from . import catalog
+from .db import connection
 from .scheduler import LOG_FILE
-from .vector_db import (
-    get_file_chunks,
-    get_indexed_files,
-    get_indexing_history,
-    get_recent_file_actions,
-    get_table_stats,
-    test_connection,
-)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -38,20 +38,127 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def _cmd_test():
-    """Test database connection."""
-    if test_connection():
+# ---------------------------------------------------------------------------
+# Queries
+# ---------------------------------------------------------------------------
+
+
+def _current_schema(cursor) -> str:
+    with cursor.connection.cursor() as plain:
+        plain.execute("SELECT to_regclass('rag_meta.snapshots') IS NOT NULL")
+        if not plain.fetchone()[0]:
+            raise RuntimeError("No snapshot registry yet (the indexer has not run)")
+        snapshots = catalog.list_snapshots(plain)
+    snap = catalog.latest_published(
+        snapshots, lineage=catalog.current_lineage()
+    ) or catalog.latest_published(snapshots)
+    if snap is None:
+        raise RuntimeError("No published snapshot")
+    return snap.schema_name
+
+
+def _query(query: str, params: tuple = (), *, snapshot: bool = True) -> list[dict]:
+    """Run a read-only query; ``{s}`` names the current snapshot's schema."""
+    with connection() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            statement = sql.SQL(query)
+            if snapshot:
+                schema = sql.Identifier(_current_schema(cursor))
+                statement = statement.format(s=schema)
+            cursor.execute(statement, params)
+            rows = [dict(row) for row in cursor.fetchall()]
+        conn.rollback()
+    return rows
+
+
+def check_connection() -> bool:
+    """Print the server and pgvector versions; True when pgvector is installed."""
+    with connection() as conn, conn.cursor() as cursor:
+        cursor.execute("SELECT version()")
+        print(cursor.fetchone()[0])
+        cursor.execute("SELECT extversion FROM pg_extension WHERE extname = 'vector'")
+        row = cursor.fetchone()
+        print(f"pgvector: {row[0] if row else 'NOT INSTALLED'}")
+        return row is not None
+
+
+def get_table_stats() -> dict[str, Any]:
+    return _query(
+        """
+        SELECT COUNT(*) AS total_chunks,
+               COUNT(DISTINCT doc_id) AS total_documents,
+               (SELECT COUNT(*) FROM {s}.transcripts) AS reader_documents
+        FROM {s}.document_chunks
+        """
+    )[0]
+
+
+def get_index_state(file_path: str) -> dict[str, Any] | None:
+    rows = _query(
+        """
+        SELECT file_path, source_hash, body_hash, body_normalization_version,
+               indexed_at, source_observed_at
+        FROM {s}.index_state WHERE file_path = %s
+        """,
+        (file_path,),
+    )
+    return rows[0] if rows else None
+
+
+def get_indexed_files() -> list[str]:
+    return [row["file_path"] for row in _query("SELECT file_path FROM {s}.index_state")]
+
+
+def get_file_chunks(doc_id: str) -> list[dict[str, Any]]:
+    return _query(
+        """
+        SELECT chunk_id, chunk_index, heading, word_count,
+               embedding IS NOT NULL AS has_embedding
+        FROM {s}.document_chunks WHERE doc_id = %s ORDER BY chunk_index
+        """,
+        (doc_id,),
+    )
+
+
+def get_recent_file_actions(limit: int = 10) -> list[dict[str, Any]]:
+    return _query(
+        """
+        SELECT file_path, action_type, source_hash, body_hash, processed_at
+        FROM rag_state.file_actions
+        ORDER BY processed_at DESC NULLS LAST, id DESC
+        LIMIT %s
+        """,
+        (limit,),
+        snapshot=False,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Commands
+# ---------------------------------------------------------------------------
+
+
+def _log_index_state(state: dict[str, Any]) -> None:
+    logger.info(f"  Source hash:   {state['source_hash']}")
+    logger.info(f"  Body hash:     {state['body_hash']}")
+    logger.info(f"  Body version:  {state['body_normalization_version']}")
+    logger.info(f"  Indexed at:    {state['indexed_at']}")
+    logger.info(f"  Source seen:   {state['source_observed_at']}")
+
+
+def _cmd_test() -> bool:
+    """Check the database connection and the pgvector extension."""
+    if check_connection():
         logger.info("Database ready")
         return True
-    else:
-        logger.error("Database test failed")
-        return False
+    logger.error("Database test failed")
+    return False
 
 
 def _cmd_stats():
-    """Display database statistics."""
+    """Display the current snapshot's statistics."""
     logger.info("=" * 60)
-    logger.info("Database Statistics")
+    logger.info("Current snapshot statistics")
     logger.info("=" * 60)
 
     stats = get_table_stats()
@@ -62,18 +169,14 @@ def _cmd_stats():
 
 
 def _cmd_history(file_path: str | None = None):
-    """Display indexing history."""
+    """Display the current snapshot's index state for one file, or list all."""
     if file_path:
-        logger.info(f"Indexing history for: {file_path}")
-        history = get_indexing_history(file_path)
-        if history:
-            logger.info(f"  Source hash:   {history['source_hash']}")
-            logger.info(f"  Body hash:     {history['body_hash']}")
-            logger.info(f"  Body version:  {history['body_normalization_version']}")
-            logger.info(f"  Indexed at:    {history['indexed_at']}")
-            logger.info(f"  Source seen:   {history['source_observed_at']}")
+        logger.info(f"Index state for: {file_path}")
+        state = get_index_state(file_path)
+        if state:
+            _log_index_state(state)
         else:
-            logger.info("  No history found")
+            logger.info("  Not in the current snapshot")
     else:
         logger.info("All indexed files:")
         indexed_files = get_indexed_files()
@@ -101,13 +204,9 @@ def _cmd_inspect(file_path: str):
     """Inspect a specific file's chunks."""
     logger.info(f"Inspecting: {file_path}")
 
-    history = get_indexing_history(file_path)
-    if history:
-        logger.info(f"  Source hash:   {history['source_hash']}")
-        logger.info(f"  Body hash:     {history['body_hash']}")
-        logger.info(f"  Body version:  {history['body_normalization_version']}")
-        logger.info(f"  Indexed at:    {history['indexed_at']}")
-        logger.info(f"  Source seen:   {history['source_observed_at']}")
+    state = get_index_state(file_path)
+    if state:
+        _log_index_state(state)
 
     chunks = get_file_chunks(file_path)
     if chunks:
@@ -127,20 +226,18 @@ def _cmd_inspect(file_path: str):
 
 def _cmd_logs(lines: int | None = None, show_all: bool = False):
     """Display scheduled pipeline run logs."""
-
-    log_file = LOG_FILE
-    if not log_file.exists():
+    if not LOG_FILE.exists():
         logger.info(
             "No scheduler logs yet. The file is created when the indexer starts."
         )
         logger.info("Schedule: see indexer_cron_schedule in config.yml")
         return
 
-    logger.info(f"Scheduler logs from: {log_file}")
+    logger.info(f"Scheduler logs from: {LOG_FILE}")
     logger.info("=" * 60)
 
     try:
-        with open(log_file) as f:
+        with open(LOG_FILE) as f:
             all_lines = f.readlines()
 
         if not all_lines:
@@ -165,18 +262,19 @@ def _cmd_logs(lines: int | None = None, show_all: bool = False):
 
 
 def main():
-    """Main entry point for database utilities."""
     parser = argparse.ArgumentParser(
-        description="RAG Vector Database Utilities",
+        description="Read-only debugging commands for the RAG snapshots",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Command to execute")
 
-    subparsers.add_parser("test", help="Test database connection")
-    subparsers.add_parser("stats", help="Display database statistics")
+    subparsers.add_parser("test", help="Check the database connection and pgvector")
+    subparsers.add_parser("stats", help="Display the current snapshot's statistics")
 
-    history_parser = subparsers.add_parser("history", help="Display indexing history")
+    history_parser = subparsers.add_parser(
+        "history", help="Display the current snapshot's index state"
+    )
     history_parser.add_argument("file", nargs="?", help="Specific file to inspect")
 
     recent_parser = subparsers.add_parser(
@@ -205,8 +303,7 @@ def main():
 
     try:
         if args.command == "test":
-            success = _cmd_test()
-            sys.exit(0 if success else 1)
+            sys.exit(0 if _cmd_test() else 1)
         elif args.command == "stats":
             _cmd_stats()
         elif args.command == "history":

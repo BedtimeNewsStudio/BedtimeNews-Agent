@@ -12,6 +12,10 @@ BEDTIMENEWS_TRANSCRIPTS_REPO_URL = (
     "https://github.com/BedtimeNewsStudio/BedtimeNews-Transcripts.git"
 )
 
+# A git command that hangs (a stalled network transfer) would otherwise hold
+# the run lock forever and stop every later scheduled run.
+GIT_TIMEOUT_S = 900
+
 
 def head_commit() -> str | None:
     """The commit the working tree is pinned to, or None outside a git clone."""
@@ -85,10 +89,15 @@ def sync_repository() -> None:
 
 
 def _run_command(cmd: list[str], cwd: Path | None = None) -> tuple[bool, str]:
-    """Run a shell command and return success status and combined output."""
+    """Run a command and return its success status and combined output."""
     try:
         result = subprocess.run(
-            cmd, cwd=cwd, capture_output=True, text=True, check=False
+            cmd,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=GIT_TIMEOUT_S,
         )
         # Include stderr: git writes its error messages there, and losing them
         # makes clone/pull failures undiagnosable from the logs.
