@@ -24,6 +24,26 @@ jobs:
   test:
     name: pytest
     runs-on: ubuntu-latest
+    # Same database gate as ci.yml. Tag pushes do not run that workflow, and
+    # without PGTEST_HOST the snapshot tests skip instead of failing the release.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGTEST_HOST: localhost
+      PGTEST_PORT: "5432"
+      PGTEST_USER: postgres
+      PGTEST_PASSWORD: postgres
     steps:
       - uses: actions/checkout@v7
 

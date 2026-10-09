@@ -1,4 +1,5 @@
 from datetime import datetime
+from pathlib import Path
 
 import pytest
 from src import scheduler
@@ -75,3 +76,18 @@ def test_overrunning_run_does_not_trigger_catch_up(monkeypatch):
     assert len(runs) == 2
     assert len(starts) == 2
     assert starts == sorted(starts)
+
+
+def test_release_workflow_runs_the_database_suite():
+    """A version tag does not run ci.yml, so the release job must not skip it.
+
+    indexer/tests/test_pipeline.py and agent/tests/test_snapshots.py skip the
+    whole database suite when PGTEST_HOST is unset. That is a silent pass on
+    a release that never started Postgres.
+    """
+    workflow = (
+        Path(__file__).resolve().parents[2] / ".github" / "workflows" / "release.yml"
+    ).read_text()
+    test_job = workflow.split("build-and-push:", 1)[0]
+    assert "pgvector/pgvector:pg18" in test_job
+    assert "PGTEST_HOST: localhost" in test_job

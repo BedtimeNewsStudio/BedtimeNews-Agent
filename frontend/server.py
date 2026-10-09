@@ -203,9 +203,9 @@ def _sse_error(message: str) -> bytes:
 def _resolve_version() -> str:
     """What to show in the masthead.
 
-    APP_VERSION is set from IMAGE_TAG by docker-compose, so a deployed release
-    reports the image tag actually running rather than whatever the source tree
-    last declared. Falling back to the installed package keeps a bare
+    APP_VERSION is set by compose to APP_IMAGE_TAG, falling back to IMAGE_TAG,
+    so a deployed release reports the tag actually running rather than whatever
+    the source tree last declared. Falling back to the installed package keeps a bare
     `uvicorn server:app` honest, and "dev" covers a checkout run in place.
     """
     tag = os.environ.get("APP_VERSION", "").strip()

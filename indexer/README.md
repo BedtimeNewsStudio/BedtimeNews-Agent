@@ -56,7 +56,7 @@ indexer_cron_schedule: "0 * * * *"      # 每小时（默认）
 
 ### 本地小样本模式
 
-`index_config.sample.yml` 固定选择八篇文稿，覆盖普通期号、小数期号、`misc` 与多个栏目。仅可在 `INDEXER_SCOPE=sample`、`INDEX_CONFIG_FILE=/app/index_config.sample.yml`、隔离的数据目录以及以 `_local` 结尾的 `POSTGRES_DB` 下运行；`POSTGRES_DB` 不以 `_local` 结尾时，每次构建都会被拒绝。`docker-compose.sample.yml` 提供服务覆盖配置（样本的 web 监听 `SAMPLE_FRONTEND_PORT`，默认 18080）。
+`index_config.sample.yml` 固定选择七篇文稿，覆盖普通期号、小数期号、`misc` 与多个栏目。仅可在 `INDEXER_SCOPE=sample`、`INDEX_CONFIG_FILE=/app/index_config.sample.yml`、隔离的数据目录以及以 `_local` 结尾的 `POSTGRES_DB` 下运行；`POSTGRES_DB` 不以 `_local` 结尾时，每次构建都会被拒绝。`docker-compose.sample.yml` 提供服务覆盖配置（样本的 web 监听 `SAMPLE_FRONTEND_PORT`，默认 18080）。
 
 ### 文档过滤规则
 

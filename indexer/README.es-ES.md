@@ -56,7 +56,7 @@ La siguiente ejecuci√≥n siempre se calcula desde el momento actual: una ejecuci√
 
 ### Modo de muestra local
 
-`index_config.sample.yml` selecciona ocho transcripciones deterministas que cubren URIs ordinarias, fraccionarias, `misc` y de varios programas. Solo se admite con `INDEXER_SCOPE=sample`, `INDEX_CONFIG_FILE=/app/index_config.sample.yml`, almacenamiento aislado y un `POSTGRES_DB` terminado en `_local`; el indexador se niega a construir en cualquier otra base de datos. `docker-compose.sample.yml` aporta las sobreescrituras de servicios (el web de muestra escucha en `SAMPLE_FRONTEND_PORT`, por defecto 18080).
+`index_config.sample.yml` selecciona siete transcripciones deterministas que cubren URIs ordinarias, fraccionarias, `misc` y de varios programas. Solo se admite con `INDEXER_SCOPE=sample`, `INDEX_CONFIG_FILE=/app/index_config.sample.yml`, almacenamiento aislado y un `POSTGRES_DB` terminado en `_local`; el indexador se niega a construir en cualquier otra base de datos. `docker-compose.sample.yml` aporta las sobreescrituras de servicios (el web de muestra escucha en `SAMPLE_FRONTEND_PORT`, por defecto 18080).
 
 ### Filtros de Documentos
 

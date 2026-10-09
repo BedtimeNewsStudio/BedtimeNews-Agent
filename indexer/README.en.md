@@ -56,7 +56,7 @@ The next run is always computed from the current time: a run that takes longer t
 
 ### Local sample mode
 
-`index_config.sample.yml` names eight deterministic transcripts covering ordinary, fractional, `misc`, and multi-channel URIs. Run it only with `INDEXER_SCOPE=sample`, `INDEX_CONFIG_FILE=/app/index_config.sample.yml`, an isolated data directory, and a `POSTGRES_DB` ending in `_local`; the indexer refuses to build into any other database. `docker-compose.sample.yml` supplies the service overrides (the sample web listens on `SAMPLE_FRONTEND_PORT`, default 18080).
+`index_config.sample.yml` names seven deterministic transcripts covering ordinary, fractional, `misc`, and multi-channel URIs. Run it only with `INDEXER_SCOPE=sample`, `INDEX_CONFIG_FILE=/app/index_config.sample.yml`, an isolated data directory, and a `POSTGRES_DB` ending in `_local`; the indexer refuses to build into any other database. `docker-compose.sample.yml` supplies the service overrides (the sample web listens on `SAMPLE_FRONTEND_PORT`, default 18080).
 
 ### Document Filters
 

@@ -111,6 +111,28 @@ class TestShippedConfigPatterns:
         assert _should_include_file(uri, self.CONFIG) is False
 
 
+def test_sample_readme_count_matches_the_sample_config():
+    """The three indexer READMEs name the same count index_config.sample.yml has."""
+    import yaml
+
+    root = pathlib.Path(__file__).parents[1]
+    sample = yaml.safe_load((root / "index_config.sample.yml").read_text())
+    count = len(sample["required_uris"])
+    assert count == len(sample["include"])
+    words = {
+        7: ("七篇", "seven", "siete"),
+        8: ("八篇", "eight", "ocho"),
+    }
+    zh, en, es = words[count]
+    assert f"固定选择{zh}" in (root / "README.md").read_text(encoding="utf-8")
+    assert f"names {en} deterministic" in (root / "README.en.md").read_text(
+        encoding="utf-8"
+    )
+    assert f"selecciona {es} transcripciones" in (root / "README.es-ES.md").read_text(
+        encoding="utf-8"
+    )
+
+
 def test_scan_fails_when_a_required_sample_uri_is_missing(tmp_path, monkeypatch):
     monkeypatch.setattr(file_scanner, "CONTENTS_DIR", tmp_path)
     monkeypatch.setattr(
