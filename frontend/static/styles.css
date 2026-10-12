@@ -1462,6 +1462,17 @@ body[data-view="browse"] .reading-scroll {
    Auto at max-width 900px. Full-screen Chat OR full-screen Archive/Reader.
    Bottom tabs switch modes. No manual desktop/mobile override. */
 @media (max-width: 900px) {
+  /* App-style navigation: suppress iOS Safari's long-press link preview.
+     Keep real links for normal navigation; article text remains selectable. */
+  .masthead-brand,
+  .mast-link,
+  .channel-chip,
+  .mobile-tab {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
   body {
     /* Reserve space for bottom tab bar */
     padding-bottom: 0;
