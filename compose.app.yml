@@ -19,7 +19,8 @@
 # NEVER written to the shared .env (an argument-less command would then bring
 # that version back). The fallbacks are for self-hosting only:
 #   -p / COMPOSE_PROJECT_NAME  instance identity
-#   APP_IMAGE_TAG              agent + web image version   (fallback: IMAGE_TAG, else latest)
+#   APP_IMAGE_TAG              web image version (and agent by default)
+#   APP_AGENT_IMAGE_TAG        temporary web-only upgrade workaround (see below)
 #   APP_PORT                   host port web publishes     (fallback: FRONTEND_PORT, else 8080)
 #   APP_INSTANCE               label reported by /healthz  (fallback: local)
 #   BEDTIMENEWS_NET_NAME       data-layer network name     (fallback: this project's own)
@@ -33,10 +34,17 @@
 # `up` never builds on its own: it reuses or PULLS the tagged image. For a
 # source build give the instance a distinct tag (e.g. 0.5.0-<sha>) and pass
 # --build in the same `up`, or compose tries to pull a tag that does not exist.
+#
+# TEMPORARY: the Python 3.15 agent image cannot currently be built because
+# ormsgpack's PyO3 dependency does not support 3.15. For a web-only upgrade,
+# set APP_AGENT_IMAGE_TAG to the last working agent release (0.4.2 at the time
+# of this workaround), build only web, then start the instance with --no-build.
+# Once the agent's full dependency set builds and tests pass on Python 3.15,
+# deploy both images with one APP_IMAGE_TAG and remove APP_AGENT_IMAGE_TAG.
 # ============================================================================
 services:
   agent:
-    image: ghcr.io/bedtimenewsstudio/bedtimenews-agent-agent:${APP_IMAGE_TAG:-${IMAGE_TAG:-latest}}
+    image: ghcr.io/bedtimenewsstudio/bedtimenews-agent-agent:${APP_AGENT_IMAGE_TAG:-${APP_IMAGE_TAG:-${IMAGE_TAG:-latest}}}
     build:
       context: ./agent
       dockerfile: Dockerfile
