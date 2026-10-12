@@ -56,6 +56,10 @@ from .snapshot_schema import (
 from .transcript_export import TRANSCRIPT_PROJECTION_VERSION, project_transcript
 from .uri_mapping import load_uri_titles, resolve_title
 
+# embeddings builds its OpenAI client at import. Keep that off this module's
+# import path; the client is created the first time a chunk is embedded.
+lazy from .embeddings import generate_embeddings
+
 logger = logging.getLogger(__name__)
 
 # Self-check parameters (design 6.5).
@@ -275,8 +279,6 @@ def _reuse_hashes(conn: Connection, source: SnapshotInfo) -> set[str]:
 
 
 def _embed(texts: list[str]) -> list[list[float]]:
-    from .embeddings import generate_embeddings
-
     vectors: list[list[float]] = []
     for start in range(0, len(texts), EMBED_GROUP):
         _check_cancel()

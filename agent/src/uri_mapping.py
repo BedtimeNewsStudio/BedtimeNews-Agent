@@ -10,13 +10,15 @@ derived from their URI at all, and for those the URI itself is shown instead.
 import re
 
 # Directory name under contents/ -> the channel's Chinese name.
-CHANNEL_NAMES = {
-    "ShuiQianXiaoXi": "睡前消息",
-    "CanKaoXinXi": "参考信息",
-    "GaoJian": "高见",
-    "JiangDianHeiHua": "讲点黑话",
-    "ChanJingPoBiJi": "产经破壁机",
-}
+CHANNEL_NAMES = frozendict(
+    {
+        "ShuiQianXiaoXi": "睡前消息",
+        "CanKaoXinXi": "参考信息",
+        "GaoJian": "高见",
+        "JiangDianHeiHua": "讲点黑话",
+        "ChanJingPoBiJi": "产经破壁机",
+    }
+)
 
 _EPISODE_STEM_RE = re.compile(r"(?P<number>\d{4})(?P<extra>\.5)?$")
 

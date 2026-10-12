@@ -1,4 +1,5 @@
-FROM python:3.14-slim
+# 3.15.0 is not published yet. Switch this to python:3.15-slim once that tag exists.
+FROM python:3.15-rc-slim
 
 # curl: the compose healthcheck (curl -fsS http://localhost:8000/health) and debugging
 RUN apt-get update && apt-get install -y \

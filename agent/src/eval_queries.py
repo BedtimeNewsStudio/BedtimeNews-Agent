@@ -317,27 +317,29 @@ GREETING_QUERIES = [
 # 所有查询的组织结构
 # =============================================================================
 
-CATEGORY_NAMES_CN = {
-    "local_debt": "地方债、城投债、独山县",
-    "population": "人口危机、社会化抚养",
-    "education": "教育公平、衡水模式、高考",
-    "traditional_medicine": "中医药、连花清瘟、以岭药业",
-    "russia_ukraine": "俄乌战争",
-    "zhengwei": "正威集团、王文银",
-    "international_relations": "国际关系、地缘政治（讲点黑话）",
-    "technology_engineering": "科技工程（高见）",
-    "industry_economy": "产业经济（产经破壁机）",
-    "ai_chip": "AI与芯片产业",
-    "new_geopolitics": "新兴地缘政治",
-    "cross_border_ecommerce": "跨境电商与出海",
-    "corporate_governance": "企业治理与监管",
-    "cryptocurrency": "加密货币与金融科技",
-    "real_estate": "房地产与城市",
-    "cross_topic": "跨主题综合问题",
-    "complex_reasoning": "复杂推理问题",
-    "greeting": "问候语（测试路由）",
-    "corpus_regression": "补录语料回归验证",
-}
+CATEGORY_NAMES_CN = frozendict(
+    {
+        "local_debt": "地方债、城投债、独山县",
+        "population": "人口危机、社会化抚养",
+        "education": "教育公平、衡水模式、高考",
+        "traditional_medicine": "中医药、连花清瘟、以岭药业",
+        "russia_ukraine": "俄乌战争",
+        "zhengwei": "正威集团、王文银",
+        "international_relations": "国际关系、地缘政治（讲点黑话）",
+        "technology_engineering": "科技工程（高见）",
+        "industry_economy": "产业经济（产经破壁机）",
+        "ai_chip": "AI与芯片产业",
+        "new_geopolitics": "新兴地缘政治",
+        "cross_border_ecommerce": "跨境电商与出海",
+        "corporate_governance": "企业治理与监管",
+        "cryptocurrency": "加密货币与金融科技",
+        "real_estate": "房地产与城市",
+        "cross_topic": "跨主题综合问题",
+        "complex_reasoning": "复杂推理问题",
+        "greeting": "问候语（测试路由）",
+        "corpus_regression": "补录语料回归验证",
+    }
+)
 
 ALL_QUERIES = {
     "local_debt": LOCAL_DEBT_QUERIES,

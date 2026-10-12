@@ -16,11 +16,11 @@ server exposes it as JSON at /api/starters.
 from typing import TypedDict
 
 
-class Topic(TypedDict):
+class Topic(TypedDict, closed=True):
     question: str  # sent to the agent and shown as the button text
 
 
-class Category(TypedDict):
+class Category(TypedDict, closed=True):
     name: str  # Chinese category name, shown as the group heading on desktop
     topics: list[Topic]
 

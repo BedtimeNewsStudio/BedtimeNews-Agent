@@ -1,4 +1,5 @@
-FROM python:3.14-slim
+# 3.15.0 is not published yet. Switch this to python:3.15-slim once that tag exists.
+FROM python:3.15-rc-slim
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y git \

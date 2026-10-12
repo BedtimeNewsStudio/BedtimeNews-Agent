@@ -7,6 +7,10 @@
 #
 # Each component (agent, indexer, frontend) keeps its own self-contained
 # pyproject.toml and is still built independently by Docker via `pip install .`.
+# Runtime Python is the 3.15 series. `requires-python` is `==3.15.*`, which
+# accepts 3.15.0rc3 now and 3.15.0 once it is released. Images currently use
+# `python:3.15-rc-slim`. Switch that tag to `python:3.15-slim`, and
+# `.python-version` from `3.15.0rc3` to `3.15`, when the stable image exists.
 #
 #   uv sync                      # all components (editable) + dev tooling
 #   uv run ruff check .          # lint
@@ -15,11 +19,13 @@
 [project]
 name = "bedtimenews"
 version = "0.4.2"
-requires-python = ">=3.12"
+requires-python = "==3.15.*"
 dependencies = [
     "bedtimenews-agent",
     "bedtimenews-indexer",
     "bedtimenews-frontend",
+    # Direct so the git source below applies. PyPI 1.12.2 cannot build on 3.15.
+    "ormsgpack",
 ]
 
 [dependency-groups]
@@ -42,9 +48,13 @@ members = ["agent", "indexer", "frontend"]
 bedtimenews-agent = { workspace = true }
 bedtimenews-indexer = { workspace = true }
 bedtimenews-frontend = { workspace = true }
+# PyPI ormsgpack 1.12.2 builds with PyO3 0.27, which rejects Python 3.15.
+# This revision is still 1.12.2 and uses PyO3 0.29. Drop it once a release
+# ships a cp315 wheel. `pip` does not read this table.
+ormsgpack = { git = "https://github.com/ormsgpack/ormsgpack.git", rev = "177a74fbf82ec5f517b276032b41a61b3323fc22" }
 
 [tool.ruff]
-target-version = "py314"
+target-version = "py315"
 line-length = 88
 extend-exclude = [".venv", "storage"]
 
