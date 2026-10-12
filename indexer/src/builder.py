@@ -58,7 +58,7 @@ from .uri_mapping import load_uri_titles, resolve_title
 
 # embeddings builds its OpenAI client at import. Keep that off this module's
 # import path; the client is created the first time a chunk is embedded.
-lazy from .embeddings import generate_embeddings
+lazy from . import embeddings
 
 logger = logging.getLogger(__name__)
 
@@ -282,7 +282,9 @@ def _embed(texts: list[str]) -> list[list[float]]:
     vectors: list[list[float]] = []
     for start in range(0, len(texts), EMBED_GROUP):
         _check_cancel()
-        vectors.extend(generate_embeddings(texts[start : start + EMBED_GROUP]))
+        vectors.extend(
+            embeddings.generate_embeddings(texts[start : start + EMBED_GROUP])
+        )
         logger.info(
             "  embedded %d/%d", min(start + EMBED_GROUP, len(texts)), len(texts)
         )
