@@ -1,5 +1,4 @@
-# 3.15.0 is not published yet. Switch this to python:3.15-slim once that tag exists.
-FROM python:3.15-rc-slim
+FROM python:3.15-slim
 
 # Run the web server as a dedicated unprivileged account.
 RUN groupadd --gid 1000 app \

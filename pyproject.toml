@@ -7,10 +7,9 @@
 #
 # Each component (agent, indexer, frontend) keeps its own self-contained
 # pyproject.toml and is still built independently by Docker via `pip install .`.
-# Runtime Python is the 3.15 series. `requires-python` is `==3.15.*`, which
-# accepts 3.15.0rc3 now and 3.15.0 once it is released. Images currently use
-# `python:3.15-rc-slim`. Switch that tag to `python:3.15-slim`, and
-# `.python-version` from `3.15.0rc3` to `3.15`, when the stable image exists.
+# Runtime Python is the 3.15 series. `requires-python` is `==3.15.*`, the
+# Docker images use `python:3.15-slim`, and `.python-version` follows the latest
+# stable 3.15 patch release.
 #
 #   uv sync                      # all components (editable) + dev tooling
 #   uv run ruff check .          # lint
