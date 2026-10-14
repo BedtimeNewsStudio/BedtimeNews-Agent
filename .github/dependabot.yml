@@ -62,9 +62,16 @@ updates:
       prefix: "docker"
     # Stay on 3.14 patch releases until the agent's dependencies support 3.15
     # (see the root pyproject.toml); then drop this rule.
+    #
+    # Ignore by update type, not by version range: a range like ">=3.15" misses
+    # prereleases (3.15.0rc3 sorts below 3.15), and Dependabot does offer them
+    # here. Because `latest` points at the newest Python rather than our pinned
+    # tag, it treats 3.14.8-slim as a prerelease and so accepts rc candidates.
     ignore:
       - dependency-name: "python"
-        versions: [">=3.15"]
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
     groups:
       base-images:
         patterns: ["*"]
