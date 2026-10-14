@@ -22,10 +22,6 @@ import sys
 from . import catalog
 from .db import connection, transaction
 
-# Deferred until `build`. list/status/retire/pin only need the catalog.
-lazy from .pipeline import run_once
-lazy from .scheduler import install_signal_handlers
-
 
 def _fmt_size(size: int | None) -> str:
     if size is None:
@@ -82,6 +78,9 @@ def _pin(snapshot_id: str, pinned: bool) -> int:
 
 
 def cmd_build(full: bool) -> int:
+    from .pipeline import run_once
+    from .scheduler import install_signal_handlers
+
     install_signal_handlers()
     result = run_once(full=full)
     print(

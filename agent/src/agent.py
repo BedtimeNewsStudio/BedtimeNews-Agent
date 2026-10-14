@@ -35,17 +35,15 @@ from .graph import AgentState, build_citation_urls, create_initial_state, graph
 from .snapshots import Snapshot, snapshot_manager
 
 # Graph nodes -> step types emitted to streaming clients.
-_NODE_STEP_TYPES = frozendict(
-    {
-        "condense": "condense",
-        "route": "route",
-        "query_rewrite": "rewrite",
-        "retrieve": "retrieve",
-        "grade": "grade",
-        "generate": "generate",
-        "direct": "generate",
-    }
-)
+_NODE_STEP_TYPES = {
+    "condense": "condense",
+    "route": "route",
+    "query_rewrite": "rewrite",
+    "retrieve": "retrieve",
+    "grade": "grade",
+    "generate": "generate",
+    "direct": "generate",
+}
 
 # ============================================================================
 # Public API

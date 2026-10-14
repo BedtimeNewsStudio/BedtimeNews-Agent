@@ -2,7 +2,7 @@
 name = "bedtimenews-frontend"
 version = "0.4.2"
 description = "Custom FastAPI + static UI frontend for Bedtime News"
-requires-python = "==3.15.*"
+requires-python = "==3.14.*"
 dependencies = [
     "fastapi>=0.142.2",
     "uvicorn[standard]>=0.54.0",

@@ -1,4 +1,4 @@
-FROM python:3.15-slim
+FROM python:3.14.8-slim
 
 # curl: the compose healthcheck (curl -fsS http://localhost:8000/health) and debugging
 RUN apt-get update && apt-get install -y \

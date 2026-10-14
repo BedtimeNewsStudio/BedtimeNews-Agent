@@ -19,15 +19,13 @@ logger = logging.getLogger(__name__)
 
 # Directory name under contents/ -> the channel's Chinese name, as used by the
 # 标准化标题 in URI映射.md.
-CHANNEL_NAMES = frozendict(
-    {
-        "ShuiQianXiaoXi": "睡前消息",
-        "CanKaoXinXi": "参考信息",
-        "GaoJian": "高见",
-        "JiangDianHeiHua": "讲点黑话",
-        "ChanJingPoBiJi": "产经破壁机",
-    }
-)
+CHANNEL_NAMES = {
+    "ShuiQianXiaoXi": "睡前消息",
+    "CanKaoXinXi": "参考信息",
+    "GaoJian": "高见",
+    "JiangDianHeiHua": "讲点黑话",
+    "ChanJingPoBiJi": "产经破壁机",
+}
 
 # A row of any markdown table in URI映射.md: the first cell is the URI, the
 # second the 标准化标题. Both the 例外表 (3 columns) and the per-channel tables

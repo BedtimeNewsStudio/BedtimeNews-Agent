@@ -73,15 +73,13 @@ CHANNEL_ORDER = (
     "GaoJian",
     "ChanJingPoBiJi",
 )
-CHANNEL_LABELS = frozendict(
-    {
-        "ShuiQianXiaoXi": "睡前消息",
-        "CanKaoXinXi": "参考信息",
-        "JiangDianHeiHua": "讲点黑话",
-        "GaoJian": "高见",
-        "ChanJingPoBiJi": "产经破壁机",
-    }
-)
+CHANNEL_LABELS = {
+    "ShuiQianXiaoXi": "睡前消息",
+    "CanKaoXinXi": "参考信息",
+    "JiangDianHeiHua": "讲点黑话",
+    "GaoJian": "高见",
+    "ChanJingPoBiJi": "产经破壁机",
+}
 ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 

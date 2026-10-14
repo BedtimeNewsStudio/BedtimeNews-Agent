@@ -60,6 +60,11 @@ updates:
       day: "monday"
     commit-message:
       prefix: "docker"
+    # Stay on 3.14 patch releases until the agent's dependencies support 3.15
+    # (see the root pyproject.toml); then drop this rule.
+    ignore:
+      - dependency-name: "python"
+        versions: [">=3.15"]
     groups:
       base-images:
         patterns: ["*"]

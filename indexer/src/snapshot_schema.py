@@ -12,7 +12,6 @@ docs/designs/20261007_rag-snapshot-architecture.md, 5.2):
 """
 
 import hashlib
-from collections.abc import Mapping
 from datetime import UTC, datetime
 
 from psycopg2 import sql
@@ -39,40 +38,38 @@ MAX_PARALLEL_MAINTENANCE_WORKERS = 2
 
 # Columns copied from a base snapshot, listed explicitly so a column-order
 # difference cannot misalign a copy, and so the SERIAL `id` is regenerated.
-COPY_COLUMNS: Mapping[str, tuple[str, ...]] = frozendict(
-    {
-        "document_chunks": (
-            "chunk_id",
-            "doc_id",
-            "chunk_index",
-            "heading",
-            "text",
-            "word_count",
-            "embedding",
-            "created_at",
-        ),
-        "documents": ("doc_id", "title", "updated_at"),
-        "transcripts": (
-            "doc_id",
-            "canonical_title",
-            "source_title",
-            "channel",
-            "publication_date",
-            "body_html",
-            "source_hash",
-            "projection_version",
-            "updated_at",
-        ),
-        "index_state": (
-            "file_path",
-            "source_hash",
-            "body_hash",
-            "body_normalization_version",
-            "indexed_at",
-            "source_observed_at",
-        ),
-    }
-)
+COPY_COLUMNS: dict[str, tuple[str, ...]] = {
+    "document_chunks": (
+        "chunk_id",
+        "doc_id",
+        "chunk_index",
+        "heading",
+        "text",
+        "word_count",
+        "embedding",
+        "created_at",
+    ),
+    "documents": ("doc_id", "title", "updated_at"),
+    "transcripts": (
+        "doc_id",
+        "canonical_title",
+        "source_title",
+        "channel",
+        "publication_date",
+        "body_html",
+        "source_hash",
+        "projection_version",
+        "updated_at",
+    ),
+    "index_state": (
+        "file_path",
+        "source_hash",
+        "body_hash",
+        "body_normalization_version",
+        "indexed_at",
+        "source_observed_at",
+    ),
+}
 SNAPSHOT_TABLES = tuple(COPY_COLUMNS)
 
 
