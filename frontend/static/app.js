@@ -57,6 +57,8 @@ const els = {
   readingClose: document.getElementById("reading-close"),
   readingEdit: document.getElementById("reading-edit"),
   readingShare: document.getElementById("reading-share"),
+  shareSheet: document.getElementById("share-sheet"),
+  shareCopy: document.getElementById("share-copy"),
   shareToast: document.getElementById("share-toast"),
   readerView: document.getElementById("reader-view"),
   readerTitle: document.getElementById("reader-title"),
@@ -680,12 +682,103 @@ function base58Encode(bytes) {
   return out;
 }
 
+// Web Crypto is missing on HTTP LAN (a phone hitting the machine IP). This
+// fallback is FIPS 180-4 SHA-256 and must match crypto.subtle.digest.
+function sha256Bytes(message) {
+  const K = new Uint32Array([
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1,
+    0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
+    0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786,
+    0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147,
+    0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13,
+    0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
+    0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a,
+    0x5b9cca4f, 0x682e6ff3, 0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
+    0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+  ]);
+  const rotr = (x, n) => (x >>> n) | (x << (32 - n));
+  const ml = message.length;
+  const paddedLen = Math.ceil((ml + 9) / 64) * 64;
+  const m = new Uint8Array(paddedLen);
+  m.set(message);
+  m[ml] = 0x80;
+  const view = new DataView(m.buffer);
+  view.setUint32(paddedLen - 4, (ml * 8) >>> 0);
+  let h0 = 0x6a09e667;
+  let h1 = 0xbb67ae85;
+  let h2 = 0x3c6ef372;
+  let h3 = 0xa54ff53a;
+  let h4 = 0x510e527f;
+  let h5 = 0x9b05688c;
+  let h6 = 0x1f83d9ab;
+  let h7 = 0x5be0cd19;
+  const w = new Uint32Array(64);
+  for (let i = 0; i < paddedLen; i += 64) {
+    for (let t = 0; t < 16; t++) w[t] = view.getUint32(i + t * 4);
+    for (let t = 16; t < 64; t++) {
+      const s0 = rotr(w[t - 15], 7) ^ rotr(w[t - 15], 18) ^ (w[t - 15] >>> 3);
+      const s1 = rotr(w[t - 2], 17) ^ rotr(w[t - 2], 19) ^ (w[t - 2] >>> 10);
+      w[t] = (w[t - 16] + s0 + w[t - 7] + s1) >>> 0;
+    }
+    let a = h0;
+    let b = h1;
+    let c = h2;
+    let d = h3;
+    let e = h4;
+    let f = h5;
+    let g = h6;
+    let h = h7;
+    for (let t = 0; t < 64; t++) {
+      const S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
+      const ch = (e & f) ^ (~e & g);
+      const temp1 = (h + S1 + ch + K[t] + w[t]) >>> 0;
+      const S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
+      const maj = (a & b) ^ (a & c) ^ (b & c);
+      const temp2 = (S0 + maj) >>> 0;
+      h = g;
+      g = f;
+      f = e;
+      e = (d + temp1) >>> 0;
+      d = c;
+      c = b;
+      b = a;
+      a = (temp1 + temp2) >>> 0;
+    }
+    h0 = (h0 + a) >>> 0;
+    h1 = (h1 + b) >>> 0;
+    h2 = (h2 + c) >>> 0;
+    h3 = (h3 + d) >>> 0;
+    h4 = (h4 + e) >>> 0;
+    h5 = (h5 + f) >>> 0;
+    h6 = (h6 + g) >>> 0;
+    h7 = (h7 + h) >>> 0;
+  }
+  const out = new Uint8Array(32);
+  const ov = new DataView(out.buffer);
+  ov.setUint32(0, h0);
+  ov.setUint32(4, h1);
+  ov.setUint32(8, h2);
+  ov.setUint32(12, h3);
+  ov.setUint32(16, h4);
+  ov.setUint32(20, h5);
+  ov.setUint32(24, h6);
+  ov.setUint32(28, h7);
+  return out;
+}
+
+async function sha256Prefix6(text) {
+  const encoded = new TextEncoder().encode(text);
+  if (globalThis.crypto?.subtle) {
+    const digestBuffer = await crypto.subtle.digest("SHA-256", encoded);
+    return new Uint8Array(digestBuffer).slice(0, 6);
+  }
+  return sha256Bytes(encoded).slice(0, 6);
+}
+
 async function shortIdFor(docId) {
-  const digestBuffer = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(docId),
-  );
-  const code = base58Encode(new Uint8Array(digestBuffer).slice(0, 6));
+  const code = base58Encode(await sha256Prefix6(docId));
   const padded = BASE58_ALPHABET[0].repeat(SHORT_ID_LENGTH) + code;
   return padded.slice(-SHORT_ID_LENGTH);
 }
@@ -716,36 +809,97 @@ function showShareToast(message) {
   }, 1600);
 }
 
-async function updateShareButton() {
-  if (!els.readingShare) return;
-  if (panelLevel !== "reader" || !currentArticle?.doc_id) {
-    els.readingShare.hidden = false;
-    els.readingShare.classList.add("is-slot-hidden");
-    els.readingShare.setAttribute("aria-hidden", "true");
-    els.readingShare.tabIndex = -1;
-    els.readingShare.removeAttribute("data-share-text");
-    return;
-  }
+function closeShareSheet() {
+  if (els.shareSheet?.open) els.shareSheet.close();
+  els.readingShare?.setAttribute("aria-expanded", "false");
+}
+
+async function ensureShareText() {
+  if (els.readingShare?.dataset.shareText) return els.readingShare.dataset.shareText;
+  if (!currentArticle?.doc_id) return "";
   const article = currentArticle;
   const text = await shareTextFor(article);
-  // The reader may have navigated away while the hash was computing.
-  if (currentArticle !== article) return;
+  if (currentArticle !== article || !els.readingShare) return "";
+  els.readingShare.dataset.shareText = text;
+  return text;
+}
+
+async function openShareSheet() {
+  if (!els.shareSheet || els.shareSheet.open) return;
+  if (!(await ensureShareText())) return;
+  els.shareSheet.showModal();
+  els.readingShare.setAttribute("aria-expanded", "true");
+}
+
+function hideShareButton() {
+  if (!els.readingShare) return;
+  closeShareSheet();
+  els.readingShare.hidden = false;
+  els.readingShare.classList.add("is-slot-hidden");
+  els.readingShare.setAttribute("aria-hidden", "true");
+  els.readingShare.setAttribute("aria-expanded", "false");
+  els.readingShare.tabIndex = -1;
+  els.readingShare.removeAttribute("data-share-text");
+}
+
+function revealShareButton() {
+  if (!els.readingShare) return;
   els.readingShare.hidden = false;
   els.readingShare.classList.remove("is-slot-hidden");
   els.readingShare.removeAttribute("aria-hidden");
   els.readingShare.tabIndex = 0;
-  els.readingShare.dataset.shareText = text;
+}
+
+async function updateShareButton() {
+  if (!els.readingShare) return;
+  if (panelLevel !== "reader" || !currentArticle?.doc_id) {
+    hideShareButton();
+    return;
+  }
+  const article = currentArticle;
+  revealShareButton();
+  try {
+    const text = await shareTextFor(article);
+    // The reader may have navigated away while the hash was computing.
+    if (currentArticle !== article) return;
+    els.readingShare.dataset.shareText = text;
+  } catch (error) {
+    console.error("Share text failed.", error);
+  }
+}
+
+function copyShareLinkFallback(text) {
+  const input = document.createElement("textarea");
+  input.value = text;
+  input.setAttribute("readonly", "");
+  input.style.position = "fixed";
+  input.style.left = "-9999px";
+  document.body.appendChild(input);
+  input.select();
+  const ok = document.execCommand("copy");
+  input.remove();
+  if (!ok) throw new Error("execCommand copy failed");
 }
 
 async function copyShareLink() {
-  const text = els.readingShare?.dataset.shareText;
+  const text = await ensureShareText();
   if (!text) return;
+  closeShareSheet();
   try {
-    await navigator.clipboard.writeText(text);
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      copyShareLinkFallback(text);
+    }
     showShareToast("已复制");
   } catch (error) {
-    console.error("Clipboard write failed.", error);
-    showShareToast("复制失败，请手动复制");
+    try {
+      copyShareLinkFallback(text);
+      showShareToast("已复制");
+    } catch (fallbackError) {
+      console.error("Clipboard write failed.", error, fallbackError);
+      showShareToast("复制失败，请手动复制");
+    }
   }
 }
 
@@ -830,13 +984,7 @@ function prepareReader(uri) {
     els.readingEdit.setAttribute("aria-hidden", "true");
     els.readingEdit.tabIndex = -1;
   }
-  if (els.readingShare) {
-    els.readingShare.hidden = false;
-    els.readingShare.classList.add("is-slot-hidden");
-    els.readingShare.setAttribute("aria-hidden", "true");
-    els.readingShare.tabIndex = -1;
-    els.readingShare.removeAttribute("data-share-text");
-  }
+  hideShareButton();
   // Re-trigger the page-in. The element is reused between articles, so the
   // animation has to be dropped and reflowed back on to run again.
   els.readerView.classList.remove("is-entering");
@@ -997,7 +1145,17 @@ els.channelBar.addEventListener("click", (event) => {
 });
 els.readingClose.addEventListener("click", () => navigate("/"));
 els.readingShare?.addEventListener("click", () => {
+  if (els.shareSheet?.open) closeShareSheet();
+  else openShareSheet();
+});
+els.shareCopy?.addEventListener("click", () => {
   copyShareLink();
+});
+els.shareSheet?.addEventListener("click", (event) => {
+  if (event.target === els.shareSheet) closeShareSheet();
+});
+els.shareSheet?.addEventListener("close", () => {
+  els.readingShare?.setAttribute("aria-expanded", "false");
 });
 
 els.tabChat?.addEventListener("click", (event) => {
@@ -1086,6 +1244,13 @@ els.readingDocBack?.addEventListener("click", () => {
 });
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
+  // Close the share sheet ourselves so aria-expanded stays in sync, and so
+  // Escape does not also fall through to leaving the article.
+  if (els.shareSheet?.open) {
+    event.preventDefault();
+    closeShareSheet();
+    return;
+  }
   // Escape also backs out of the reading pane, the way it closes a modal.
   if (panelLevel) navigate("/");
 });

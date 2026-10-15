@@ -133,7 +133,7 @@
             <path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" />
           </svg>
         </button>
-        <button class="reading-share is-slot-hidden" id="reading-share" type="button" aria-label="复制分享链接" title="复制分享链接" tabindex="-1" aria-hidden="true">
+        <button class="reading-share is-slot-hidden" id="reading-share" type="button" aria-label="分享" title="分享" aria-haspopup="dialog" aria-expanded="false" aria-controls="share-sheet" tabindex="-1" aria-hidden="true">
           <svg class="icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
             <circle cx="18" cy="5" r="2.5" fill="none" stroke="currentColor" stroke-width="1.75" />
             <circle cx="6" cy="12" r="2.5" fill="none" stroke="currentColor" stroke-width="1.75" />
@@ -224,6 +224,22 @@
   <noscript>
     <p class="noscript-note">文稿目录与正文无需 JavaScript 即可阅读；知识库 Agent 对话需要启用 JavaScript。</p>
   </noscript>
+  <dialog class="share-sheet" id="share-sheet" aria-labelledby="share-sheet-title">
+    <div class="share-sheet-panel">
+      <p class="share-sheet-title" id="share-sheet-title">分享</p>
+      <div class="share-sheet-actions">
+        <button class="share-action" id="share-copy" type="button">
+          <span class="share-action-icon" aria-hidden="true">
+            <svg class="icon" viewBox="0 0 24 24" width="20" height="20" focusable="false">
+              <rect x="8.25" y="3.5" width="11.25" height="14" rx="2.25" fill="none" stroke="currentColor" stroke-width="1.75" />
+              <rect x="4.5" y="6.5" width="11.25" height="14" rx="2.25" fill="var(--share-icon-well)" stroke="currentColor" stroke-width="1.75" />
+            </svg>
+          </span>
+          <span class="share-action-label">复制链接</span>
+        </button>
+      </div>
+    </div>
+  </dialog>
   <p class="share-toast" id="share-toast" role="status" aria-live="polite" hidden></p>
   <script type="module" src="/app.js"></script>
 </body>
