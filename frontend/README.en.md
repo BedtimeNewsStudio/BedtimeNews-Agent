@@ -48,6 +48,10 @@ See the [main README](../README.en.md) for full-stack setup.
 - Real-time SSE streaming with visible pipeline steps
 - Markdown answers via vendored markdown-it (`html:false`) and in-app citation
   navigation
+- Opening `/transcripts/<URI>#<anchor>` directly, or following an in-app link
+  that only changes the hash of the open transcript, scrolls the reading pane
+  to that heading. A missing id stays at the top. Scrolling uses the reading
+  pane, not the browser's native hash scroll
 - Ephemeral, in-page conversation (cleared on refresh)
 - Keyboard-accessible; respects `prefers-reduced-motion`
 
@@ -215,7 +219,7 @@ The frontend proxies the agent's `/chat` endpoint.
 
 ```json
 {"type": "step", "step": "condense|route|rewrite|retrieve|grade|generate", "content": "…"}
-{"type": "citations", "urls": {"ShuiQianXiaoXi/0501-0600/0588.md": {"title": "睡前消息588", "url": "/transcripts/ShuiQianXiaoXi/0501-0600/0588.md"}}}
+{"type": "citations", "urls": {"ShuiQianXiaoXi/0501-0600/0588.md#城投债": {"title": "睡前消息588", "url": "/transcripts/ShuiQianXiaoXi/0501-0600/0588.md#%E5%9F%8E%E6%8A%95%E5%80%BA"}, "ShuiQianXiaoXi/0501-0600/0588.md": {"title": "睡前消息588", "url": "/transcripts/ShuiQianXiaoXi/0501-0600/0588.md"}, "CanKaoXinXi/0401-0500/0490.md": {"title": "参考信息490", "url": "/transcripts/CanKaoXinXi/0401-0500/0490.md"}}}
 {"type": "answer_chunk", "content": "…"}
 {"type": "answer_final", "content": "…", "grounded": true}
 {"type": "answer_meta", "grounded": true}

@@ -1,5 +1,7 @@
 """Unit tests for the document chunker (pure text-processing logic)."""
 
+import logging
+
 from src.chunker import (
     _extract_headings,
     _extract_last_words,
@@ -35,13 +37,12 @@ class TestExtractHeadings:
         assert _extract_headings("just some text\nmore text") == []
 
     def test_levels_and_text(self):
-        headings = _extract_headings("# Title\n\nbody\n## Sub\n### Deep")
-        levels = [(level, text) for _pos, level, text in headings]
-        assert levels == [(1, "Title"), (2, "Sub"), (3, "Deep")]
+        headings = _extract_headings("开场\n\n## 第一节\n\n正文\n\n## 第二节\n")
+        assert [text for _pos, text in headings] == ["第一节", "第二节"]
 
     def test_positions_are_increasing(self):
-        headings = _extract_headings("# A\n## B\n# C")
-        positions = [pos for pos, _level, _text in headings]
+        headings = _extract_headings("## A\n\n## B\n\n## C")
+        positions = [pos for pos, _text in headings]
         assert positions == sorted(positions)
         assert len(positions) == 3
 
@@ -53,8 +54,9 @@ class TestSplitIntoSections:
         assert sections[0]["heading"] is None
 
     def test_records_heading_per_section(self):
-        sections = _split_into_sections("# A\n## B\n# C")
+        sections = _split_into_sections("## A\n\n## B\n\n## C")
         assert [s["heading"] for s in sections] == ["A", "B", "C"]
+        assert [s["heading_anchor"] for s in sections] == ["A", "B", "C"]
 
     def test_text_before_first_heading_is_kept(self):
         sections = _split_into_sections("开场白\n\n## 第一题\n内容")
@@ -62,15 +64,18 @@ class TestSplitIntoSections:
             (None, "开场白"),
             ("第一题", "## 第一题\n内容"),
         ]
+        assert [s["heading_anchor"] for s in sections] == ["", "第一题"]
 
     def test_blank_preamble_adds_no_section(self):
         sections = _split_into_sections("\n\n## A\nalpha")
         assert [s["heading"] for s in sections] == ["A"]
 
     def test_section_content_spans_to_next_heading(self):
-        sections = _split_into_sections("# A\nalpha\n# B\nbeta")
+        sections = _split_into_sections("## A\nalpha\n## B\nbeta")
         assert "alpha" in sections[0]["content"]
         assert "beta" not in sections[0]["content"]
+        assert sections[0]["heading_anchor"] == "A"
+        assert sections[1]["heading_anchor"] == "B"
 
 
 class TestSplitByParagraphs:
@@ -153,12 +158,14 @@ class TestChunkDocument:
         text = "## 流浪狗\n\n" + "狗" * 60 + "\n\n## 宁德时代\n\n" + "电" * 60
         chunks = chunk_document(_doc(text), min_chunk_size=1, overlap_size=20)
         assert [c.heading for c in chunks] == ["流浪狗", "宁德时代"]
+        assert [c.heading_anchor for c in chunks] == ["流浪狗", "宁德时代"]
         assert "狗" not in chunks[1].text
 
     def test_preamble_before_first_heading_is_chunked(self):
         text = "开" * 60 + "\n\n## 话题\n\n" + "题" * 60
         chunks = chunk_document(_doc(text), min_chunk_size=1)
         assert [c.heading for c in chunks] == [None, "话题"]
+        assert [c.heading_anchor for c in chunks] == ["", "话题"]
         assert chunks[0].text == "开" * 60
 
     def test_overlap_is_kept_within_a_section(self):
@@ -174,3 +181,23 @@ class TestChunkDocument:
         assert len(chunks) > 1
         # The second chunk opens with the tail of the first.
         assert chunks[1].text.split("\n\n")[0] == chunks[0].text.split("\n\n")[-1]
+        assert [c.heading_anchor for c in chunks] == ["话题"] * len(chunks)
+
+    def test_single_hash_heading_rejects_the_file(self, caplog):
+        caplog.set_level(logging.ERROR)
+        text = "# 标题\n\n" + "正" * 60 + "\n\n## 话题\n\n" + "文" * 60
+        assert chunk_document(_doc(text), min_chunk_size=1) == []
+        assert "ShuiQianXiaoXi/0001-0100/0123.md" in caplog.text
+
+    def test_deeper_heading_rejects_the_file(self, caplog):
+        # A ### must not be ignored so the neighboring ## is still indexed.
+        caplog.set_level(logging.ERROR)
+        text = "## 话题\n\n" + "文" * 60 + "\n\n### 更深\n\n" + "深" * 60
+        assert chunk_document(_doc(text), min_chunk_size=1) == []
+        assert "ShuiQianXiaoXi/0001-0100/0123.md" in caplog.text
+
+    def test_footnote_marker_rejects_the_file(self, caplog):
+        caplog.set_level(logging.ERROR)
+        text = "## 话题\n\n" + "文" * 60 + "\n\n见脚注[^1]。"
+        assert chunk_document(_doc(text), min_chunk_size=1) == []
+        assert "ShuiQianXiaoXi/0001-0100/0123.md" in caplog.text

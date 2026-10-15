@@ -17,7 +17,7 @@ See the [main README](../README.en.md) for setup instructions, and the [design d
 - **Body-only indexing**: only the span between `## 正文` and `## 附录` is extracted; the title line, the `**发布日期**` metadata line and the appendix's fact-correction notes are all dropped
 - **URI as doc_id**: a transcript's path relative to `contents/` (with `.md`) is its identifier
 - **Standardised titles**: the upstream `URI映射.md` is parsed and the URI → title mapping written to the snapshot's `documents` table
-- **Smart chunking**: Markdown-aware semantic chunking, one section per sub-heading inside `## 正文` (the text before the first sub-heading is its own section); overlap is carried only within a section, never across a heading, and chunks under 50 words are dropped
+- **Smart chunking**: each sibling `##` inside the body is one section, and the text before the first `##` is the preamble; overlap does not cross a section, and a chunk under 50 words is dropped. A `#` or `###` still present in the body rejects that file (it is logged, and it contributes zero chunks)
 - **Read-only agent**: the indexer maintains the `rag_agent` role, which can only read published snapshots
 - **Monitoring**: run status in `rag_meta.indexer_status` (exposed by the agent's `/health`), ops commands and a debugger
 
@@ -56,7 +56,7 @@ The next run is always computed from the current time: a run that takes longer t
 
 ### Local sample mode
 
-`index_config.sample.yml` names seven deterministic transcripts covering ordinary, fractional, `misc`, and multi-channel URIs. Run it only with `INDEXER_SCOPE=sample`, `INDEX_CONFIG_FILE=/app/index_config.sample.yml`, an isolated data directory, and a `POSTGRES_DB` ending in `_local`; the indexer refuses to build into any other database. `docker-compose.sample.yml` supplies the service overrides (the sample web listens on `SAMPLE_FRONTEND_PORT`, default 18080).
+`index_config.sample.yml` names eight deterministic transcripts covering ordinary, fractional, `misc`, and multi-channel URIs, plus a body `##` title that contains a space (参考信息17: each whitespace run in the anchor becomes one `-`, and the stored heading keeps the space). Run it only with `INDEXER_SCOPE=sample`, `INDEX_CONFIG_FILE=/app/index_config.sample.yml`, an isolated data directory, and a `POSTGRES_DB` ending in `_local`; the indexer refuses to build into any other database. `docker-compose.sample.yml` supplies the service overrides (the sample web listens on `SAMPLE_FRONTEND_PORT`, default 18080).
 
 ### Document Filters
 
@@ -110,6 +110,7 @@ Run inside the indexer container:
 | `python -m src.snapshots unretire <id>`                 | Undo a retirement (retired snapshots are kept for 24 hours)                                              |
 | `python -m src.snapshots pin <id>` / `unpin <id>`       | Pin or unpin; pinned snapshots are never garbage-collected                                               |
 | `python -m src.snapshots build [--full]`                | Run a build now, protected by the same run lock and advisory lock as the scheduled run                   |
+| `python -m src.snapshots drop-previous-lineage [--dry-run]` | Once the current lineage is published, drop the previous chunking in this embedding space immediately. Does not touch the current lineage and does not wait 7 days. Run `--dry-run` first |
 
 ```bash
 docker compose exec indexer python -m src.snapshots list
@@ -193,7 +194,8 @@ rag_s<id>   read-only snapshots: document_chunks / documents / transcripts / ind
 - `chunk_id`: unique identifier, `{slug}_chunk_{index:03d}`, where the slug is the URI without `.md` and with `/` replaced by `_` (e.g. `ShuiQianXiaoXi_0501-0600_0588_chunk_000`)
 - `doc_id`: the transcript's URI, **including `.md`**, e.g. `ShuiQianXiaoXi/0501-0600/0588.md` — byte-for-byte the key used by the upstream `URI映射.md`
 - `chunk_index`: 0-based index within document
-- `heading`: section heading (if any)
+- `heading`: section heading, when there is one; empty for the preamble
+- `heading_anchor`: that section's anchor, the same string as the topic `h2` `id` in the reader. An empty string means no URL fragment. This column exists on format 2 and not on format 1
 - `text`: chunk content
 - `word_count`: number of words
 - `embedding`: `halfvec(N)`, `N` being the dimension of the snapshot's vector space. The column **type** is intentionally fixed to `halfvec`: it fits any model up to 4000 dims at half the storage with negligible recall loss. An HNSW index (`halfvec_cosine_ops`, pgvector defaults `m=16`, `ef_construction=64`) serves the agent's nearest-neighbour search
@@ -213,7 +215,7 @@ Titles come from the upstream `URI映射.md`. A general rule (`{channel}/{bucket
 - `doc_id`: transcript URI (primary key)
 - `canonical_title` / `source_title`: standardised title and the transcript's own `# ` title
 - `channel`, `publication_date`: channel name and the `**发布日期**` value
-- `body_html`: the rendered page served by the agent's `/transcripts` API
+- `body_html`: the rendered page served by the agent's `/transcripts` API. A body topic `h2` carries an `id` equal to its anchor. A projection-version change re-renders and does not re-embed
 - `source_hash`, `projection_version`: re-render triggers (source edits or a renderer change)
 
 **`index_state`**: build provenance, the baseline for the next incremental build (not read by the agent)
@@ -260,6 +262,8 @@ GC runs before and after every build, each deletion in its own transaction holdi
 | `pinned` snapshots are never deleted                                                                      | Explicit long-term pinning                                        |
 | `retired` snapshots are kept for 24 hours                                                                 | A mistaken retirement can be undone                               |
 | Nothing is deleted within 10 minutes of being superseded or retired                                       | Protects in-flight requests (the agent switches within 15 s)      |
+
+The 7 days above is the automatic collection. The format 2 full build reuses vectors from the old snapshot by chunk text, so wait until that build is published and the agent's `/health` names it before `drop-previous-lineage`. Dropping first discards vectors that have not been copied yet. The command then drops the previous chunking in the same embedding space: snapshots that did not cut the body on sibling `##` topics and have no `heading_anchor`, including `legacy`. It does not drop the previous snapshot kept in the current lineage. It refuses, and drops nothing, when no current-lineage snapshot is published or a previous snapshot is pinned. Run `--dry-run` first.
 
 ## Upgrading from the pre-snapshot schema
 

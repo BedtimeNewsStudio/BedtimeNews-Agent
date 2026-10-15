@@ -120,6 +120,10 @@ class ChunkResult(BaseModel):
     )
     chunk_index: int | None = Field(None, description="Chunk index within document")
     heading: str | None = Field(None, description="Section heading")
+    heading_anchor: str = Field(
+        default="",
+        description="Section anchor. Empty means a whole-document citation.",
+    )
     text: str | None = Field(None, description="Chunk content")
     word_count: int = Field(..., description="Word count of chunk")
     similarity: float = Field(..., description="Cosine similarity score (0.0-1.0)")

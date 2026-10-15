@@ -17,7 +17,7 @@
 - **只索引正文**：每篇文稿只抽取 `## 正文` 到 `## 附录` 之间的内容，丢弃标题行、`**发布日期**` 元数据与附录的订正/核对记录
 - **URI 作为 doc_id**：文稿相对 `contents/` 的路径（含 `.md`）即其标识
 - **标准化标题**：解析上游 `URI映射.md`，把 URI → 标题写入快照的 `documents` 表
-- **智能分块**：感知 markdown 的语义分块，`## 正文` 内每个小标题一节（第一个小标题之前的正文单独成节）；重叠只在同一节内延续，不跨越标题；不足 50 词的 chunk 丢弃
+- **智能分块**：正文里每个同级 `##` 是一节，第一个 `##` 之前的文字是导语；重叠不跨节；不足 50 词的 chunk 丢弃。正文里若仍有 `#` 或 `###`，该文稿整篇拒绝（记入日志，零 chunk）
 - **只读 Agent**：Indexer 维护 `rag_agent` 角色，该角色只能读取已发布的快照
 - **可监控**：运行状态记录在 `rag_meta.indexer_status`（由 Agent 的 `/health` 暴露），并提供运维命令与调试工具
 
@@ -56,7 +56,7 @@ indexer_cron_schedule: "0 * * * *"      # 每小时（默认）
 
 ### 本地小样本模式
 
-`index_config.sample.yml` 固定选择七篇文稿，覆盖普通期号、小数期号、`misc` 与多个栏目。仅可在 `INDEXER_SCOPE=sample`、`INDEX_CONFIG_FILE=/app/index_config.sample.yml`、隔离的数据目录以及以 `_local` 结尾的 `POSTGRES_DB` 下运行；`POSTGRES_DB` 不以 `_local` 结尾时，每次构建都会被拒绝。`docker-compose.sample.yml` 提供服务覆盖配置（样本的 web 监听 `SAMPLE_FRONTEND_PORT`，默认 18080）。
+`index_config.sample.yml` 固定选择八篇文稿，覆盖普通期号、小数期号、`misc`、多个栏目，以及正文 `##` 标题里的空格（参考信息17，锚点把每段空白收成一个 `-`，标题原文仍保留空格）。仅可在 `INDEXER_SCOPE=sample`、`INDEX_CONFIG_FILE=/app/index_config.sample.yml`、隔离的数据目录以及以 `_local` 结尾的 `POSTGRES_DB` 下运行；`POSTGRES_DB` 不以 `_local` 结尾时，每次构建都会被拒绝。`docker-compose.sample.yml` 提供服务覆盖配置（样本的 web 监听 `SAMPLE_FRONTEND_PORT`，默认 18080）。
 
 ### 文档过滤规则
 
@@ -109,6 +109,7 @@ validation:
 | `python -m src.snapshots unretire <id>`           | 撤销退役（退役的快照保留 24 小时）                                       |
 | `python -m src.snapshots pin <id>` / `unpin <id>` | 固定或取消固定；固定的快照永不被垃圾回收                                 |
 | `python -m src.snapshots build [--full]`          | 立即构建，与定时运行使用同一运行锁和 advisory lock                       |
+| `python -m src.snapshots drop-previous-lineage [--dry-run]` | 当前谱系已发布后，立刻删除同一向量空间里的旧分块快照。不碰当前谱系，也不等 7 天。先 `--dry-run` |
 
 ```bash
 docker compose exec indexer python -m src.snapshots list
@@ -192,7 +193,8 @@ rag_s<id>   只读快照：document_chunks / documents / transcripts / index_sta
 - `chunk_id`：唯一标识，`{slug}_chunk_{index:03d}`，slug 为去掉 `.md`、`/` 替换为 `_` 的 URI（例如 `ShuiQianXiaoXi_0501-0600_0588_chunk_000`）
 - `doc_id`：文稿 URI，**含 `.md`**，例如 `ShuiQianXiaoXi/0501-0600/0588.md`——与上游 `URI映射.md` 的键逐字节一致
 - `chunk_index`：文稿内从 0 开始的序号
-- `heading`：小节标题（如有）
+- `heading`：小节标题（如有）；导语为空
+- `heading_anchor`：该节锚点，与阅读器话题 `h2` 的 `id` 相同。空字符串表示没有 URL 片段。此列只在 format 2 上存在，format 1 没有它
 - `text`：chunk 内容
 - `word_count`：词数
 - `embedding`：`halfvec(N)`，`N` 为该快照向量空间的维度。列**类型**固定为 `halfvec`：可容纳 4000 维以内的任意模型，存储减半、召回损失可忽略。HNSW 索引（`halfvec_cosine_ops`，pgvector 默认参数 `m=16`、`ef_construction=64`）支撑 Agent 的近邻检索
@@ -212,7 +214,7 @@ rag_s<id>   只读快照：document_chunks / documents / transcripts / index_sta
 - `doc_id`：文稿 URI（主键）
 - `canonical_title` / `source_title`：标准化标题与文稿自身的 `# ` 标题
 - `channel`、`publication_date`：栏目名与 `**发布日期**` 的值
-- `body_html`：Agent 的 `/transcripts` API 返回的渲染页面
+- `body_html`：Agent 的 `/transcripts` API 返回的渲染页面。正文话题 `h2` 的 `id` 等于该话题的锚点。投影版本变化会重新渲染，不会重新 embedding
 - `source_hash`、`projection_version`：重新渲染的触发条件（源文件修改或渲染器变化）
 
 **`index_state`**：构建来源记录，作为下一次增量构建的基线（Agent 不读取）
@@ -259,6 +261,8 @@ Agent 以 `rag_agent` 连接，该角色只有 `rag_meta` 的 `USAGE` 及其两�
 | `pinned` 快照永不删除                                                                         | 显式长期固定                                |
 | `retired` 快照保留 24 小时                                                                    | 误退役可以撤销                              |
 | 被取代或退役后 10 分钟内的快照不删除                                                          | 保护进行中的请求（Agent 在 15 秒内切换）    |
+
+上面的 7 天是自动回收。format 2 的全量构建会按 chunk 文本复用旧快照里的向量，所以要等这次构建发布、并且 Agent 的 `/health` 已经指向它，再跑 `drop-previous-lineage`。先删会丢掉还没复制过去的向量。该命令立刻删掉同一向量空间里的旧分块（不按正文 `##` 切、没有 `heading_anchor` 的快照，含 `legacy`）。它不删除当前谱系里留作回滚的上一份快照。没有已发布的当前谱系，或旧快照被 `pin` 住时，命令拒绝执行、什么都不删。先 `--dry-run`。
 
 ## 从旧版 schema 升级
 

@@ -41,7 +41,9 @@ class Chunk:
         chunk_index: 0-based index of this chunk within the document
         text: The chunk's text content
         word_count: Number of words in this chunk
-        heading: Section heading for this chunk
+        heading: Section heading for this chunk. Empty for the preamble.
+        heading_anchor: Anchor shared with the reader ``h2`` id. Empty string
+            means no fragment.
     """
 
     id: str
@@ -50,6 +52,7 @@ class Chunk:
     text: str
     word_count: int = 0
     heading: str | None = None
+    heading_anchor: str = ""
 
 
 @dataclass(frozen=True)

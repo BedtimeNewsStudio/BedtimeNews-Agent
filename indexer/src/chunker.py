@@ -1,21 +1,29 @@
 """Document chunking with overlap and section awareness."""
 
+import logging
 import re
 from typing import Any
 
+from .anchors import assign_heading_anchors, iter_h2
 from .models import Chunk, Document
 
-# Pre-compile regex patterns for performance (avoid re-compilation on every call)
-HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.+?)$", re.MULTILINE)
+logger = logging.getLogger(__name__)
+
+# A heading that is not a sibling ``##``. ``#标题`` with no space is prose
+# (a hashtag), not a heading, and is left alone.
+_OTHER_HEADING = re.compile(r"^(?:#(?!#)|#{3,})[ \t]+\S.*$", re.MULTILINE)
 PARAGRAPH_SPLIT_PATTERN = re.compile(r"\n\s*\n")
 TOKEN_PATTERN = re.compile(r"[\u4e00-\u9fff]|[a-zA-Z]+|\S")
+_WRAPPERS = ("**", "__")
 
 # Bump whenever the chunking parameters below (the defaults of chunk_document)
 # or the chunking logic change. It is part of the snapshot pipeline
 # fingerprint, so a bump makes the next build a full build; chunks whose text
 # did not change still reuse their vectors. Forgetting a bump mixes old and new
 # chunking in one snapshot.
-CHUNKER_VERSION = 1
+#   2: only a sibling ``##`` is a section; chunks store ``heading_anchor``.
+#      A ``#`` or ``###`` still in the body rejects that file.
+CHUNKER_VERSION = 2
 
 
 def chunk_document(
@@ -46,6 +54,13 @@ def chunk_document(
     Returns:
         List of Chunk objects
     """
+    violation = _body_violation(document.text)
+    if violation:
+        # One bad file must not fail the run, and must not be indexed by
+        # treating every heading level as a cut.
+        logger.error("rejecting %s: %s", document.doc_id, violation)
+        return []
+
     sections = _split_into_sections(document.text)
 
     all_chunks = []
@@ -69,6 +84,7 @@ def chunk_document(
                     doc_id=document.doc_id,
                     chunk_index=chunk_index,
                     heading=chunk_data["heading"],
+                    heading_anchor=chunk_data["heading_anchor"],
                     text=chunk_data["text"],
                     word_count=word_count,
                 )
@@ -96,33 +112,64 @@ def count_words(text: str) -> int:
     return chinese_chars + english_words
 
 
+def _body_violation(text: str) -> str | None:
+    """Why this body must not be indexed, or None when it may be chunked.
+
+    A sibling ``##`` is the only cut. Anything else that the corpus contract
+    forbids rejects the whole file: the neighboring ``##`` is not used as a
+    fallback boundary. Duplicate titles are not a violation; their anchors
+    are disambiguated with ``-2``, ``-3``, and so on.
+    """
+    other = _OTHER_HEADING.search(text)
+    if other:
+        return f"body contains a non-topic heading ({other.group(0).strip()})"
+    if "[^" in text:
+        return "body contains a footnote marker"
+    for _pos, title in iter_h2(text):
+        if "](" in title or "[^" in title:
+            return f"body topic title is not plain text: {title}"
+        for wrapper in _WRAPPERS:
+            size = len(wrapper)
+            if (
+                len(title) >= size * 2 + 1
+                and title.startswith(wrapper)
+                and title.endswith(wrapper)
+                and wrapper not in title[size:-size]
+            ):
+                return f"body topic title is wrapped: {title}"
+    return None
+
+
 def _split_into_sections(text: str) -> list[dict[str, Any]]:
-    """Split text into sections based on Markdown headings.
+    """Split text into sections on sibling ``##`` headings.
 
     Args:
-        text: Markdown text
+        text: Markdown body that has already passed ``_body_violation``
 
     Returns:
-        List of section dictionaries with keys: heading, content. Text before
-        the first heading (most episodes open with several minutes of speech
-        before any sub-heading) becomes a leading section with heading None.
+        List of section dictionaries with keys: heading, heading_anchor,
+        content. Text before the first ``##`` (most episodes open with
+        several minutes of speech before any topic) becomes a leading
+        section with an empty heading and an empty anchor.
     """
     headings = _extract_headings(text)
+    anchors = assign_heading_anchors([title for _pos, title in headings])
 
     if not headings:
-        return [{"heading": None, "content": text}]
+        return [{"heading": None, "heading_anchor": "", "content": text}]
 
     sections = []
 
     preamble = text[: headings[0][0]].strip()
     if preamble:
-        sections.append({"heading": None, "content": preamble})
+        sections.append({"heading": None, "heading_anchor": "", "content": preamble})
 
-    for i, (pos, _level, heading_text) in enumerate(headings):
+    for i, (pos, heading_text) in enumerate(headings):
         end_pos = headings[i + 1][0] if i + 1 < len(headings) else len(text)
         sections.append(
             {
                 "heading": heading_text,
+                "heading_anchor": anchors[i],
                 "content": text[pos:end_pos].strip(),
             }
         )
@@ -130,24 +177,17 @@ def _split_into_sections(text: str) -> list[dict[str, Any]]:
     return sections
 
 
-def _extract_headings(text: str) -> list[tuple[int, int, str]]:
-    """Extract Markdown headings from text.
+def _extract_headings(text: str) -> list[tuple[int, str]]:
+    """Extract sibling ``##`` headings from text.
 
     Args:
         text: Markdown text
 
     Returns:
-        List of (position, level, heading_text) tuples
+        List of (position, heading_text) tuples. ``#`` and ``###`` are not
+        headings here; ``chunk_document`` rejects a body that still has them.
     """
-    headings = []
-
-    for match in HEADING_PATTERN.finditer(text):
-        level = len(match.group(1))  # Number of # characters
-        heading_text = match.group(2).strip()
-        position = match.start()
-        headings.append((position, level, heading_text))
-
-    return headings
+    return iter_h2(text)
 
 
 def _chunk_section(
@@ -178,6 +218,7 @@ def _chunk_section(
             {
                 "text": content,
                 "heading": section["heading"],
+                "heading_anchor": section["heading_anchor"],
             }
         )
         return chunks
@@ -198,6 +239,7 @@ def _chunk_section(
                 {
                     "text": chunk_text,
                     "heading": section["heading"],
+                    "heading_anchor": section["heading_anchor"],
                 }
             )
             # Extract overlap for next chunk
@@ -217,6 +259,7 @@ def _chunk_section(
             {
                 "text": "\n\n".join(current_chunk),
                 "heading": section["heading"],
+                "heading_anchor": section["heading_anchor"],
             }
         )
 

@@ -167,6 +167,9 @@ const BOLD_CITATION_RE = /(\*\*|__)(\[\[[^[\]]+?\]\]\([^()\s]*\))\1/g;
 // the ordered rule ignores decimals like "3.5", the bullet rule ignores "---".
 function normalizeMarkdown(raw) {
   return raw
+    // A citation inside single backticks renders as code, so the raw
+    // [[title]](url) is what the reader sees. Drop that pair.
+    .replace(/`(\[\[[^`]+?\]\](?:\([^)`\n]*\))?)`/g, "$1")
     .replace(BOLD_CITATION_RE, "$2")
     .replace(/^([ \t]*)(\d{1,9}[.)])(?=[^\s\d])/gm, "$1$2 ")
     .replace(/^([ \t]*)([*+-])(?=[^\s*+-])/gm, "$1$2 ");
@@ -180,21 +183,28 @@ function renderMarkdown(md, raw) {
 }
 
 // Mirror of the server's _repair_citations, applied to the partial answer while
-// it streams. The model cites a document by its URI — `[[ShuiQianXiaoXi/0501-
-// 0600/0588.md]]` — which is not what a reader should see, and the server only
-// rewrites it once generation has finished, too late for someone watching the
-// text appear. The "citations" event carries a name -> {title, url} map keyed by
-// both URI and 标准化标题, so the same substitution can run per render tick: each
-// citation turns into a titled link the moment it finishes arriving. A
-// half-streamed `[[ShuiQianXiaoXi/0501-` has no closing brackets yet, so it
-// simply doesn't match and is upgraded on a later tick.
+// it streams. The model copies a `Cite:` token — `[[<URI>]]` or
+// `[[<URI>#<anchor>]]` — which is not what a reader should see, and the server
+// only rewrites it once generation has finished, too late for someone watching
+// the text appear. The "citations" event carries a name -> {title, url} map
+// keyed by URI, 标准化标题, and `URI#anchor` when the chunk has one, so the same
+// substitution can run per render tick. A half-streamed `[[ShuiQianXiaoXi/0501-`
+// has no closing brackets yet, so it simply doesn't match and is upgraded on a
+// later tick. The `#` stays inside the token; an anchor this retrieval did not
+// return falls back to the whole document.
 const CITATION_RE = /(?:\[\[([^[\]]+?)\]\]|《([^《》]+?)》)(\([^)]*\))?/g;
 
 function linkifyCitations(text, urls) {
   if (!urls) return text;
-  return text.replace(CITATION_RE, (whole, bracketName, cjkName) => {
+  return text.replace(CITATION_RE, (whole, bracketName, cjkName, trailing) => {
     const name = bracketName || cjkName;
-    const entry = urls[name];
+    // answer_final is already [[标题]](/transcripts/<URI>#<anchor>). The bare
+    // title in the map is the whole episode. Replacing it would drop the section.
+    if (trailing && trailing.includes("#")) return whole;
+    let entry = urls[name];
+    if (!entry && name.includes("#")) {
+      entry = urls[name.slice(0, name.indexOf("#"))];
+    }
     // Names we have no entry for are left exactly as written — that is what
     // keeps a genuine 《书名》 in the prose from being turned into a link.
     return entry ? `[[${entry.title}]](${entry.url})` : whole;
@@ -1038,6 +1048,10 @@ async function showReader(uri, generation) {
   setPanelLevel("reader");
   prepareReader(uri);
   els.readingScroll.scrollTo({ top: 0 });
+  // SSR already placed body_html. Scroll before the refresh fetch returns.
+  if (window.location.hash && document.body.dataset.ssrDocId === uri) {
+    scrollToLocationHash();
+  }
   document.title = "文稿 · 睡前消息知识库";
   try {
     const response = await fetch(
@@ -1071,6 +1085,7 @@ async function showReader(uri, generation) {
       }
     }
     els.readerState.textContent = "";
+    scrollToLocationHash();
   } catch (error) {
     if (generation !== routeGeneration) return;
     console.error("Transcript unavailable.", error);
@@ -1116,6 +1131,17 @@ async function renderRoute() {
       console.error("Malformed transcript route.", error);
     }
     if (uri) {
+      // Same transcript, hash only: the article is already in the pane.
+      if (
+        currentArticle &&
+        currentArticle.doc_id === uri &&
+        panelLevel === "reader" &&
+        els.readerBody &&
+        els.readerBody.innerHTML.trim()
+      ) {
+        scrollToLocationHash();
+        return;
+      }
       await showReader(uri, generation);
       return;
     }
@@ -1137,9 +1163,22 @@ async function renderRoute() {
 function navigate(href) {
   const url = new URL(href, window.location.origin);
   if (url.origin !== window.location.origin) return;
-  const next = `${url.pathname}${url.search}`;
-  if (next === `${window.location.pathname}${window.location.search}`) return;
+  const nextPath = `${url.pathname}${url.search}`;
+  const currentPath = `${window.location.pathname}${window.location.search}`;
+  const next = `${nextPath}${url.hash}`;
+  const current = `${currentPath}${window.location.hash}`;
+  // Same link again, after the reader has scrolled away: the hash did not
+  // change, so jump back to the section without a new history entry.
+  if (next === current) {
+    if (url.hash && nextPath === currentPath) scrollToLocationHash();
+    return;
+  }
   history.pushState({}, "", next);
+  // A hash-only change must not refetch. The reading pane scrolls to the id.
+  if (nextPath === currentPath) {
+    scrollToLocationHash();
+    return;
+  }
   renderRoute();
 }
 
@@ -1224,6 +1263,73 @@ if (window.visualViewport) {
 // scrollIntoView() and bare hash navigation also scroll ancestor/viewport
 // containers; with a 100dvh locked shell that shoves the whole desk upward and
 // leaves a blank band of page background.
+// The hash never reaches the server. After body_html is in the pane, scroll
+// that pane — not the 100dvh page shell — to the decoded id. A missing id or
+// an empty hash stays at the top.
+function readingPaneIsSettled() {
+  const pane = els.readingPane;
+  if (!pane || document.body.dataset.view !== "browse") return false;
+  if (typeof pane.getAnimations !== "function") return true;
+  // flex-basis is still sliding from 0% to half the desk. Measuring a heading
+  // during that slide uses the narrow column, then the wider reflow leaves
+  // the scroll position past the heading.
+  return !pane.getAnimations().some((anim) => {
+    if (anim.playState !== "running") return false;
+    const prop = anim.transitionProperty;
+    return !prop || prop === "flex-basis" || prop === "border-left-width";
+  });
+}
+
+function whenReadingPaneSettled(callback) {
+  if (readingPaneIsSettled()) {
+    callback();
+    return;
+  }
+  const pane = els.readingPane;
+  if (!pane) return;
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    pane.removeEventListener("transitionend", onEnd);
+    requestAnimationFrame(() => requestAnimationFrame(callback));
+  };
+  const onEnd = (event) => {
+    if (event.target !== pane || event.propertyName !== "flex-basis") return;
+    finish();
+  };
+  pane.addEventListener("transitionend", onEnd);
+  setTimeout(finish, PANE_SLIDE_MS + 40);
+}
+
+function scrollToLocationHash() {
+  const scroller = els.readingScroll;
+  if (!scroller) return;
+  const raw = window.location.hash;
+  if (!raw || raw === "#") {
+    scroller.scrollTo({ top: 0 });
+    return;
+  }
+  let id = raw.slice(1);
+  try {
+    id = decodeURIComponent(id);
+  } catch {
+    /* keep the raw fragment */
+  }
+  // Resolve the node after the pane settles. The element found before the
+  // wait can be replaced when the fetched article HTML arrives.
+  whenReadingPaneSettled(() => {
+    const target =
+      (els.readerBody && els.readerBody.querySelector(`#${CSS.escape(id)}`)) ||
+      scroller.querySelector(`#${CSS.escape(id)}`);
+    if (!target) {
+      scroller.scrollTo({ top: 0 });
+      return;
+    }
+    scrollReadingPaneTo(target);
+  });
+}
+
 function scrollReadingPaneTo(target) {
   const scroller = els.readingScroll;
   if (!scroller || !target) return;
@@ -1294,6 +1400,7 @@ document.addEventListener("click", (event) => {
   navigate(link.href);
 });
 
+if ("scrollRestoration" in history) history.scrollRestoration = "manual";
 window.addEventListener("popstate", renderRoute);
 
 /* -------------------------------------------------------------- conversation */

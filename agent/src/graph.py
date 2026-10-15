@@ -65,7 +65,7 @@ import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Annotated, Any, Literal, TypedDict
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 
 from langchain_core.documents import Document
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
@@ -576,6 +576,7 @@ def _retrieve_node(state: AgentState) -> AgentState:
                     "title": result.title,
                     "chunk_index": result.chunk_index,
                     "heading": result.heading,
+                    "heading_anchor": result.heading_anchor or "",
                     "word_count": result.word_count,
                     "similarity": result.similarity,
                 },
@@ -804,14 +805,8 @@ def _answer_generate_node(state: AgentState) -> AgentState:
             if cid and cid in text_map:
                 doc.page_content = text_map[cid]
 
-    # Format documents for context.
-    #
-    # The model is shown each document's URI and asked to cite that, not a
-    # display name and not a URL. A URI is a short, exact, copyable token that
-    # already exists in the data, so the model has nothing to invent: no
-    # hallucinated episode numbers, and no fabricated links. Turning URIs into
-    # titled links is done here afterwards, where it is a lookup rather than a
-    # generation problem.
+    # Each passage is one source. The id is URI#anchor from the index. The
+    # episode title and the link are applied after generation.
     context_parts = []
     # Map accepted citation spelling -> canonical citation, used to repair the
     # model's citations after generation.
@@ -820,10 +815,12 @@ def _answer_generate_node(state: AgentState) -> AgentState:
         metadata = chunk.metadata
         doc_id = metadata.get("doc_id", "unknown")
         heading = metadata.get("heading", "")
+        anchor = metadata.get("heading_anchor") or ""
         similarity = metadata.get("similarity", 0.0)
+        source = _source_id(doc_id, anchor)
 
         context_parts.append(
-            f"URI: {doc_id}\n"
+            f"Source: {source}\n"
             f"Similarity: {similarity:.2f}\n"
             f"Heading: {heading}\n"
             f"Content: {chunk.page_content}\n"
@@ -834,7 +831,6 @@ def _answer_generate_node(state: AgentState) -> AgentState:
         if context_parts
         else "No relevant documents found."
     )
-
     system_prompt = """You are a knowledgeable assistant for the 睡前消息 knowledge base.
 
 Your task: Respond to the user's input based on the provided documents from 睡前消息 episodes.
@@ -846,32 +842,19 @@ CRITICAL REQUIREMENTS:
 
 Guidelines:
 1. **Ground your response in the documents**: Only make claims supported by the retrieved content
-2. **Cite by URI**: Each retrieved document begins with a `URI:` field (e.g. `ShuiQianXiaoXi/0501-0600/0588.md`). When you reference a document, write its URI verbatim inside double brackets: `[[ShuiQianXiaoXi/0501-0600/0588.md]]`. Copy the URI character for character, including the `.md` suffix. Do not write a URL, do not write the episode's Chinese name, and do not invent a URI that was not given to you.
-3. **Be specific**: Reference episode numbers, examples, and arguments from the show
+2. **Name the source id only**: A passage's Source line is its id. Two topics from one episode are two sources. When you attribute a claim, copy that id between double square brackets. Do not wrap the citation in backticks, and do not write the episode title, a URL, or a markdown link. Those are added after you answer.
+3. **Be specific**: Use the examples and arguments from the passage.
 4. **Synthesize**: Combine information from ALL documents - don't just summarize individual documents
 5. **Be honest**: If the documents don't contain enough information to answer, say so clearly. This is about gaps in what the user asked; it is not a reason to report on off-topic passages the documents happen to contain.
 6. **Structure clearly**: Use paragraphs, bullets, or sections as appropriate
-7. **Cite once per run of claims**: When several consecutive sentences or paragraphs draw on the same document, cite it once at the end of that run (e.g. the end of the paragraph or section), not after every sentence.
+7. **One source id per run of claims**: When several sentences draw on the same Source line, name that id once at the end of the run. Do not merge two topics into one episode name.
 8. **Distinguish sources**: Make it clear when you're:
-   - Reporting what 睡前消息 says (cite documents)
+   - Reporting what 睡前消息 says (name that passage's Source id)
    - Adding general context (mark as background knowledge)
 9. **Do not propose next step in prose**: Do not end the answer with offers like "如果你想，我可以……" or "要不要我帮你……". Suggested next questions belong only in the FOLLOW-UP block described below.
 10. **Prior conversation is context, not evidence**: If earlier turns are shown, use them only to understand what the user is referring to and to avoid repeating yourself. They are NOT a source of facts. Every factual claim in this answer must come from the documents retrieved for THIS turn and carry a citation. If the conversation touched on something the current documents do not cover, say so rather than recalling it.
 
-**MANDATORY**: Every provided document that contains content relevant to the user's input must contribute to the answer and be cited. A document whose content is entirely unrelated to the input is simply left out, without comment.
-
-**CITATION FORMAT (MANDATORY)**: Every citation is the document's URI in double
-brackets, copied verbatim from that document's `URI:` field — `[[<URI>]]`. Write
-nothing else: no URL, no parentheses, no Chinese episode name. The URI is turned
-into a properly titled link for the reader automatically after you answer, so a
-bare `[[<URI>]]` is the complete and correct citation.
-- ✅ Correct: `[[CanKaoXinXi/0401-0500/0426.md]]`
-- ❌ Wrong: `[[参考信息426]]` — do not translate the URI into the episode name
-- ❌ Wrong: `[[CanKaoXinXi/0401-0500/0426.md]](https://…)` — do not append a URL
-- ❌ Wrong: `《参考信息426》` — never use 书名号 for an episode reference, not even
-  when it appears mid-sentence as the subject of a clause. Write
-  `[[CanKaoXinXi/0401-0500/0426.md]] 详细披露了…`, not `《参考信息426》 详细披露了…`.
-- ❌ Wrong: citing a URI that appears in no `URI:` field above.
+**MANDATORY**: Every retrieved passage that bears on the user's input must contribute to the answer. A passage whose content is entirely unrelated is left out, without comment.
 
 If no relevant documents: Explain that the knowledge base doesn't contain information about this topic.
 
@@ -887,10 +870,6 @@ language, as a user would type them, each under 30 characters where possible.
 
 If the retrieved documents were empty or irrelevant, output the delimiter with
 nothing after it.
-
-Example ending:
-
-…以上就是专项债投向的主要问题。
 
 <<<FOLLOWUPS>>>
 地方政府的隐性债务有多大规模？
@@ -910,7 +889,7 @@ Example ending:
         HumanMessage(
             content=(
                 f"{history_block}User input: {question}\n\n"
-                f"## Retrieved Documents:\n\n{context}"
+                f"## Retrieved passages:\n\n{context}"
             )
         ),
     ]
@@ -927,7 +906,7 @@ Example ending:
 
     # Turn the bare `[[URI]]` citations the prompt asks for (and the spellings the
     # model drifts into) into titled links to the transcript pages.
-    answer, repaired = _repair_citations(answer, citation_map)
+    answer, repaired = _repair_citations(answer, citation_map, documents)
 
     # Repair only rewrites citations that are present in some form. The model
     # occasionally omits them altogether, and the result is the worst possible
@@ -936,7 +915,7 @@ Example ending:
     # it are known, so list them rather than let the answer stand unattributed.
     uncited = bool(documents) and not _has_citation(answer)
     if uncited:
-        sources = "\n".join(f"- {c}" for c in dict.fromkeys(citation_map.values()))
+        sources = "\n".join(f"- {c}" for c in _source_list_links(citation_map))
         answer = f"{answer}\n\n---\n\n**参考来源**\n\n{sources}"
 
     total_time = time.perf_counter() - start_time
@@ -1094,42 +1073,76 @@ def _parallel_llm_calls(
 # ordinary Chinese way to write a title, so it reaches for it even when told not
 # to. Whichever it writes, the enclosed text is looked up in citation_map, which
 # is keyed by both URI and 标准化标题 — the model can read the title off the URI,
-# so it sometimes writes the title even though it was shown only the URI.
-# Anything not in that map is left untouched, which is what keeps a genuine
-# 《书名》 in the prose from being turned into a link.
+# so it sometimes writes the episode title even though it was shown the
+# source id. A known episode opens a retrieved section. Anything not in that
+# map is left untouched, which keeps a genuine 《书名》 in the prose unlinked.
 _CITATION_RE = re.compile(r"(?:\[\[([^\[\]]+?)\]\]|《([^《》]+?)》)(\([^)]*\))?")
 
 
-def _repair_citations(answer: str, citation_map: dict[str, str]) -> tuple[str, int]:
+def _repair_citations(
+    answer: str,
+    citation_map: dict[str, str],
+    documents: list[Document] | None = None,
+) -> tuple[str, int]:
     """
     Rewrite citations into the canonical titled markdown link.
 
-    This is the step that turns what the model wrote — `[[<URI>]]`, or one of the
-    spellings it drifts into — into what the reader should see:
-    `[[标准化标题]](/transcripts/<URI>)`. The model never writes the URL or the
-    title itself; both are looked up here from the retrieved documents, so a
-    citation is either correct or absent, never plausibly wrong.
-
-    For every citation whose enclosed text matches a retrieved document (by URI
-    or by title), the whole token — including any parenthetical the model
-    appended — is replaced with that document's canonical citation. Text not
-    among the retrieved documents is left exactly as written.
+    The model is shown a source id (``URI`` or ``URI#anchor``). This step
+    looks up the standardised title and the section URL. The model does not
+    write either. A known episode with a retrieved section opens that section,
+    not the start of the transcript. Text that matches nothing retrieved is
+    left as written.
 
     Returns the repaired answer and the number of citations that were changed.
+
+    A bare episode name opens a retrieved section: the heading matched by the
+    text before the citation, otherwise the strongest section. It does not open
+    the start of the transcript. A preamble with no topic anchor stays a
+    whole-document link.
     """
+    matches = list(_CITATION_RE.finditer(answer))
+    if not matches:
+        return answer, 0
+    pieces: list[str] = []
+    cursor = 0
+    previous = 0
     repaired = 0
-
-    def _sub(match: re.Match[str]) -> str:
-        nonlocal repaired
+    for match in matches:
         name = match.group(1) or match.group(2)
-        canonical = citation_map.get(name)
+        canonical = _lookup_citation(name, citation_map)
         if canonical is None:
-            return match.group(0)
-        if match.group(0) != canonical:
+            pieces.append(answer[cursor : match.end()])
+            cursor = match.end()
+            previous = match.end()
+            continue
+        if documents is not None and "#" not in name:
+            anchor = _anchor_from_passage(
+                answer[previous : match.start()], canonical, documents
+            )
+            doc_id = _doc_id_from_citation(canonical)
+            upgraded = citation_map.get(f"{doc_id}#{anchor}") if anchor else None
+            if upgraded:
+                canonical = upgraded
+        start, end = match.start(), match.end()
+        # A single pair of backticks would show the repaired link as code.
+        if (
+            start > 0
+            and end < len(answer)
+            and answer[start - 1] == "`"
+            and answer[end] == "`"
+            and (start < 2 or answer[start - 2] != "`")
+            and (end + 1 >= len(answer) or answer[end + 1] != "`")
+        ):
+            start -= 1
+            end += 1
+        if answer[start:end] != canonical:
             repaired += 1
-        return canonical
-
-    return _CITATION_RE.sub(_sub, answer), repaired
+        pieces.append(answer[cursor:start])
+        pieces.append(canonical)
+        cursor = end
+        previous = end
+    pieces.append(answer[cursor:])
+    return "".join(pieces), repaired
 
 
 # The generation prompt asks for the answer, this delimiter, then the suggested
@@ -1182,9 +1195,33 @@ def _has_citation(answer: str) -> bool:
     return _TRANSCRIPT_LINK in answer
 
 
-def _citation_url(doc_id: str) -> str:
-    """Public transcript page for a document URI."""
-    return f"{TRANSCRIPTS_BASE_URL}{quote(doc_id, safe='/')}"
+def _citation_url(doc_id: str, anchor: str = "") -> str:
+    """Public transcript page for a document URI, plus a section fragment."""
+    url = f"{TRANSCRIPTS_BASE_URL}{quote(doc_id, safe='/')}"
+    if anchor:
+        # Raw anchor in the path's fragment. Chinese is percent-encoded; "-" stays.
+        url += "#" + quote(anchor, safe="")
+    return url
+
+
+def _lookup_citation(name: str, citation_map: dict[str, str]) -> str | None:
+    """Resolve a citation token.
+
+    An unknown ``#anchor`` falls back to that episode's retrieved section, not
+    to the start of the transcript.
+    """
+    found = citation_map.get(name)
+    if found is not None:
+        return found
+    base, sep, _anchor = name.partition("#")
+    if sep:
+        return citation_map.get(base)
+    return None
+
+
+def _source_list_links(citation_map: dict[str, str]) -> list[str]:
+    """One bullet per distinct link. Section links are the sources."""
+    return list(dict.fromkeys(citation_map.values()))
 
 
 def _display_title(doc_id: str, title: str | None = None) -> str:
@@ -1197,27 +1234,131 @@ def _display_title(doc_id: str, title: str | None = None) -> str:
     return title or derive_title(doc_id) or doc_id
 
 
-def _canonical_citation(doc_id: str, title: str | None = None) -> tuple[str, str]:
-    """(display title, full markdown link) for a document."""
+def _canonical_citation(
+    doc_id: str, title: str | None = None, anchor: str = ""
+) -> tuple[str, str]:
+    """(display title, full markdown link) for a document or one of its sections."""
     display = _display_title(doc_id, title)
-    return display, f"[[{display}]]({_citation_url(doc_id)})"
+    return display, f"[[{display}]]({_citation_url(doc_id, anchor)})"
+
+
+def _chunk_anchor(chunk: Document) -> str:
+    return str(chunk.metadata.get("heading_anchor") or "")
+
+
+def _source_id(doc_id: str, anchor: str) -> str:
+    """Parallel source id. A section is ``URI#anchor``; a preamble is the URI."""
+    return f"{doc_id}#{anchor}" if anchor else doc_id
+
+
+def _citation_target(link: str) -> str:
+    return link.split("](", 1)[-1].rstrip(")")
+
+
+def _doc_id_from_citation(link: str) -> str:
+    path = _citation_target(link).split("#", 1)[0]
+    prefix = TRANSCRIPTS_BASE_URL
+    if path.startswith(prefix):
+        return unquote(path[len(prefix) :])
+    return ""
+
+
+def _heading_coverage(text: str, phrase: str) -> int:
+    """How many characters of ``phrase`` occur in ``text`` as a run of 2 or more."""
+    phrase = re.sub(r"\s+", "", phrase)
+    if len(phrase) < 2:
+        return 0
+    covered = [False] * len(phrase)
+    for length in range(len(phrase), 1, -1):
+        for start in range(0, len(phrase) - length + 1):
+            if any(covered[start : start + length]):
+                continue
+            if phrase[start : start + length] in text:
+                covered[start : start + length] = [True] * length
+    return sum(covered)
+
+
+def _anchor_from_passage(
+    passage: str, canonical: str, documents: list[Document]
+) -> str:
+    """The retrieved section this bare episode citation is about, or ''."""
+    doc_id = _doc_id_from_citation(canonical)
+    headings: dict[str, str] = {}
+    for chunk in documents:
+        if str(chunk.metadata.get("doc_id", "")) != doc_id:
+            continue
+        anchor = _chunk_anchor(chunk)
+        if not anchor:
+            continue
+        headings.setdefault(anchor, str(chunk.metadata.get("heading") or anchor))
+    if not headings:
+        return ""
+    if len(headings) == 1:
+        return next(iter(headings))
+    scored = [
+        (
+            max(
+                _heading_coverage(passage, heading), _heading_coverage(passage, anchor)
+            ),
+            anchor,
+        )
+        for anchor, heading in headings.items()
+    ]
+    scored.sort(reverse=True)
+    if scored[0][0] >= 2 and scored[0][0] > scored[1][0]:
+        return scored[0][1]
+    return ""
+
+
+def _default_section(documents: list[Document]) -> dict[str, str]:
+    """doc_id -> anchor of its strongest retrieved section.
+
+    A higher similarity wins. Equal scores keep the earlier chunk. Episodes
+    with no topic anchor are absent.
+    """
+    best: dict[str, tuple[float, str]] = {}
+    for chunk in documents:
+        anchor = _chunk_anchor(chunk)
+        if not anchor:
+            continue
+        doc_id = str(chunk.metadata.get("doc_id", "unknown"))
+        similarity = float(chunk.metadata.get("similarity") or 0)
+        current = best.get(doc_id)
+        if current is None or similarity > current[0]:
+            best[doc_id] = (similarity, anchor)
+    return {doc_id: anchor for doc_id, (_similarity, anchor) in best.items()}
 
 
 def build_citation_map(documents: list[Document]) -> dict[str, str]:
     """
-    Map every accepted citation spelling -> the canonical markdown link.
+    Map every accepted spelling to a titled link.
 
-    Keyed by URI, which is what the prompt tells the model to write, and also by
-    标准化标题, which it reaches for on its own because the URI spells the title
-    out (`ShuiQianXiaoXi/.../0588.md` is visibly 睡前消息588). Both resolve to the
-    same link, so either spelling is repaired rather than left as dead text.
+    A section is its own source: ``URI#anchor``. The visible label is the
+    episode title, with no heading suffix. The bare URI and the bare title of
+    an episode that has a retrieved section open that section, not the start
+    of the transcript. The strongest section is the default; passage repair
+    can pick another retrieved section of the same episode.
     """
     citations: dict[str, str] = {}
+    defaults = _default_section(documents)
+    seen: set[str] = set()
     for chunk in documents:
-        doc_id = chunk.metadata.get("doc_id", "unknown")
-        display, citation = _canonical_citation(doc_id, chunk.metadata.get("title"))
-        citations[doc_id] = citation
-        citations[display] = citation
+        doc_id = str(chunk.metadata.get("doc_id", "unknown"))
+        if doc_id in seen:
+            continue
+        seen.add(doc_id)
+        title = chunk.metadata.get("title")
+        display, link = _canonical_citation(doc_id, title, defaults.get(doc_id, ""))
+        citations[doc_id] = link
+        citations[display] = link
+    for chunk in documents:
+        anchor = _chunk_anchor(chunk)
+        if not anchor:
+            continue
+        doc_id = str(chunk.metadata.get("doc_id", "unknown"))
+        display, link = _canonical_citation(doc_id, chunk.metadata.get("title"), anchor)
+        citations[f"{doc_id}#{anchor}"] = link
+        citations[f"{display}#{anchor}"] = link
     return citations
 
 
@@ -1230,16 +1371,33 @@ def build_citation_urls(documents: list[Document]) -> dict[str, dict[str, str]]:
     finished, which is too late to help a reader watching the text appear.
 
     The model writes URIs, but the reader must see 标准化标题, so the client needs
-    both values rather than a bare URL. Keyed like build_citation_map — by URI
-    and by title — so client and server repair the same set of spellings.
+    both values rather than a bare URL. Keyed like build_citation_map — by URI,
+    by title, and by ``URI#anchor`` / ``title#anchor`` when the chunk has one.
     """
     urls: dict[str, dict[str, str]] = {}
+    defaults = _default_section(documents)
+    seen: set[str] = set()
     for chunk in documents:
-        doc_id = chunk.metadata.get("doc_id", "unknown")
+        doc_id = str(chunk.metadata.get("doc_id", "unknown"))
+        if doc_id in seen:
+            continue
+        seen.add(doc_id)
         display = _display_title(doc_id, chunk.metadata.get("title"))
-        entry = {"title": display, "url": _citation_url(doc_id)}
+        entry = {
+            "title": display,
+            "url": _citation_url(doc_id, defaults.get(doc_id, "")),
+        }
         urls[doc_id] = entry
         urls[display] = entry
+    for chunk in documents:
+        anchor = _chunk_anchor(chunk)
+        if not anchor:
+            continue
+        doc_id = str(chunk.metadata.get("doc_id", "unknown"))
+        display = _display_title(doc_id, chunk.metadata.get("title"))
+        entry = {"title": display, "url": _citation_url(doc_id, anchor)}
+        urls[f"{doc_id}#{anchor}"] = entry
+        urls[f"{display}#{anchor}"] = entry
     return urls
 
 

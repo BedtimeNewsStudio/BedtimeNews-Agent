@@ -8,11 +8,15 @@ Usage (inside the indexer container):
     docker compose exec indexer python -m src.snapshots pin <id>
     docker compose exec indexer python -m src.snapshots unpin <id>
     docker compose exec indexer python -m src.snapshots build [--full]
+    docker compose exec indexer python -m src.snapshots drop-previous-lineage [--dry-run]
 
 ``retire`` is the data rollback: agents stop selecting the snapshot within
 their 15 s poll and fall back to the previous readable one. ``unretire``
 undoes it within the 24 h retention. Pinned snapshots are never collected.
 ``build`` takes the same run lock and advisory lock as the scheduled run.
+``drop-previous-lineage`` removes older chunking in the same embedding
+space once a snapshot of the current lineage is published. It does not
+wait out the 7-day retention, and it does not touch the current lineage.
 """
 
 import argparse
@@ -77,6 +81,38 @@ def _pin(snapshot_id: str, pinned: bool) -> int:
     return 0
 
 
+def cmd_drop_previous(dry_run: bool) -> int:
+    with connection() as conn, transaction(conn) as cursor:
+        snapshots = catalog.list_snapshots(cursor)
+    try:
+        targets = catalog.previous_lineage_targets(snapshots, catalog.current_lineage())
+    except catalog.PreviousLineageBlocked as exc:
+        print(exc, file=sys.stderr)
+        return 1
+    if not targets:
+        print("nothing to drop")
+        return 0
+    for snap in targets:
+        print(
+            f"{'would drop' if dry_run else 'dropping'} {snap.snapshot_id} "
+            f"schema={snap.schema_name} format={snap.format_version} "
+            f"status={snap.status}"
+        )
+    if dry_run:
+        return 0
+    try:
+        with connection() as conn:
+            dropped = catalog.drop_previous_lineage(conn)
+    except catalog.PreviousLineageBlocked as exc:
+        print(exc, file=sys.stderr)
+        return 1
+    except Exception as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(f"dropped {len(dropped)}: {', '.join(dropped)}")
+    return 0
+
+
 def cmd_build(full: bool) -> int:
     from .pipeline import run_once
     from .scheduler import install_signal_handlers
@@ -106,6 +142,15 @@ def main(argv: list[str] | None = None) -> int:
         sub.add_parser(name, help=help_text).add_argument("snapshot_id")
     build = sub.add_parser("build", help="Run a build now")
     build.add_argument("--full", action="store_true", help="Force a full build")
+    drop = sub.add_parser(
+        "drop-previous-lineage",
+        help="Drop the previous chunking in this embedding space",
+    )
+    drop.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="List the snapshots that would be dropped",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -124,6 +169,8 @@ def main(argv: list[str] | None = None) -> int:
                 return _pin(args.snapshot_id, False)
             case "build":
                 return cmd_build(args.full)
+            case "drop-previous-lineage":
+                return cmd_drop_previous(args.dry_run)
     except LookupError as exc:
         print(exc, file=sys.stderr)
         return 2

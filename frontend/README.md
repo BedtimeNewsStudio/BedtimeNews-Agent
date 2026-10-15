@@ -39,6 +39,7 @@ agent 后端；文稿列表与正文阅读器同源托管于 `/transcripts`。
 - 桌面文稿页 GitHub Edit（指向 Transcripts 仓库 `edit/main/contents/…`）
 - 实时 SSE 流式输出与可见流水线步骤
 - markdown-it 渲染回答（本地内置，`html:false`）与应用内引用跳转
+- 直接打开 `/transcripts/<URI>#<anchor>`，或在已打开的文稿里只改 hash，都会把阅读栏滚到对应标题。找不到该 id 时停在正文开头。滚动的是阅读栏，不是浏览器对 hash 的默认滚动
 - 会话仅存当前页（刷新清空）
 - 键盘可用；尊重 `prefers-reduced-motion`
 
@@ -191,7 +192,7 @@ Frontend 代理 agent 的 `/chat` 端点。
 
 ```json
 {"type": "step", "step": "condense|route|rewrite|retrieve|grade|generate", "content": "…"}
-{"type": "citations", "urls": {"ShuiQianXiaoXi/0501-0600/0588.md": {"title": "睡前消息588", "url": "/transcripts/ShuiQianXiaoXi/0501-0600/0588.md"}}}
+{"type": "citations", "urls": {"ShuiQianXiaoXi/0501-0600/0588.md#城投债": {"title": "睡前消息588", "url": "/transcripts/ShuiQianXiaoXi/0501-0600/0588.md#%E5%9F%8E%E6%8A%95%E5%80%BA"}, "ShuiQianXiaoXi/0501-0600/0588.md": {"title": "睡前消息588", "url": "/transcripts/ShuiQianXiaoXi/0501-0600/0588.md"}, "CanKaoXinXi/0401-0500/0490.md": {"title": "参考信息490", "url": "/transcripts/CanKaoXinXi/0401-0500/0490.md"}}}
 {"type": "answer_chunk", "content": "…"}
 {"type": "answer_final", "content": "…", "grounded": true}
 {"type": "answer_meta", "grounded": true}

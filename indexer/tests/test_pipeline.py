@@ -597,6 +597,13 @@ def test_agent_role_is_read_only(corpus, fake_embed, query, monkeypatch, databas
     agent.close()
 
 
+def test_format_2_copy_columns_include_heading_anchor():
+    from src.snapshot_schema import COPY_COLUMNS
+
+    columns = COPY_COLUMNS["document_chunks"]
+    assert columns[columns.index("heading") + 1] == "heading_anchor"
+
+
 def test_snapshot_ids_stay_unique_within_one_second(
     corpus, fake_embed, query, monkeypatch
 ):

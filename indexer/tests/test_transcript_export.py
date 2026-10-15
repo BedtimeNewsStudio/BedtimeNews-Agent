@@ -2,6 +2,7 @@
 
 import hashlib
 
+from src.anchors import encode_fragment
 from src.transcript_export import _rewrite_href, project_transcript
 
 TRANSCRIPT = """# 【睡前消息588】城投债四大网红
@@ -46,6 +47,10 @@ def test_projection_includes_preamble_body_and_appendix():
     assert "bilibili.com" in html
     assert "example.com/watch" in html
     assert "<h1" not in html.lower()
+    assert 'id="第一节"' in html
+    assert 'id="附录"' not in html
+    assert 'id="事实订正"' not in html
+    assert "<h3" in html
     assert projection.body_markdown == TRANSCRIPT
     assert projection.source_hash == hashlib.sha256(raw).hexdigest()
 
@@ -58,6 +63,7 @@ def test_projection_sanitizes_html_and_suppresses_remote_images():
     assert "<img" not in html
     assert "[图片：远程图]" in html
     assert "<u>下划线</u>" in html
+    assert 'id="第一节"' in html
 
 
 def test_footnotes_are_bidirectional_links():
@@ -77,6 +83,7 @@ def test_projection_localizes_internal_and_old_site_links():
 ## 正文
 
 [relative](../0201-0300/0201.md)
+[jumpto](../0201-0300/0201.md#俄军更换指挥官-美欧援助重装备)
 [old](https://bedtimenewsstudio.github.io/BedtimeNews-Transcripts/contents/CanKaoXinXi/0401-0500/0490.html)
 [outside](../../../../secret.md)
 [unsafe](javascript:alert(1))
@@ -87,8 +94,10 @@ def test_projection_localizes_internal_and_old_site_links():
         "ShuiQianXiaoXi/0101-0200/0150.md", markdown.encode(), "标题"
     ).body_html
 
-    assert "/transcripts/ShuiQianXiaoXi/0201-0300/0201.md" in html
-    assert "/transcripts/CanKaoXinXi/0401-0500/0490.md" in html
+    fragment = encode_fragment("俄军更换指挥官-美欧援助重装备")
+    assert 'href="/transcripts/ShuiQianXiaoXi/0201-0300/0201.md"' in html
+    assert f'href="/transcripts/ShuiQianXiaoXi/0201-0300/0201.md#{fragment}"' in html
+    assert 'href="/transcripts/CanKaoXinXi/0401-0500/0490.md"' in html
     assert "bedtimenewsstudio.github.io" not in html
     assert 'href="javascript:' not in html
     assert "javascript:" in html

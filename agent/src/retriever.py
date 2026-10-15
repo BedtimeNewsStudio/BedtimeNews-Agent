@@ -56,6 +56,7 @@ class _Retriever:
             match_count=request.match_count,
             doc_id_filter=request.doc_id_filter,
             include_text=request.include_text,
+            format_version=snapshot.format_version,
         )
 
         results = self._map_chunk_results(documents, request)
@@ -113,6 +114,7 @@ class _Retriever:
                 match_count=request.match_count,
                 doc_id_filter=request.doc_id_filter,
                 include_text=request.include_text,
+                format_version=snapshot.format_version,
             )
             chunk_results = self._map_chunk_results(documents, request)
             return RetrieveResponse(
@@ -154,6 +156,7 @@ class _Retriever:
                 title=doc.get("title"),
                 chunk_index=doc.get("chunk_index"),
                 heading=doc.get("heading") if request.include_heading else None,
+                heading_anchor=doc.get("heading_anchor") or "",
                 text=doc["text"] if request.include_text else None,
                 word_count=doc["word_count"],
                 similarity=round(doc["similarity"], 4),

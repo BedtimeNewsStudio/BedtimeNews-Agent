@@ -209,6 +209,7 @@ def search_similar_chunks(
     match_count: int,
     doc_id_filter: list[str] | None = None,
     include_text: bool = True,
+    format_version: int = 1,
 ) -> list[dict[str, Any]]:
     """
     Search for similar chunks using vector similarity.
@@ -221,6 +222,7 @@ def search_similar_chunks(
         match_count: Maximum number of results to return
         doc_id_filter: Optional list of doc_ids to restrict search
         include_text: Whether to include full text in results (False saves bandwidth for grading)
+        format_version: Snapshot format. Format 1 has no ``heading_anchor`` column, so the query must not name it.
 
     Returns:
         List of matching chunks with similarity scores
@@ -247,6 +249,7 @@ def search_similar_chunks(
                 d.title,
                 c.chunk_index,
                 c.heading,
+                {anchor_column}
                 {text_column}
                 c.word_count,
                 1 - (c.embedding <=> %s::halfvec) AS similarity
@@ -261,6 +264,7 @@ def search_similar_chunks(
         """
     ).format(
         text_column=sql.SQL("c.text," if include_text else ""),
+        anchor_column=sql.SQL("c.heading_anchor," if format_version >= 2 else ""),
         chunks=_table(schema, "document_chunks"),
         documents=_table(schema, "documents"),
         doc_filter=doc_filter_sql,

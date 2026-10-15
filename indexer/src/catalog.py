@@ -466,6 +466,81 @@ def gc_candidates(
     return doomed
 
 
+class PreviousLineageBlocked(RuntimeError):
+    """Refusing to drop the previous chunking."""
+
+
+def previous_lineage_targets(
+    snapshots: list[SnapshotInfo],
+    lineage: tuple[str, str],
+) -> list[SnapshotInfo]:
+    """Snapshots of an older chunking in this embedding space.
+
+    The current lineage is the fingerprint of this indexer (format 2, chunker
+    2). Anything else in the same embedding space is the previous method: it
+    did not cut the body on sibling ``##`` topics and has no ``heading_anchor``.
+    A different embedding space is a different model and is not this cleanup.
+
+    Raises ``PreviousLineageBlocked`` when no current-lineage snapshot is
+    published, or when a candidate is pinned. The caller drops nothing in
+    either case.
+    """
+    fingerprint, space = lineage
+    if not any(
+        s.status == STATUS_PUBLISHED and s.lineage == lineage for s in snapshots
+    ):
+        raise PreviousLineageBlocked(
+            "no published snapshot in the current lineage; "
+            "refusing to drop the previous chunking"
+        )
+    targets = [
+        s
+        for s in snapshots
+        if s.embedding_space == space and s.pipeline_fingerprint != fingerprint
+    ]
+    pinned = [s.snapshot_id for s in targets if s.pinned]
+    if pinned:
+        raise PreviousLineageBlocked(
+            "pinned snapshot still holds the previous chunking: " + ", ".join(pinned)
+        )
+    return targets
+
+
+def drop_registered_snapshot(conn: Connection, snap: SnapshotInfo) -> None:
+    """DROP one snapshot schema and delete its registry row."""
+    if not _is_snapshot_schema(snap.schema_name):
+        raise RuntimeError(f"refusing to drop unexpected schema {snap.schema_name}")
+    with transaction(conn) as cursor:
+        if not try_advisory_xact_lock(cursor):
+            raise RuntimeError("another writer holds the snapshot advisory lock")
+        cursor.execute(f"SET LOCAL lock_timeout = '{GC_LOCK_TIMEOUT}'")
+        cursor.execute(
+            sql.SQL("DROP SCHEMA IF EXISTS {s} CASCADE").format(
+                s=sql.Identifier(snap.schema_name)
+            )
+        )
+        cursor.execute(
+            "DELETE FROM rag_meta.snapshots WHERE snapshot_id = %s",
+            (snap.snapshot_id,),
+        )
+
+
+def drop_previous_lineage(conn: Connection) -> list[str]:
+    """Drop older chunking in this embedding space. See ``previous_lineage_targets``."""
+    with transaction(conn) as cursor:
+        targets = previous_lineage_targets(list_snapshots(cursor), current_lineage())
+    dropped: list[str] = []
+    for snap in targets:
+        drop_registered_snapshot(conn, snap)
+        dropped.append(snap.snapshot_id)
+        logger.info(
+            "dropped previous-lineage snapshot %s (format %s)",
+            snap.snapshot_id,
+            snap.format_version,
+        )
+    return dropped
+
+
 def collect_garbage(conn: Connection) -> list[str]:
     """Drop snapshots past retention, one transaction each. Returns dropped ids."""
     with transaction(conn) as cursor:
@@ -479,22 +554,14 @@ def collect_garbage(conn: Connection) -> list[str]:
             logger.error("Refusing to drop unexpected schema %s", snap.schema_name)
             continue
         try:
-            with transaction(conn) as cursor:
-                if not try_advisory_xact_lock(cursor):
-                    logger.info("GC skipped: another writer holds the lock")
-                    return dropped
-                cursor.execute(f"SET LOCAL lock_timeout = '{GC_LOCK_TIMEOUT}'")
-                cursor.execute(
-                    sql.SQL("DROP SCHEMA IF EXISTS {s} CASCADE").format(
-                        s=sql.Identifier(snap.schema_name)
-                    )
-                )
-                cursor.execute(
-                    "DELETE FROM rag_meta.snapshots WHERE snapshot_id = %s",
-                    (snap.snapshot_id,),
-                )
+            drop_registered_snapshot(conn, snap)
             dropped.append(snap.snapshot_id)
             logger.info("GC dropped snapshot %s (%s)", snap.snapshot_id, reason)
+        except RuntimeError as exc:
+            if "advisory lock" in str(exc):
+                logger.info("GC skipped: %s", exc)
+                return dropped
+            logger.warning("GC could not drop %s yet: %s", snap.snapshot_id, exc)
         except Exception as exc:
             # Typically a lock timeout: a query is still reading it. Next run.
             logger.warning("GC could not drop %s yet: %s", snap.snapshot_id, exc)
@@ -511,9 +578,13 @@ __all__ = [
     "FORMAT_VERSION",
     "SnapshotInfo",
     "bootstrap",
+    "PreviousLineageBlocked",
     "collect_garbage",
     "current_lineage",
+    "drop_previous_lineage",
+    "drop_registered_snapshot",
     "gc_candidates",
+    "previous_lineage_targets",
     "get_snapshot",
     "get_status",
     "grant_read",

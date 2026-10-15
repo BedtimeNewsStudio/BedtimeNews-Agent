@@ -63,7 +63,9 @@ reader. Built with LangGraph, any OpenAI-compatible chat/embedding endpoints (th
 
 Indexing scope: only each transcript's `## 正文` (body) section is indexed; the
 `## 附录` (appendix — fact corrections and verification notes) and the
-`**发布日期**` metadata line are excluded from retrieval.
+`**发布日期**` metadata line are excluded from retrieval. The citation label is
+the standardised title, and the link opens the matching `##` in the body. With
+no topic anchor, the link opens the start of the transcript.
 
 The stack serves plain HTTP on port 8080 — no TLS. Public exposure and TLS
 termination are handled outside this repo.

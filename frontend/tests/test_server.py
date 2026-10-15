@@ -272,13 +272,17 @@ def test_channel_archive_is_server_rendered_and_sorted(client):
 
 def test_transcript_page_contains_raw_ssr_body_and_safe_metadata(client):
     hostile_title = '题目</title><script>alert("x")</script>'
-    article = _article_payload(source_title=hostile_title)
+    article = _article_payload(
+        source_title=hostile_title,
+        body_html='<h2 id="话题">话题</h2><p>这是已经清洗的<strong>正文内容</strong>。</p>',
+    )
     server._client = _FakeJsonClient(_json_upstream(200, article))
 
     response = client.get("/transcripts/ShuiQianXiaoXi/0501-0600/0588.md")
 
     assert response.status_code == 200
     assert article["body_html"] in response.text
+    assert '<h2 id="话题">' in response.text
     assert hostile_title not in response.text
     assert "题目&lt;/title&gt;&lt;script&gt;" in response.text
     assert '<meta property="og:type" content="article"' in response.text

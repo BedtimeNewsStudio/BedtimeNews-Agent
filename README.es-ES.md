@@ -70,7 +70,9 @@ PostgreSQL + pgvector.
 
 Alcance de la indexación: solo se indexa la sección `## 正文` (cuerpo) de cada
 transcripción; `## 附录` (apéndice: correcciones y notas de verificación) y la
-línea de metadatos `**发布日期**` quedan fuera de la recuperación.
+línea de metadatos `**发布日期**` quedan fuera de la recuperación. La etiqueta
+de la cita es el título normalizado, y el enlace abre el `##` correspondiente
+del cuerpo. Sin ancla de tema, el enlace abre el inicio de la transcripción.
 
 La pila sirve HTTP puro en el puerto 8080 — sin TLS. La exposición pública y la
 terminación TLS se gestionan fuera de este repositorio.

@@ -116,9 +116,12 @@ def test_higher_supported_format_beats_newer(db, monkeypatch):
     register(db, "s_v2", fmt=2, minutes_ago=30)
     register(db, "s_v1", fmt=1, minutes_ago=1)
     register(db, "s_v3", fmt=3)
-    assert select(db)[0].snapshot_id == "s_v1"  # supports {1} only
-    monkeypatch.setattr(snapshots, "SUPPORTED_FORMATS", frozenset({1, 2}))
+    # Production supports {1, 2}. Format 2 beats a newer format 1.
+    # Format 3 is not supported and is not selected.
     assert select(db)[0].snapshot_id == "s_v2"
+    # A process that only supports {1} keeps reading format 1.
+    monkeypatch.setattr(snapshots, "SUPPORTED_FORMATS", frozenset({1}))
+    assert select(db)[0].snapshot_id == "s_v1"
 
 
 @needs_db
@@ -221,6 +224,7 @@ def test_retrieval_cache_is_per_snapshot(monkeypatch):
                 "title": "t",
                 "chunk_index": 0,
                 "heading": None,
+                "heading_anchor": "",
                 "text": "x",
                 "word_count": 1,
                 "similarity": 0.9,
@@ -240,3 +244,42 @@ def test_retrieval_cache_is_per_snapshot(monkeypatch):
     assert r.retrieve(request, old).results[0].chunk_id == "rag_s1-chunk"
     assert r.retrieve_batch([request], new)[0].results[0].chunk_id == "rag_s2-chunk"
     assert calls == ["rag_s1", "rag_s2"], "second s1 call is cached; s2 is not"
+
+
+def _sql_text(query) -> str:
+    seq = getattr(query, "seq", None)
+    if seq is not None:
+        return "".join(_sql_text(part) for part in seq)
+    string = getattr(query, "string", None)
+    if isinstance(string, str):
+        return string
+    strings = getattr(query, "strings", None)
+    if strings:
+        return ".".join(strings)
+    return ""
+
+
+def test_format_1_sql_omits_heading_anchor_and_format_2_selects_it(monkeypatch):
+    captured = []
+
+    class _Capture:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def cursor(self):
+            return self
+
+        def execute(self, query, _params):
+            captured.append(_sql_text(query))
+
+        def fetchall(self):
+            return []
+
+    monkeypatch.setattr(vector_db, "_Connection", _Capture)
+    vector_db.search_similar_chunks("rag_s1", [0.1], 0.2, 3, format_version=1)
+    vector_db.search_similar_chunks("rag_s2", [0.1], 0.2, 3, format_version=2)
+    assert "heading_anchor" not in captured[0]
+    assert "heading_anchor" in captured[1]

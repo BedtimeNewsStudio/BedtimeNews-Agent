@@ -416,7 +416,7 @@ def _insert_chunks(cursor: Cursor, target: str, prepared: Prepared) -> None:
             """
             CREATE TEMP TABLE _new_chunks (
                 chunk_id TEXT, doc_id TEXT, chunk_index INTEGER, heading TEXT,
-                text TEXT, word_count INTEGER, text_hash TEXT,
+                heading_anchor TEXT, text TEXT, word_count INTEGER, text_hash TEXT,
                 embedding halfvec({dim})
             ) ON COMMIT DROP
             """
@@ -428,6 +428,7 @@ def _insert_chunks(cursor: Cursor, target: str, prepared: Prepared) -> None:
             p.chunk.doc_id,
             p.chunk.chunk_index,
             p.chunk.heading,
+            p.chunk.heading_anchor,
             p.chunk.text,
             p.chunk.word_count,
             p.text_hash,
@@ -439,7 +440,7 @@ def _insert_chunks(cursor: Cursor, target: str, prepared: Prepared) -> None:
         cursor,
         "INSERT INTO _new_chunks VALUES %s",
         rows,
-        template="(%s, %s, %s, %s, %s, %s, %s, %s::halfvec)",
+        template="(%s, %s, %s, %s, %s, %s, %s, %s, %s::halfvec)",
         page_size=200,
     )
 
@@ -449,8 +450,8 @@ def _insert_chunks(cursor: Cursor, target: str, prepared: Prepared) -> None:
             sql.SQL(
                 """
                 INSERT INTO {t}.document_chunks
-                    (chunk_id, doc_id, chunk_index, heading, text, word_count, embedding)
-                SELECT chunk_id, doc_id, chunk_index, heading, text, word_count, embedding
+                    (chunk_id, doc_id, chunk_index, heading, heading_anchor, text, word_count, embedding)
+                SELECT chunk_id, doc_id, chunk_index, heading, heading_anchor, text, word_count, embedding
                 FROM _new_chunks
                 """
             ).format(t=t)
@@ -462,8 +463,8 @@ def _insert_chunks(cursor: Cursor, target: str, prepared: Prepared) -> None:
         sql.SQL(
             """
             INSERT INTO {t}.document_chunks
-                (chunk_id, doc_id, chunk_index, heading, text, word_count, embedding)
-            SELECT n.chunk_id, n.doc_id, n.chunk_index, n.heading, n.text,
+                (chunk_id, doc_id, chunk_index, heading, heading_anchor, text, word_count, embedding)
+            SELECT n.chunk_id, n.doc_id, n.chunk_index, n.heading, n.heading_anchor, n.text,
                    n.word_count, COALESCE(n.embedding, r.embedding)
             FROM _new_chunks n
             LEFT JOIN (

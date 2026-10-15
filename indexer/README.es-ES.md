@@ -17,7 +17,7 @@ Consulta el [README principal](../README.es-ES.md) para las instrucciones de con
 - **Indexación solo del cuerpo**: solo se extrae el tramo entre `## 正文` y `## 附录`; se descartan la línea del título, la línea de metadatos `**发布日期**` y las notas de corrección del apéndice
 - **URI como doc_id**: la ruta de la transcripción relativa a `contents/` (con `.md`) es su identificador
 - **Títulos estandarizados**: se analiza el `URI映射.md` del repositorio de origen y la correspondencia URI → título se escribe en la tabla `documents` del snapshot
-- **Fragmentación inteligente**: fragmentación semántica consciente de Markdown, una sección por subtítulo dentro de `## 正文` (el texto anterior al primer subtítulo es su propia sección); el solapamiento solo se mantiene dentro de una sección, nunca atraviesa un título, y los fragmentos de menos de 50 palabras se descartan
+- **Fragmentación inteligente**: cada `##` del mismo nivel dentro del cuerpo es una sección, y el texto anterior al primer `##` es el preámbulo; el solapamiento no cruza una sección, y un fragmento de menos de 50 palabras se descarta. Un `#` o `###` que siga en el cuerpo rechaza ese archivo (se registra y aporta cero fragmentos)
 - **Agente de solo lectura**: el indexador mantiene el rol `rag_agent`, que solo puede leer snapshots publicados
 - **Monitoreo**: estado de ejecución en `rag_meta.indexer_status` (expuesto por `/health` del agente), comandos de operación y un depurador
 
@@ -56,7 +56,7 @@ La siguiente ejecución siempre se calcula desde el momento actual: una ejecuci�
 
 ### Modo de muestra local
 
-`index_config.sample.yml` selecciona siete transcripciones deterministas que cubren URIs ordinarias, fraccionarias, `misc` y de varios programas. Solo se admite con `INDEXER_SCOPE=sample`, `INDEX_CONFIG_FILE=/app/index_config.sample.yml`, almacenamiento aislado y un `POSTGRES_DB` terminado en `_local`; el indexador se niega a construir en cualquier otra base de datos. `docker-compose.sample.yml` aporta las sobreescrituras de servicios (el web de muestra escucha en `SAMPLE_FRONTEND_PORT`, por defecto 18080).
+`index_config.sample.yml` selecciona ocho transcripciones deterministas que cubren URIs ordinarias, fraccionarias, `misc` y de varios programas, además de un `##` del cuerpo con un espacio interno (参考信息17: cada serie de espacios en el ancla pasa a un `-`, y el título guardado conserva el espacio). Solo se admite con `INDEXER_SCOPE=sample`, `INDEX_CONFIG_FILE=/app/index_config.sample.yml`, almacenamiento aislado y un `POSTGRES_DB` terminado en `_local`; el indexador se niega a construir en cualquier otra base de datos. `docker-compose.sample.yml` aporta las sobreescrituras de servicios (el web de muestra escucha en `SAMPLE_FRONTEND_PORT`, por defecto 18080).
 
 ### Filtros de Documentos
 
@@ -110,6 +110,7 @@ Dentro del contenedor del indexador:
 | `python -m src.snapshots unretire <id>`           | Deshace una retirada (los snapshots retirados se conservan 24 horas)                                     |
 | `python -m src.snapshots pin <id>` / `unpin <id>` | Fija o desfija; los snapshots fijados nunca se recolectan                                                |
 | `python -m src.snapshots build [--full]`          | Construye ahora, protegido por el mismo bloqueo de ejecución y bloqueo consultivo que la ejecución programada |
+| `python -m src.snapshots drop-previous-lineage [--dry-run]` | Con el linaje actual publicado, borra de inmediato la fragmentación anterior en este espacio vectorial. No toca el linaje actual ni espera 7 días. Ejecutar primero `--dry-run` |
 
 ```bash
 docker compose exec indexer python -m src.snapshots list
@@ -193,7 +194,8 @@ rag_s<id>   snapshots de solo lectura: document_chunks / documents / transcripts
 - `chunk_id`: identificador único, `{slug}_chunk_{índice:03d}`, donde el slug es el URI sin `.md` y con `/` sustituido por `_` (p. ej. `ShuiQianXiaoXi_0501-0600_0588_chunk_000`)
 - `doc_id`: el URI de la transcripción, **incluido `.md`**, p. ej. `ShuiQianXiaoXi/0501-0600/0588.md`: byte a byte la clave del `URI映射.md` de origen
 - `chunk_index`: índice basado en 0 dentro del documento
-- `heading`: título de la sección (si lo hay)
+- `heading`: título de la sección, si lo hay; vacío en el preámbulo
+- `heading_anchor`: el ancla de esa sección, la misma cadena que el `id` del `h2` de tema en el lector. La cadena vacía significa que no hay fragmento de URL. Esta columna existe en el formato 2 y no en el formato 1
 - `text`: contenido del fragmento
 - `word_count`: número de palabras
 - `embedding`: `halfvec(N)`, siendo `N` la dimensión del espacio vectorial del snapshot. El **tipo** de columna es fijo a propósito: `halfvec` admite cualquier modelo de hasta 4000 dimensiones con la mitad de almacenamiento y una pérdida de recall despreciable. Un índice HNSW (`halfvec_cosine_ops`, valores por defecto de pgvector `m=16`, `ef_construction=64`) atiende la búsqueda de vecinos del agente
@@ -213,7 +215,7 @@ Los títulos provienen del `URI映射.md` de origen. Una regla general (`{canal}
 - `doc_id`: URI de la transcripción (clave primaria)
 - `canonical_title` / `source_title`: título estandarizado y el título `# ` propio de la transcripción
 - `channel`, `publication_date`: nombre del canal y el valor de `**发布日期**`
-- `body_html`: la página renderizada que sirve la API `/transcripts` del agente
+- `body_html`: la página renderizada que sirve la API `/transcripts` del agente. Un `h2` de tema del cuerpo lleva un `id` igual a su ancla. Un cambio de versión de proyección vuelve a renderizar y no vuelve a generar embeddings
 - `source_hash`, `projection_version`: disparadores de re-renderizado (ediciones del origen o un cambio del renderizador)
 
 **`index_state`**: procedencia de la construcción, base de la siguiente construcción incremental (el agente no la lee)
@@ -260,6 +262,8 @@ La GC se ejecuta antes y después de cada construcción; cada borrado va en su p
 | Los snapshots `pinned` nunca se borran                                                                   | Fijación explícita a largo plazo                               |
 | Los snapshots `retired` se conservan 24 horas                                                            | Una retirada por error puede deshacerse                        |
 | Nada se borra en los 10 minutos siguientes a ser sustituido o retirado                                   | Protege las peticiones en curso (el agente cambia en 15 s)     |
+
+Los 7 días de arriba son la recolección automática. La construcción completa del formato 2 reutiliza los vectores del snapshot anterior por el texto del fragmento, así que hay que esperar a que esté publicado y a que `/health` del agente lo nombre antes de `drop-previous-lineage`. Borrarlo antes descarta vectores que aún no se han copiado. El comando borra entonces la fragmentación anterior en el mismo espacio vectorial: snapshots que no cortaban el cuerpo en `##` hermanos y no tienen `heading_anchor`, incluido `legacy`. No borra el snapshot anterior que el linaje actual conserva. Si no hay un snapshot publicado del linaje actual, o un snapshot anterior está fijado, el comando se niega y no borra nada. Ejecutar primero `--dry-run`.
 
 ## Actualización desde el esquema anterior a los snapshots
 

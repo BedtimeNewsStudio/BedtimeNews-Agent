@@ -91,6 +91,34 @@ def test_other_lineage_older_members_go_after_grace():
     assert doomed([snap("o2", 30, OTHER), snap("o1", 60, OTHER)]) == ["o1"]
 
 
+def test_previous_lineage_targets_the_old_chunking_in_this_space():
+    other_model = ("fp-old", "other-model@1024")
+    targets = catalog.previous_lineage_targets(
+        [
+            snap("new", 1),
+            snap("old", 10, OTHER),
+            snap("old-retired", 20, OTHER, status="retired", retired_minutes_ago=5),
+            snap("other-model", 10, other_model),
+            snap("also-current", 40),
+        ],
+        CURRENT,
+    )
+    assert [s.snapshot_id for s in targets] == ["old", "old-retired"]
+
+
+def test_previous_lineage_refuses_without_a_published_current_snapshot():
+    with pytest.raises(catalog.PreviousLineageBlocked):
+        catalog.previous_lineage_targets([snap("old", 10, OTHER)], CURRENT)
+
+
+def test_previous_lineage_refuses_a_pinned_old_snapshot():
+    with pytest.raises(catalog.PreviousLineageBlocked):
+        catalog.previous_lineage_targets(
+            [snap("new", 1), snap("old", 10, OTHER, pinned=True)],
+            CURRENT,
+        )
+
+
 def test_only_snapshot_schemas_are_droppable():
     assert catalog._is_snapshot_schema("rag")
     assert catalog._is_snapshot_schema("rag_s20261007t091512z_a1b2c3d")

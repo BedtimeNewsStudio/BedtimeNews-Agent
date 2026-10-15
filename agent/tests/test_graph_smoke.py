@@ -18,6 +18,7 @@ chunk-text fetch are all replaced.
 """
 
 import asyncio
+from urllib.parse import quote
 
 import pytest
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
@@ -46,6 +47,10 @@ def _fake_chunk(i: int) -> ChunkResult:
         title=f"参考信息{490 + i}",
         chunk_index=i,
         heading="大家好，欢迎收看睡前消息",  # deliberately uninformative, as in the corpus
+        # Empty anchor: the greeting heading is not a topic, so the link is the
+        # whole document. Chunk 0 carries a real section so the event map has
+        # both shapes.
+        heading_anchor="鹤岗" if i == 0 else "",
         text=None,
         word_count=800,
         similarity=0.7 - i * 0.01,
@@ -249,27 +254,51 @@ def test_source_list_is_not_appended_when_the_model_cited(stub_pipeline):
 
 
 def test_citation_repair_covers_every_spelling():
+    from langchain_core.documents import Document
+
+    uri = "ChanJingPoBiJi/0001-0100/0067.md"
     url = "/transcripts/ChanJingPoBiJi/0001-0100/0067.md"
-    canonical = f"[[产经破壁机67]]({url})"
-    citation_map = {
-        # Keyed by both spellings, exactly as build_citation_map does.
-        "ChanJingPoBiJi/0001-0100/0067.md": canonical,
-        "产经破壁机67": canonical,
-    }
+    section_url = f"{url}#{quote('芯片', safe='')}"
+    section = f"[[产经破壁机67]]({section_url})"
+    citation_map = graph_mod.build_citation_map(
+        [
+            Document(
+                page_content="",
+                metadata={
+                    "doc_id": uri,
+                    "title": "产经破壁机67",
+                    "heading_anchor": "芯片",
+                },
+            )
+        ]
+    )
     raws = (
-        # The instructed form.
-        "见 [[ChanJingPoBiJi/0001-0100/0067.md]] 的分析",
-        # The model appended a URL it was told not to write.
-        "见 [[ChanJingPoBiJi/0001-0100/0067.md]](...) 的分析",
-        # The model resolved the URI to the title on its own.
+        # The source id without its section, the episode title, and 书名号.
+        # This retrieval has a section, so none of these open the article start.
+        f"见 [[{uri}]] 的分析",
+        f"见 [[{uri}]](...) 的分析",
         "见 [[产经破壁机67]] 的分析",
-        # The model fell back to 书名号.
         "见 《产经破壁机67》 的分析",
     )
     for raw in raws:
         repaired, count = graph_mod._repair_citations(raw, citation_map)
         assert count == 1, raw
-        assert repaired == f"见 {canonical} 的分析", raw
+        assert repaired == f"见 {section} 的分析", raw
+
+    for raw in (
+        f"见 [[{uri}#芯片]] 的分析",
+        "见 [[产经破壁机67#芯片]] 的分析",
+    ):
+        repaired, count = graph_mod._repair_citations(raw, citation_map)
+        assert count == 1, raw
+        assert repaired == f"见 {section} 的分析", raw
+
+    # An anchor this retrieval did not return still opens a retrieved section.
+    invented, count = graph_mod._repair_citations(
+        f"见 [[{uri}#不存在]] 的分析", citation_map
+    )
+    assert count == 1
+    assert invented == f"见 {section} 的分析"
 
     # A real book title shares the 《》 spelling but is not a known episode.
     untouched, count = graph_mod._repair_citations("他读了《三体》", citation_map)
@@ -280,13 +309,149 @@ def test_citation_repair_covers_every_spelling():
 def test_citation_map_is_keyed_by_uri_and_title():
     from langchain_core.documents import Document
 
-    doc = Document(
+    doc_id = "CanKaoXinXi/0401-0500/0490.md"
+    hegang = f"[[参考信息490]]({CITED_URL}#{quote('鹤岗', safe='')})"
+    price = f"[[参考信息490]]({CITED_URL}#{quote('房价', safe='')})"
+    first = Document(
         page_content="",
-        metadata={"doc_id": "CanKaoXinXi/0401-0500/0490.md", "title": "参考信息490"},
+        metadata={
+            "doc_id": doc_id,
+            "title": "参考信息490",
+            "heading_anchor": "鹤岗",
+            "similarity": 0.4,
+        },
     )
-    citations = graph_mod.build_citation_map([doc])
-    assert set(citations) == {"CanKaoXinXi/0401-0500/0490.md", "参考信息490"}
-    assert all(c == f"[[参考信息490]]({CITED_URL})" for c in citations.values())
+    second = Document(
+        page_content="",
+        metadata={
+            "doc_id": doc_id,
+            "title": "参考信息490",
+            "heading_anchor": "房价",
+            "similarity": 0.9,
+        },
+    )
+    citations = graph_mod.build_citation_map([first, second])
+    # The bare episode name opens the strongest section, not the article start.
+    assert citations[doc_id] == price
+    assert citations["参考信息490"] == price
+    assert citations[f"{doc_id}#鹤岗"] == hegang
+    assert citations[f"{doc_id}#房价"] == price
+    assert citations["参考信息490#鹤岗"] == hegang
+    assert citations["参考信息490#房价"] == price
+    assert "#" in citations["参考信息490"].split("](", 1)[-1]
+
+
+def test_backticks_around_a_citation_are_removed():
+    from langchain_core.documents import Document
+
+    uri = "CanKaoXinXi/0001-0100/0017.md"
+    anchor = "俄军更换指挥官-美欧援助重装备"
+    documents = [
+        Document(
+            page_content="",
+            metadata={
+                "doc_id": uri,
+                "title": "参考信息17",
+                "heading_anchor": anchor,
+            },
+        )
+    ]
+    citation_map = graph_mod.build_citation_map(documents)
+    raw = f"据 `[[{uri}#{anchor}]]` 提供的信息"
+    repaired, count = graph_mod._repair_citations(raw, citation_map, documents)
+    assert count == 1
+    assert "`" not in repaired
+    assert repaired.startswith("据 [[参考信息17]](/transcripts/")
+    assert repaired.endswith(") 提供的信息")
+    assert quote(anchor, safe="") in repaired
+
+
+def test_heading_text_is_not_a_citation_key():
+    from langchain_core.documents import Document
+
+    doc_id = "ShuiQianXiaoXi/0501-0600/0588.md"
+    documents = [
+        Document(
+            page_content="",
+            metadata={
+                "doc_id": doc_id,
+                "title": "睡前消息588",
+                "heading_anchor": "地方债与政信债",
+            },
+        ),
+        Document(
+            page_content="",
+            metadata={
+                "doc_id": "ShuiQianXiaoXi/0001-0100/0013.5.md",
+                "title": "睡前消息13.5",
+                "heading_anchor": "",
+            },
+        ),
+    ]
+    citations = graph_mod.build_citation_map(documents)
+    assert "地方债与政信债" not in citations
+    assert f"{doc_id}#地方债与政信债" in citations
+    assert graph_mod._source_id(doc_id, "地方债与政信债") == f"{doc_id}#地方债与政信债"
+    assert graph_mod._source_id("ShuiQianXiaoXi/0001-0100/0013.5.md", "") == (
+        "ShuiQianXiaoXi/0001-0100/0013.5.md"
+    )
+
+
+def test_bare_title_opens_the_heading_the_paragraph_is_about():
+    from langchain_core.documents import Document
+
+    doc_id = "ShuiQianXiaoXi/0501-0600/0588.md"
+    url = "/transcripts/ShuiQianXiaoXi/0501-0600/0588.md"
+    documents = [
+        Document(
+            page_content="",
+            metadata={
+                "doc_id": doc_id,
+                "title": "睡前消息588",
+                "heading": "地方债与政信债",
+                "heading_anchor": "地方债与政信债",
+                "similarity": 0.4,
+            },
+        ),
+        Document(
+            page_content="",
+            metadata={
+                "doc_id": doc_id,
+                "title": "睡前消息588",
+                "heading": "病毒绕着走的城市",
+                "heading_anchor": "病毒绕着走的城市",
+                "similarity": 0.9,
+            },
+        ),
+    ]
+    citation_map = graph_mod.build_citation_map(documents)
+    debt = f"地方债和政信债不是一回事。[[睡前消息588]]({url})"
+    virus = f"柳州被称为病毒绕着走的城市。[[睡前消息588]]({url})"
+
+    repaired, count = graph_mod._repair_citations(
+        "地方债和政信债不是一回事。[[睡前消息588]]", citation_map, documents
+    )
+    assert count == 1
+    assert repaired == debt.replace(url, url + "#" + quote("地方债与政信债", safe=""))
+
+    repaired, _count = graph_mod._repair_citations(
+        "柳州被称为病毒绕着走的城市。[[睡前消息588]]", citation_map, documents
+    )
+    assert repaired == virus.replace(
+        url, url + "#" + quote("病毒绕着走的城市", safe="")
+    )
+
+    # No heading wins. The link still opens a retrieved section, the strongest one.
+    repaired, _count = graph_mod._repair_citations(
+        "节目讨论了债务。[[睡前消息588]]", citation_map, documents
+    )
+    assert repaired == (
+        "节目讨论了债务。[[睡前消息588]]("
+        + url
+        + "#"
+        + quote("病毒绕着走的城市", safe="")
+        + ")"
+    )
 
 
 def test_title_falls_back_to_the_general_rule_when_the_db_row_is_missing():
@@ -320,8 +485,12 @@ def test_uri_citations_are_rewritten_into_titled_links(stub_pipeline):
         "a URI citation was repaired, so the canonical answer has to be re-sent "
         "or the reader keeps seeing raw URIs"
     )
-    assert f"[[参考信息490]]({CITED_URL})" in terminal["content"]
+    assert (
+        f"[[参考信息490]]({CITED_URL}#{quote('鹤岗', safe='')})" in terminal["content"]
+    )
     assert f"[[{CITED_URI}]]" not in terminal["content"]
+    urls = next(e for e in events if e["type"] == "citations")["urls"]
+    assert f"{CITED_URI}#鹤岗" in urls
 
 
 def test_citations_event_carries_titles_and_urls(stub_pipeline):
@@ -329,6 +498,11 @@ def test_citations_event_carries_titles_and_urls(stub_pipeline):
     events = _collect("鹤岗为什么成了收缩型城市的代表？")
     urls = next(e for e in events if e["type"] == "citations")["urls"]
 
-    assert urls[CITED_URI] == {"title": "参考信息490", "url": CITED_URL}
-    # Keyed by title too, so the client repairs the same spellings the server does.
+    section = f"{CITED_URI}#鹤岗"
+    section_url = f"{CITED_URL}#{quote('鹤岗', safe='')}"
+    # The bare episode name opens that section. The label stays the episode title.
+    assert urls[CITED_URI] == {"title": "参考信息490", "url": section_url}
     assert urls["参考信息490"] == urls[CITED_URI]
+    assert urls[section]["title"] == "参考信息490"
+    assert urls[section]["url"] == section_url
+    assert "鹤岗" not in urls

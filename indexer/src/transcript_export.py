@@ -11,11 +11,14 @@ from markdown_it import MarkdownIt
 from markdown_it.renderer import RendererHTML
 from mdit_py_plugins.footnote import footnote_plugin
 
+from .anchors import encode_fragment, topic_anchors
+from .document_loader import clean_text, extract_body
 from .models import TranscriptProjection
 
 # Bump whenever the stored projection changes so stale rows re-render without
 # touching RAG embeddings (which still key only on normalized ## 正文).
-TRANSCRIPT_PROJECTION_VERSION = 4
+#   5: topic h2 elements carry the shared heading anchor as id.
+TRANSCRIPT_PROJECTION_VERSION = 5
 
 _OLD_TRANSCRIPT_HOST = "bedtimenewsstudio.github.io"
 _OLD_TRANSCRIPT_PREFIX = "/BedtimeNews-Transcripts/contents/"
@@ -70,9 +73,15 @@ _ALLOWED_ATTRIBUTES = {
     "section": ["id", "class"],
     "span": ["class", "id"],
     "sup": ["id", "class"],
+    "h2": ["id"],
+    "h3": ["id"],
+    "h4": ["id"],
+    "h5": ["id"],
+    "h6": ["id"],
     "td": ["align"],
     "th": ["align"],
 }
+_H2_TAG = re.compile(r"<h2>(.*?)</h2>", re.IGNORECASE | re.DOTALL)
 
 
 def _plain_title(value: str) -> str:
@@ -99,9 +108,23 @@ def _reader_markdown(markdown: str) -> str:
     return _LEADING_H1_RE.sub("", markdown, count=1).strip()
 
 
+def _split_fragment(href: str) -> tuple[str, str]:
+    """Return ``(path, raw fragment)``. The fragment is empty when absent."""
+    path, sep, fragment = href.partition("#")
+    return path, fragment if sep else ""
+
+
+def _append_fragment(url: str, fragment: str) -> str:
+    """Keep a fragment that was already on the link. Do not invent one."""
+    if not fragment:
+        return url
+    return f"{url}#{encode_fragment(unquote(fragment))}"
+
+
 def _normalize_relative_uri(base_uri: str, href: str) -> str | None:
     """Resolve a relative Markdown link without permitting path traversal."""
-    decoded = unquote(href.split("#", 1)[0].split("?", 1)[0])
+    path, _fragment = _split_fragment(href)
+    decoded = unquote(path.split("?", 1)[0])
     if decoded.startswith(("/", "\\")) or "\\" in decoded:
         return None
     base_parts = list(PurePosixPath(base_uri).parent.parts)
@@ -132,7 +155,8 @@ def _rewrite_href(base_uri: str, href: str) -> str | None:
     if href.startswith("//"):
         return None
 
-    parsed = urlparse(href)
+    path, fragment = _split_fragment(href)
+    parsed = urlparse(path)
     scheme = parsed.scheme.lower()
     if scheme in {"javascript", "vbscript", "file", "data"}:
         return None
@@ -144,15 +168,17 @@ def _rewrite_href(base_uri: str, href: str) -> str | None:
         ):
             relative = unquote(parsed.path.removeprefix(_OLD_TRANSCRIPT_PREFIX))
             uri = f"{relative.removesuffix('.html')}.md"
-            return f"/transcripts/{quote(uri, safe='/')}"
+            return _append_fragment(f"/transcripts/{quote(uri, safe='/')}", fragment)
         return href
     if scheme == "mailto":
         return href
     if scheme:
         return None
 
-    uri = _normalize_relative_uri(base_uri, href)
-    return f"/transcripts/{quote(uri, safe='/')}" if uri else None
+    uri = _normalize_relative_uri(base_uri, path)
+    if not uri:
+        return None
+    return _append_fragment(f"/transcripts/{quote(uri, safe='/')}", fragment)
 
 
 class _TranscriptRenderer(RendererHTML):
@@ -194,7 +220,43 @@ def _render_markdown(doc_id: str, markdown: str) -> str:
         strip=True,
         strip_comments=True,
     )
-    return cleaner.clean(rendered)
+    return _stamp_topic_ids(cleaner.clean(rendered), _body_topic_anchors(markdown))
+
+
+def _body_topic_anchors(markdown: str) -> list[str]:
+    """Anchors for topic ``##`` lines, in the same order the chunker sees."""
+    body = clean_text(extract_body(markdown))
+    return topic_anchors(body)
+
+
+def _h2_text(inner: str) -> str:
+    return html.unescape(re.sub(r"<[^>]+>", "", inner)).strip()
+
+
+def _stamp_topic_ids(rendered: str, anchors: list[str]) -> str:
+    """Write topic anchors onto body ``h2`` elements. ``## 正文`` and ``## 附录`` stay bare."""
+    index = 0
+    in_body = False
+
+    def replace(match: re.Match[str]) -> str:
+        nonlocal index, in_body
+        inner = match.group(1)
+        text = _h2_text(inner)
+        if text == "正文":
+            in_body = True
+            return match.group(0)
+        if text == "附录":
+            in_body = False
+            return match.group(0)
+        if not in_body or index >= len(anchors):
+            return match.group(0)
+        anchor = anchors[index]
+        index += 1
+        if not anchor:
+            return match.group(0)
+        return f'<h2 id="{html.escape(anchor, quote=True)}">{inner}</h2>'
+
+    return _H2_TAG.sub(replace, rendered)
 
 
 def project_transcript(

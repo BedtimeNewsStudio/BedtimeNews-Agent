@@ -34,10 +34,12 @@ schemas) registered in `rag_meta.snapshots`; see the
 [indexer README](../indexer/README.en.md#database-schema). The agent:
 
 - **selects** the published snapshot whose `format_version` it supports
-  (`SUPPORTED_FORMATS`, currently `{1}`) and whose vector space
+  (`SUPPORTED_FORMATS` is `{1, 2}`) and whose vector space
   (`<embedding.model>@<EMBEDDING_DIM>`, or `embedding.space_id`) equals its
-  own — highest format first, then the most recently published. `RAG_SNAPSHOT`
-  pins one snapshot ID instead. Before the indexer has created `rag_meta`, the
+  own — highest format first, then the most recently published. Only format 2
+  has section anchors. A process that supports only `{1}` keeps reading format 1.
+  A selected format 1 snapshot has no `heading_anchor`, and its citations have
+  no hash. `RAG_SNAPSHOT` pins one snapshot ID instead. Before the indexer has created `rag_meta`, the
   original `rag` schema is read as the implicit snapshot `legacy`;
 - keeps the current snapshot **in memory** and re-applies the rule every 15
   seconds in a background thread, so a newly published or rolled-back snapshot
@@ -121,7 +123,7 @@ rewritten and retried once before the generator returns a no-results response.
 
 ```json
 {
-  "answer": "根据[[睡前消息588]](/transcripts/ShuiQianXiaoXi/0501-0600/0588.md)...",
+  "answer": "根据[[睡前消息588]](/transcripts/ShuiQianXiaoXi/0501-0600/0588.md#%E5%9F%8E%E6%8A%95%E5%80%BA)…另见[[参考信息490]](/transcripts/CanKaoXinXi/0401-0500/0490.md)。",
   "followups": ["独山县后来如何化解债务？"],
   "grounded": true
 }
@@ -131,7 +133,7 @@ rewritten and retried once before the generator returns a no-results response.
 
 ```plaintext
 data: {"type": "step", "step": "route", "content": "..."}
-data: {"type": "citations", "urls": {"ShuiQianXiaoXi/0501-0600/0588.md": {"title": "睡前消息588", "url": "/transcripts/ShuiQianXiaoXi/0501-0600/0588.md"}}}
+data: {"type": "citations", "urls": {"ShuiQianXiaoXi/0501-0600/0588.md#城投债": {"title": "睡前消息588", "url": "/transcripts/ShuiQianXiaoXi/0501-0600/0588.md#%E5%9F%8E%E6%8A%95%E5%80%BA"}, "ShuiQianXiaoXi/0501-0600/0588.md": {"title": "睡前消息588", "url": "/transcripts/ShuiQianXiaoXi/0501-0600/0588.md"}, "CanKaoXinXi/0401-0500/0490.md": {"title": "参考信息490", "url": "/transcripts/CanKaoXinXi/0401-0500/0490.md"}}}
 data: {"type": "answer_chunk", "content": "根据"}
 data: {"type": "answer_chunk", "content": "睡前"}
 data: {"type": "answer_meta", "grounded": true}
@@ -402,11 +404,7 @@ docker compose exec agent python -m src.eval_agent --limit 1
 
 ## Where citation titles come from
 
-In its raw output the model writes a transcript **URI** — e.g.
-`[[ShuiQianXiaoXi/0501-0600/0588.md]]` — and neither a URL nor a Chinese episode
-name. The URI is a string already present in its context, so there is no episode
-number or link for it to invent. After generation, `_repair_citations` rewrites
-every citation into `[[standardised title]](url)`.
+Each section is its own source. The id is `URI#anchor`, composed at retrieval from `doc_id` and `heading_anchor`. The model does not write the standardised title or the URL. It may copy the source id. Repair then sets the label to the standardised title and puts the anchor only in the link. If the model writes just the episode name, the link still opens a section from this retrieval: the heading matched by the preceding text, otherwise the strongest section. It does not open the start of the transcript. A preamble with no topic anchor stays a whole-document link.
 
 Titles come from the snapshot's `documents.title`, LEFT JOINed at retrieval time
 (written by the indexer from the upstream `URI映射.md`). When that row is missing, a general
@@ -424,5 +422,5 @@ The 29 documented exceptions (the `misc/` specials and friends) cannot be derive
 at all; those fall back to showing the URI itself — an ugly label on a link that
 still works.
 
-Citation links point at the transcript site:
-`/transcripts/<URI>` (in-app reader; source on GitHub at `blob/main/contents/<URI>`)
+Citation links point at the in-app reader:
+`/transcripts/<URI>` or `/transcripts/<URI>#<anchor>` (source on GitHub at `blob/main/contents/<URI>`)

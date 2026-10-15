@@ -23,7 +23,8 @@ from .settings import settings
 # changes. Adding columns the agent does not read, or changing only
 # index_state, does not need a bump. Format 1 is the layout of the original
 # `rag` schema, which is why adopted legacy data is format 1 too.
-FORMAT_VERSION = 1
+# Format 2 adds document_chunks.heading_anchor, which the agent reads.
+FORMAT_VERSION = 2
 
 SCHEMA_PREFIX = "rag_"
 LEGACY_SNAPSHOT_ID = "legacy"
@@ -44,6 +45,7 @@ COPY_COLUMNS: dict[str, tuple[str, ...]] = {
         "doc_id",
         "chunk_index",
         "heading",
+        "heading_anchor",
         "text",
         "word_count",
         "embedding",
@@ -110,7 +112,7 @@ def schema_for(snapshot_id: str) -> str:
 
 
 def create_tables_sql(schema: str, dim: int) -> sql.Composed:
-    """Format-1 DDL for one snapshot schema, without the HNSW index."""
+    """Format-2 DDL for one snapshot schema, without the HNSW index."""
     s = sql.Identifier(schema)
     return sql.SQL(
         """
@@ -120,6 +122,7 @@ def create_tables_sql(schema: str, dim: int) -> sql.Composed:
             doc_id VARCHAR(255) NOT NULL,
             chunk_index INTEGER NOT NULL,
             heading TEXT,
+            heading_anchor TEXT NOT NULL DEFAULT '',
             text TEXT NOT NULL,
             word_count INTEGER NOT NULL DEFAULT 0,
             embedding halfvec({dim}) NOT NULL,

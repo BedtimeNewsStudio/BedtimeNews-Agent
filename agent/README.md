@@ -29,9 +29,11 @@
 Indexer 把知识库发布为不可变的快照（`rag_s<id>` schema），登记在
 `rag_meta.snapshots` 中；参见 [Indexer README](../indexer/README.md#数据库结构)。Agent：
 
-- **选择**已发布快照中 `format_version` 受支持（`SUPPORTED_FORMATS`，目前为 `{1}`）、
+- **选择**已发布快照中 `format_version` 受支持（`SUPPORTED_FORMATS` 为 `{1, 2}`）、
   且向量空间（`<embedding.model>@<EMBEDDING_DIM>`，或 `embedding.space_id`）与自身一致的快照——
-  先取最高格式，再取最新发布的。设置 `RAG_SNAPSHOT` 时直接固定使用该快照 ID。
+  先取最高格式，再取最新发布的。只有 format 2 带有章节锚点。只支持 `{1}` 的进程继续读 format 1。
+  选中的快照若仍是 format 1，它没有 `heading_anchor`，引用也不带 hash。
+  设置 `RAG_SNAPSHOT` 时直接固定使用该快照 ID。
   在 Indexer 创建 `rag_meta` 之前，原有的 `rag` schema 被当作隐式快照 `legacy` 读取；
 - 把当前快照保存在**进程内存**中，后台线程每 15 秒重新应用选择规则，因此新发布或回滚的快照
   无需重启即可生效。处理请求时从不查询 `rag_meta`；
@@ -107,7 +109,7 @@ Indexer 把知识库发布为不可变的快照（`rag_s<id>` schema），登记
 
 ```json
 {
-  "answer": "根据[[睡前消息588]](/transcripts/ShuiQianXiaoXi/0501-0600/0588.md)...",
+  "answer": "根据[[睡前消息588]](/transcripts/ShuiQianXiaoXi/0501-0600/0588.md#%E5%9F%8E%E6%8A%95%E5%80%BA)…另见[[参考信息490]](/transcripts/CanKaoXinXi/0401-0500/0490.md)。",
   "followups": ["独山县后来如何化解债务？"],
   "grounded": true
 }
@@ -117,7 +119,7 @@ Indexer 把知识库发布为不可变的快照（`rag_s<id>` schema），登记
 
 ```plaintext
 data: {"type": "step", "step": "route", "content": "..."}
-data: {"type": "citations", "urls": {"ShuiQianXiaoXi/0501-0600/0588.md": {"title": "睡前消息588", "url": "/transcripts/ShuiQianXiaoXi/0501-0600/0588.md"}}}
+data: {"type": "citations", "urls": {"ShuiQianXiaoXi/0501-0600/0588.md#城投债": {"title": "睡前消息588", "url": "/transcripts/ShuiQianXiaoXi/0501-0600/0588.md#%E5%9F%8E%E6%8A%95%E5%80%BA"}, "ShuiQianXiaoXi/0501-0600/0588.md": {"title": "睡前消息588", "url": "/transcripts/ShuiQianXiaoXi/0501-0600/0588.md"}, "CanKaoXinXi/0401-0500/0490.md": {"title": "参考信息490", "url": "/transcripts/CanKaoXinXi/0401-0500/0490.md"}}}
 data: {"type": "answer_chunk", "content": "根据"}
 data: {"type": "answer_chunk", "content": "睡前"}
 data: {"type": "answer_meta", "grounded": true}
@@ -367,10 +369,7 @@ docker compose exec agent python -m src.eval_agent --limit 1
 
 ## 引用标题的来源
 
-模型在原始输出里写的是文稿 **URI**（如
-`[[ShuiQianXiaoXi/0501-0600/0588.md]]`），不写链接也不写中文台名——URI 是
-上下文里已有的字符串，模型无需臆造期号或 URL。生成结束后由
-`_repair_citations` 统一改写成 `[[标准化标题]](链接)`。
+每一节是一条独立来源，身份是 `URI#锚点`，在检索时由 `doc_id` 和 `heading_anchor` 拼成。模型不写标准化标题，也不写 URL。它最多抄来源 id。生成结束后标签一律是标准化标题，链接才带 `#`。模型若只写期名，链接仍打开这次检索到的一节（正文对得上的那节，否则相似度最高的一节），不打开文章开头。没有话题锚点的导语才是整篇链接。
 
 标题优先取自检索时 LEFT JOIN 出来的快照 `documents.title`（由 indexer 从上游
 `URI映射.md` 写入）。该行缺失时退回通则推导：
@@ -387,4 +386,4 @@ docker compose exec agent python -m src.eval_agent --limit 1
 但链接依然正确可点。
 
 引用链接指向应用内阅读器：
-`/transcripts/<URI>`（应用内阅读；源文件见 GitHub `blob/main/contents/<URI>`）
+`/transcripts/<URI>` 或 `/transcripts/<URI>#<anchor>`（应用内阅读；源文件见 GitHub `blob/main/contents/<URI>`）
