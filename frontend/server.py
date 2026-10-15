@@ -406,6 +406,20 @@ def _display_title(item: dict) -> str:
     )
 
 
+_UNSAFE_FILENAME = re.compile(r'[\\/:*?"<>|\x00-\x1f]')
+
+
+def _markdown_filename(title: str) -> str:
+    stem = _UNSAFE_FILENAME.sub("", title).strip() or "transcript"
+    if not stem.lower().endswith(".md"):
+        stem = f"{stem}.md"
+    return stem
+
+
+def _content_disposition(filename: str) -> str:
+    return f"attachment; filename=\"transcript.md\"; filename*=UTF-8''{quote(filename)}"
+
+
 def _description_from_body(body_html: str, title: str) -> str:
     parser = _BodyTextExtractor()
     parser.feed(body_html)
@@ -896,8 +910,45 @@ async def transcript_index(request: Request) -> Response:
     return await _proxy_transcript_json(request, TRANSCRIPTS_ENDPOINT)
 
 
+async def _transcript_markdown_download(upstream_url: str) -> Response:
+    try:
+        article = await _fetch_upstream_json(upstream_url)
+    except _UpstreamError as exc:
+        status_code = 404 if exc.status_code == 404 else 503
+        message = (
+            "这篇文稿不存在。"
+            if status_code == 404
+            else "文稿服务暂时不可用，请稍后重试。"
+        )
+        return JSONResponse(
+            {"detail": message},
+            status_code=status_code,
+            headers={"Cache-Control": "no-cache"},
+        )
+    markdown = article.get("body_markdown")
+    if not isinstance(markdown, str) or not markdown:
+        return JSONResponse(
+            {"detail": "文稿源暂不可用"},
+            status_code=404,
+            headers={"Cache-Control": "no-cache"},
+        )
+    filename = _markdown_filename(_display_title(article))
+    return Response(
+        content=markdown.encode("utf-8"),
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Cache-Control": "no-cache",
+            "Content-Disposition": _content_disposition(filename),
+        },
+    )
+
+
 @app.get("/api/transcripts/{doc_id:path}")
-async def transcript_detail(doc_id: str, request: Request) -> Response:
+async def transcript_detail(
+    doc_id: str,
+    request: Request,
+    download: Annotated[str | None, Query()] = None,
+) -> Response:
     # Validate before building the upstream URL: a path such as "../health"
     # would otherwise be normalized by httpx into a request for another agent
     # endpoint, reachable from the public internet through this proxy.
@@ -909,9 +960,10 @@ async def transcript_detail(doc_id: str, request: Request) -> Response:
             status_code=404,
             headers={"Cache-Control": "no-cache"},
         )
-    return await _proxy_transcript_json(
-        request, f"{TRANSCRIPTS_ENDPOINT}/{quote(canonical, safe='/')}"
-    )
+    upstream = f"{TRANSCRIPTS_ENDPOINT}/{quote(canonical, safe='/')}"
+    if download == "markdown":
+        return await _transcript_markdown_download(upstream)
+    return await _proxy_transcript_json(request, upstream)
 
 
 @app.get("/", include_in_schema=False)

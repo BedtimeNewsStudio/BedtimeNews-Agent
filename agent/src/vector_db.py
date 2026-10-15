@@ -321,20 +321,58 @@ def list_transcripts(schema: str) -> list[dict[str, Any]]:
         return [dict(row) for row in cursor.fetchall()]
 
 
+_markdown_column: dict[str, bool] = {}
+
+
+def _transcripts_have_markdown(schema: str) -> bool:
+    cached = _markdown_column.get(schema)
+    if cached is not None:
+        return cached
+    with _Connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = %s AND table_name = 'transcripts'
+                  AND column_name = 'body_markdown'
+            ) AS has_markdown
+            """,
+            (schema,),
+        )
+        found = bool(cursor.fetchone()["has_markdown"])
+    _markdown_column[schema] = found
+    return found
+
+
 @retry_on_transient_error()
 def get_transcript(schema: str, doc_id: str) -> dict[str, Any] | None:
     """Return one sanitized reader projection by exact canonical URI."""
+    fields = [
+        "doc_id",
+        "canonical_title",
+        "source_title",
+        "channel",
+        "publication_date",
+        "body_html",
+        "source_hash",
+        "updated_at",
+    ]
+    if _transcripts_have_markdown(schema):
+        fields.insert(fields.index("source_hash"), "body_markdown")
     with _Connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
             sql.SQL(
                 """
-                SELECT doc_id, canonical_title, source_title, channel,
-                       publication_date, body_html, source_hash, updated_at
+                SELECT {columns}
                 FROM {transcripts}
                 WHERE doc_id = %s;
                 """
-            ).format(transcripts=_table(schema, "transcripts")),
+            ).format(
+                columns=sql.SQL(", ").join(sql.Identifier(name) for name in fields),
+                transcripts=_table(schema, "transcripts"),
+            ),
             (doc_id,),
         )
         row = cursor.fetchone()

@@ -62,5 +62,6 @@ class TranscriptProjection:
     channel: str
     publication_date: str | None
     body_html: str
+    body_markdown: str
     source_hash: str
     projection_version: int

@@ -49,7 +49,9 @@ def detect_changes(
     The full-source hash is the cheap first gate. Only a new, changed, or legacy
     source is parsed and normalized. This keeps the hourly no-op path to one raw
     file read per transcript while ensuring only changes to the exact text sent
-    to chunking and embeddings cause a RAG rebuild.
+    to chunking and embeddings cause a RAG rebuild. Edits that stay outside
+    ``## 正文`` (title, publication line, appendix) are ``source_only``: they
+    rewrite the stored Markdown/HTML and skip embeddings.
     """
     changes = ChangeSet(deleted=set(histories) - current_files)
 

@@ -59,6 +59,7 @@ const els = {
   readingShare: document.getElementById("reading-share"),
   shareSheet: document.getElementById("share-sheet"),
   shareCopy: document.getElementById("share-copy"),
+  shareDownload: document.getElementById("share-download"),
   shareToast: document.getElementById("share-toast"),
   readerView: document.getElementById("reader-view"),
   readerTitle: document.getElementById("reader-title"),
@@ -903,6 +904,28 @@ async function copyShareLink() {
   }
 }
 
+function markdownFilename(article) {
+  const title = article.source_title || article.canonical_title || "transcript";
+  const stem = title.replace(/[\\/:*?"<>|\u0000-\u001f]/g, "").trim() || "transcript";
+  return stem.toLowerCase().endsWith(".md") ? stem : `${stem}.md`;
+}
+
+function downloadMarkdown() {
+  const docId = currentArticle?.doc_id;
+  if (!docId) {
+    showShareToast("文稿源暂不可用");
+    return;
+  }
+  closeShareSheet();
+  const path = `/api/transcripts/${docId.split("/").map(encodeURIComponent).join("/")}?download=markdown`;
+  const link = document.createElement("a");
+  link.href = path;
+  link.download = markdownFilename(currentArticle);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
 function updateReadingBar() {
   // Titles live in the pane (archive H1 / reader H1). The bar keeps fixed
   // slots so its border does not jump when back/edit appear.
@@ -1150,6 +1173,9 @@ els.readingShare?.addEventListener("click", () => {
 });
 els.shareCopy?.addEventListener("click", () => {
   copyShareLink();
+});
+els.shareDownload?.addEventListener("click", () => {
+  downloadMarkdown();
 });
 els.shareSheet?.addEventListener("click", (event) => {
   if (event.target === els.shareSheet) closeShareSheet();

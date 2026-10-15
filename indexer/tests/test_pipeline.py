@@ -275,12 +275,17 @@ def test_title_only_change_makes_no_embedding_calls(corpus, fake_embed, query):
     assert result.result == "published"
     _, schema, _, _, stats = snapshot_rows(query)[-1]
     assert stats["changes"]["source_only"] == 1
+    assert stats["reindexed_transcripts"] == 0
+    assert stats["rendered_transcripts"] == 1
     assert fake_embed.calls == [], "metadata-only builds skip the model check too"
-    title = query(
-        f'SELECT source_title FROM "{schema}".transcripts '
+    title, markdown, html = query(
+        f'SELECT source_title, body_markdown, body_html FROM "{schema}".transcripts '
         "WHERE doc_id = 'ShuiQianXiaoXi/0001-0100/0001.md'"
-    )[0][0]
+    )[0]
     assert title == "新标题"
+    assert markdown.startswith("# 新标题")
+    assert "附录也改了" in markdown
+    assert "附录也改了" in html
 
 
 def test_chunker_bump_forces_full_build_reusing_vectors(

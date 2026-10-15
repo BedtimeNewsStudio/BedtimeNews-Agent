@@ -757,6 +757,72 @@ def test_transcript_api_proxies_a_canonical_uri(client):
     ]
 
 
+class _MarkdownGetClient:
+    def __init__(self, payload):
+        self.payload = payload
+        self.urls = []
+
+    async def get(self, url, **_kwargs):
+        self.urls.append(str(url))
+        return httpx.Response(
+            200, json=self.payload, request=httpx.Request("GET", str(url))
+        )
+
+
+def test_transcript_markdown_download_uses_title_filename(client):
+    fake = _MarkdownGetClient(
+        {
+            "doc_id": "ShuiQianXiaoXi/0501-0600/0588.md",
+            "source_title": "【睡前消息588】城投债四大网红，柳州第一",
+            "canonical_title": "睡前消息588",
+            "body_markdown": "# 【睡前消息588】城投债四大网红，柳州第一\n\n## 正文\n",
+        }
+    )
+    server._client = fake
+
+    response = client.get(
+        "/api/transcripts/ShuiQianXiaoXi/0501-0600/0588.md?download=markdown"
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/markdown")
+    assert response.headers["content-disposition"] == server._content_disposition(
+        "【睡前消息588】城投债四大网红，柳州第一.md"
+    )
+    assert response.text.startswith("# 【睡前消息588】城投债四大网红，柳州第一")
+    assert fake.urls == [
+        f"{server.TRANSCRIPTS_ENDPOINT}/ShuiQianXiaoXi/0501-0600/0588.md"
+    ]
+
+
+def test_transcript_markdown_download_rejects_non_canonical_uri(client):
+    fake = _RecordingGetClient()
+    server._client = fake
+
+    response = client.get("/api/transcripts/../health?download=markdown")
+
+    assert response.status_code == 404
+    assert fake.urls == []
+
+
+def test_transcript_markdown_download_is_404_without_source(client):
+    fake = _MarkdownGetClient(
+        {
+            "doc_id": "ShuiQianXiaoXi/0501-0600/0588.md",
+            "source_title": "标题",
+            "body_html": "<p>x</p>",
+        }
+    )
+    server._client = fake
+
+    response = client.get(
+        "/api/transcripts/ShuiQianXiaoXi/0501-0600/0588.md?download=markdown"
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "文稿源暂不可用"
+
+
 @pytest.mark.parametrize("path", ["/docs", "/redoc", "/openapi.json"])
 def test_no_generated_api_docs_are_public(client, path):
     assert client.get(path).status_code == 404

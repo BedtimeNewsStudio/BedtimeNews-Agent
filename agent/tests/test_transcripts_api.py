@@ -48,13 +48,17 @@ def test_transcript_index_is_ordered_json_with_revalidation(client, monkeypatch)
 
 
 def test_transcript_detail_returns_sanitized_projection(client, monkeypatch):
-    article = _metadata() | {"body_html": "<h2>正文</h2><p>内容</p>"}
+    article = _metadata() | {
+        "body_html": "<h2>正文</h2><p>内容</p>",
+        "body_markdown": "# 标题\n\n## 正文\n\n内容\n",
+    }
     monkeypatch.setattr(main, "get_transcript", lambda _schema, doc_id: article)
 
     response = client.get("/transcripts/ShuiQianXiaoXi/0501-0600/0588.md")
 
     assert response.status_code == 200
     assert response.json()["body_html"] == article["body_html"]
+    assert response.json()["body_markdown"] == article["body_markdown"]
     assert response.headers["etag"] == main._etag_for(article)
 
 

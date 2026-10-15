@@ -46,6 +46,7 @@ def test_projection_includes_preamble_body_and_appendix():
     assert "bilibili.com" in html
     assert "example.com/watch" in html
     assert "<h1" not in html.lower()
+    assert projection.body_markdown == TRANSCRIPT
     assert projection.source_hash == hashlib.sha256(raw).hexdigest()
 
 

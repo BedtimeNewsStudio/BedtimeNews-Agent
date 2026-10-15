@@ -41,8 +41,9 @@ def load_indexable_source(
     ``body_hash`` is calculated from the exact normalized string stored in
     ``Document.text``. Title, publication date, appendix, and formatting that
     normalization removes therefore cannot trigger unnecessary embeddings.
-    ``source_hash`` still observes every byte for non-RAG consumers such as the
-    transcript reader.
+    ``source_hash`` still observes every byte for the reader HTML and the
+    downloadable original Markdown, so a preamble or appendix edit refreshes
+    those without a RAG rebuild.
     """
     file_path = CONTENTS_DIR / uri
     if raw_bytes is None:

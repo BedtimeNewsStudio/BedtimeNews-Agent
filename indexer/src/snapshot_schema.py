@@ -57,6 +57,7 @@ COPY_COLUMNS: dict[str, tuple[str, ...]] = {
         "channel",
         "publication_date",
         "body_html",
+        "body_markdown",
         "source_hash",
         "projection_version",
         "updated_at",
@@ -141,6 +142,7 @@ def create_tables_sql(schema: str, dim: int) -> sql.Composed:
             channel VARCHAR(100) NOT NULL,
             publication_date VARCHAR(100),
             body_html TEXT NOT NULL,
+            body_markdown TEXT NOT NULL DEFAULT '',
             source_hash VARCHAR(64) NOT NULL,
             projection_version INTEGER NOT NULL,
             updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP

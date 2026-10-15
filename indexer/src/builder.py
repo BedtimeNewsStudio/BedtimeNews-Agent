@@ -88,9 +88,12 @@ class BuildPlan:
     changes: ChangeSet
     titles: dict[str, str]
     source_commit: str | None
-    # Files whose chunks are (re)built in this snapshot.
+    # Files whose chunks/embeddings are (re)built. Follows ## 正文 only
+    # (added / body_modified / legacy), never a preamble or appendix edit.
     reindex: set[str] = field(default_factory=set)
-    # Reader projections to (re)render / remove, relative to the base.
+    # Reader HTML and downloadable original Markdown to rewrite. Follows every
+    # byte of the source file, so title/date/appendix edits land here without
+    # touching embeddings.
     render: set[str] = field(default_factory=set)
     transcripts_removed: set[str] = field(default_factory=set)
     titles_changed: bool = False
@@ -211,15 +214,20 @@ def plan_build(conn: Connection, *, full: bool, source_commit: str | None) -> Bu
         return plan
 
     plan.reindex = changes.reindex_files
+    # Embeddings: ## 正文. Downloadable Markdown and reader HTML: whole file.
+    plan.render = set(changes.reindex_files) | set(changes.source_only)
     plan.transcripts_removed = set(base_transcripts) - current_files
     for uri in current_files:
         stored = base_transcripts.get(uri)
-        if stored is None or (stored[0], stored[1]) != (
-            changes.current_source_hashes[uri],
-            TRANSCRIPT_PROJECTION_VERSION,
-        ):
+        if stored is None:
             plan.render.add(uri)
-        elif stored[2] != titles[uri]:
+            continue
+        stored_hash, stored_version, stored_title = stored
+        if stored_hash != changes.current_source_hashes[uri]:
+            plan.render.add(uri)
+        elif stored_version != TRANSCRIPT_PROJECTION_VERSION:
+            plan.render.add(uri)
+        elif stored_title != titles[uri]:
             plan.titles_changed = True
     plan.titles_changed = plan.titles_changed or base_titles != titles
     return plan
@@ -370,9 +378,24 @@ def _vector_literal(vector: list[float]) -> str:
     return "[" + ",".join(f"{float(v):.7g}" for v in vector) + "]"
 
 
+def _columns_on(cursor: Cursor, schema: str, table: str) -> set[str]:
+    cursor.execute(
+        """
+        SELECT column_name FROM information_schema.columns
+        WHERE table_schema = %s AND table_name = %s
+        """,
+        (schema, table),
+    )
+    return {row[0] for row in cursor.fetchall()}
+
+
 def _copy_base(cursor: Cursor, base: str, target: str) -> None:
     for table in SNAPSHOT_TABLES:
-        cols = sql.SQL(", ").join(sql.Identifier(c) for c in COPY_COLUMNS[table])
+        present = _columns_on(cursor, base, table)
+        cols = tuple(c for c in COPY_COLUMNS[table] if c in present)
+        if not cols:
+            raise RuntimeError(f"no overlapping columns to copy for {table}")
+        col_sql = sql.SQL(", ").join(sql.Identifier(c) for c in cols)
         cursor.execute(
             sql.SQL(
                 "INSERT INTO {t}.{tab} ({cols}) SELECT {cols} FROM {b}.{tab}"
@@ -380,7 +403,7 @@ def _copy_base(cursor: Cursor, base: str, target: str) -> None:
                 t=sql.Identifier(target),
                 b=sql.Identifier(base),
                 tab=sql.Identifier(table),
-                cols=cols,
+                cols=col_sql,
             )
         )
 
@@ -529,6 +552,7 @@ def _write_transcripts(
             p.channel,
             p.publication_date,
             p.body_html,
+            p.body_markdown,
             p.source_hash,
             p.projection_version,
         )
@@ -541,7 +565,8 @@ def _write_transcripts(
                 """
                 INSERT INTO {t}.transcripts (
                     doc_id, canonical_title, source_title, channel,
-                    publication_date, body_html, source_hash, projection_version
+                    publication_date, body_html, body_markdown, source_hash,
+                    projection_version
                 ) VALUES %s
                 ON CONFLICT (doc_id) DO UPDATE
                 SET canonical_title = EXCLUDED.canonical_title,
@@ -549,6 +574,7 @@ def _write_transcripts(
                     channel = EXCLUDED.channel,
                     publication_date = EXCLUDED.publication_date,
                     body_html = EXCLUDED.body_html,
+                    body_markdown = EXCLUDED.body_markdown,
                     source_hash = EXCLUDED.source_hash,
                     projection_version = EXCLUDED.projection_version,
                     updated_at = CURRENT_TIMESTAMP

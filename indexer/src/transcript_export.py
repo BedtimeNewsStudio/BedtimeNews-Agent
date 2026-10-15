@@ -13,9 +13,9 @@ from mdit_py_plugins.footnote import footnote_plugin
 
 from .models import TranscriptProjection
 
-# Bump whenever reader HTML shape changes so stale projections re-render without
+# Bump whenever the stored projection changes so stale rows re-render without
 # touching RAG embeddings (which still key only on normalized ## 正文).
-TRANSCRIPT_PROJECTION_VERSION = 3
+TRANSCRIPT_PROJECTION_VERSION = 4
 
 _OLD_TRANSCRIPT_HOST = "bedtimenewsstudio.github.io"
 _OLD_TRANSCRIPT_PREFIX = "/BedtimeNews-Transcripts/contents/"
@@ -215,6 +215,7 @@ def project_transcript(
         channel=PurePosixPath(doc_id).parts[0],
         publication_date=_publication_date(markdown),
         body_html=_render_markdown(doc_id, _reader_markdown(markdown)),
+        body_markdown=markdown,
         source_hash=hashlib.sha256(raw_bytes).hexdigest(),
         projection_version=TRANSCRIPT_PROJECTION_VERSION,
     )
