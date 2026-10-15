@@ -869,7 +869,7 @@ async function updateShareButton() {
   }
 }
 
-function copyShareLinkFallback(text) {
+function copyTextFallback(text) {
   const input = document.createElement("textarea");
   input.value = text;
   input.setAttribute("readonly", "");
@@ -882,25 +882,30 @@ function copyShareLinkFallback(text) {
   if (!ok) throw new Error("execCommand copy failed");
 }
 
+// writeText is invoked before the first await so a click's user-activation
+// still covers it. A rejected Clipboard API falls through to the textarea path.
+async function writeClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch (error) {
+      console.error("Clipboard write failed; trying the fallback.", error);
+    }
+  }
+  copyTextFallback(text);
+}
+
 async function copyShareLink() {
   const text = await ensureShareText();
   if (!text) return;
   closeShareSheet();
   try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-    } else {
-      copyShareLinkFallback(text);
-    }
+    await writeClipboard(text);
     showShareToast("已复制");
   } catch (error) {
-    try {
-      copyShareLinkFallback(text);
-      showShareToast("已复制");
-    } catch (fallbackError) {
-      console.error("Clipboard write failed.", error, fallbackError);
-      showShareToast("复制失败，请手动复制");
-    }
+    console.error("Clipboard write failed.", error);
+    showShareToast("复制失败，请手动复制");
   }
 }
 
@@ -1312,6 +1317,11 @@ function addTransmissionTurn() {
     head.setAttribute("aria-expanded", String(collapsed));
   });
 
+  const answerCopy = turn.querySelector(".answer-copy");
+  answerCopy.addEventListener("click", () => {
+    copyAnswerMarkdown(answerCopy);
+  });
+
   return {
     turn,
     signal,
@@ -1319,6 +1329,8 @@ function addTransmissionTurn() {
     stages: turn.querySelectorAll(".stage-item"),
     answer: turn.querySelector(".answer"),
     answerBody: turn.querySelector(".answer-body"),
+    answerActions: turn.querySelector(".answer-actions"),
+    answerCopy,
     counts: { retrieved: null, relevant: null },
   };
 }
@@ -1396,6 +1408,64 @@ function recordTurn(question, answer, grounded) {
     answer: answer.slice(0, HISTORY_ANSWER_CHARS),
     grounded,
   });
+}
+
+// The string the renderer parsed: citation links repaired, follow-up block
+// removed, list markers made valid. That is the Markdown of this one answer.
+// The question and the suggested follow-ups are not part of it.
+function answerMarkdownSource(state) {
+  const text = stripFollowupBlock(state.finalText || state.answerText).trim();
+  if (!text) return "";
+  return normalizeMarkdown(linkifyCitations(text, state.citationUrls)).trim();
+}
+
+function publishAnswerCopy(state) {
+  const markdown = answerMarkdownSource(state);
+  state.ctx.answerCopy.markdown = markdown;
+  state.ctx.answerActions.hidden = !markdown;
+}
+
+let copiedAnswerButton = null;
+let copiedAnswerTimer = 0;
+
+function restoreAnswerCopyButton(button) {
+  if (!button) return;
+  button.classList.remove("is-copied", "is-failed");
+  const label = button.querySelector(".answer-copy-label");
+  if (label) label.textContent = "复制";
+  button.setAttribute("aria-label", "复制 Markdown");
+}
+
+function flashAnswerCopy(button, ok) {
+  if (copiedAnswerButton && copiedAnswerButton !== button) {
+    restoreAnswerCopyButton(copiedAnswerButton);
+  }
+  if (copiedAnswerTimer) clearTimeout(copiedAnswerTimer);
+  copiedAnswerButton = button;
+  button.classList.toggle("is-copied", ok);
+  button.classList.toggle("is-failed", !ok);
+  const label = button.querySelector(".answer-copy-label");
+  if (label) label.textContent = ok ? "已复制" : "复制失败";
+  button.setAttribute("aria-label", ok ? "已复制 Markdown" : "复制失败");
+  const status = button.parentElement?.querySelector(".answer-copy-status");
+  if (status) status.textContent = ok ? "已复制" : "复制失败";
+  copiedAnswerTimer = setTimeout(() => {
+    restoreAnswerCopyButton(button);
+    if (copiedAnswerButton === button) copiedAnswerButton = null;
+    copiedAnswerTimer = 0;
+  }, 1600);
+}
+
+async function copyAnswerMarkdown(button) {
+  const text = button.markdown;
+  if (!text) return;
+  try {
+    await writeClipboard(text);
+    flashAnswerCopy(button, true);
+  } catch (error) {
+    console.error("Clipboard write failed.", error);
+    flashAnswerCopy(button, false);
+  }
 }
 
 function renderFollowups(ctx, items) {
@@ -1624,6 +1694,7 @@ async function completeQuestion(question, state) {
       '<p class="answer-empty">未能生成回答，请换个问法再试。</p>';
   }
   state.ctx.answer.classList.remove("is-streaming");
+  publishAnswerCopy(state);
   recordTurn(
     question,
     stripFollowupBlock(state.finalText || state.answerText),
@@ -1641,6 +1712,7 @@ async function handleQuestionError(err, state) {
   // A stop is a choice, not a failure: keep whatever arrived, rendered, and
   // say so plainly instead of dressing it up as an error.
   await finalizeAnswer(state);
+  publishAnswerCopy(state);
   if (stopped) {
     state.ctx.statusEl.textContent = "已停止";
     if (!state.answerText && !state.finalText) {

@@ -799,6 +799,65 @@ body {
   color: var(--accent);
 }
 
+/* One control per finished answer. Same pill as a follow-up chip, kept to the
+   touch size so it stays tappable under a long answer on a phone. Hidden while
+   the answer is still streaming, and absent when there is no answer text. */
+.answer-actions {
+  display: flex;
+  align-items: center;
+  margin-top: 0.85rem;
+}
+
+.answer-copy {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: var(--touch);
+  padding: 0 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--font-cjk);
+  font-size: 0.85rem;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.18s var(--ease), border-color 0.18s var(--ease),
+    background 0.18s var(--ease);
+}
+
+.answer-copy .icon {
+  display: block;
+  flex: 0 0 auto;
+}
+
+/* Holds "已复制" without widening the resting "复制" label. */
+.answer-copy-label {
+  min-width: 3em;
+  text-align: center;
+}
+
+.answer-copy:hover,
+.answer-copy:focus-visible {
+  color: var(--text);
+  border-color: var(--accent);
+  background: rgba(var(--accent-rgb), 0.08);
+}
+
+.answer-copy.is-copied {
+  color: var(--accent);
+  border-color: rgba(var(--accent-rgb), 0.45);
+  background: rgba(var(--accent-rgb), 0.08);
+}
+
+.answer-copy.is-failed {
+  color: var(--text);
+  border-color: var(--text-dim);
+}
+
 /* Streaming cursor while tokens arrive. It hangs off the last rendered block
    rather than .answer-body itself: the body's children are block elements once
    markdown is rendering live, and an ::after on the container would sit on its
