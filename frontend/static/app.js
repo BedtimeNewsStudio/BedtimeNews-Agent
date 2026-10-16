@@ -206,9 +206,46 @@ function dedupeCitationRuns(text) {
   );
 }
 
+// Where a citation run belongs: inside the sentence it supports, in full-width
+// parentheses, directly before the sentence's final punctuation. Mirror of the
+// server's _place_citation_runs, so streaming and the final answer agree.
+//   ...很激烈。[[a]] [[b]] 下一句   ->   ...很激烈（[[a]] [[b]]）。 下一句
+const SENTENCE_END = "。！？；!?;…";
+const PLACE_RUN_RE = new RegExp(String.raw`${CITATION_LINK}(?:[ \t]*${CITATION_LINK})*`, "g");
+const LIST_PREFIX_RE = /^\s*(?:[-*+]|\d+[.)])?\s*$/;
+
+function placeCitationRuns(text) {
+  let out = "";
+  let cursor = 0;
+  for (const match of text.matchAll(PLACE_RUN_RE)) {
+    const start = match.index;
+    const end = start + match[0].length;
+    const lineStart = text.lastIndexOf("\n", start - 1) + 1;
+    // A line that is only a list marker plus citations: a source-list item.
+    if (LIST_PREFIX_RE.test(text.slice(lineStart, start))) continue;
+    const paragraphBreak = text.lastIndexOf("\n\n", start - 1);
+    const paragraph = text.slice(paragraphBreak === -1 ? 0 : paragraphBreak + 2, start);
+    // Already inside a parenthetical: leave it, so running twice changes nothing.
+    if (
+      Math.max(paragraph.lastIndexOf("（"), paragraph.lastIndexOf("(")) >
+      Math.max(paragraph.lastIndexOf("）"), paragraph.lastIndexOf(")"))
+    ) {
+      continue;
+    }
+    const run = match[0].match(CITATION_LINK_RE).join(" ");
+    const head = text.slice(cursor, start);
+    const stripped = head.replace(/[ \t]+$/, "");
+    let split = stripped.length;
+    while (split > 0 && SENTENCE_END.includes(stripped[split - 1])) split--;
+    out += `${head.slice(0, split)}（${run}）${stripped.slice(split)}`;
+    cursor = end;
+  }
+  return out + text.slice(cursor);
+}
+
 function linkifyCitations(text, urls) {
-  if (!urls) return dedupeCitationRuns(text);
-  return dedupeCitationRuns(text.replace(CITATION_RE, (whole, bracketName, cjkName, trailing) => {
+  if (!urls) return placeCitationRuns(dedupeCitationRuns(text));
+  return placeCitationRuns(dedupeCitationRuns(text.replace(CITATION_RE, (whole, bracketName, cjkName, trailing) => {
     const name = bracketName || cjkName;
     // answer_final is already [[标题]](/transcripts/<URI>#<anchor>). The bare
     // title in the map is the whole episode. Replacing it would drop the section.
@@ -225,7 +262,7 @@ function linkifyCitations(text, urls) {
     // Names we have no entry for are left exactly as written — that is what
     // keeps a genuine 《书名》 in the prose from being turned into a link.
     return entry ? `[[${entry.label || entry.title}]](${entry.url})` : whole;
-  }));
+  })));
 }
 
 // The follow-up block rides in the same completion as the answer, so the raw

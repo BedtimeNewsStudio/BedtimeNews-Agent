@@ -287,7 +287,7 @@ def test_citation_repair_covers_every_spelling():
     for raw in raws:
         repaired, count = graph_mod._repair_citations(raw, citation_map)
         assert count == 1, raw
-        assert repaired == f"见 {section} 的分析", raw
+        assert repaired == f"见（{section}） 的分析", raw
 
     for raw in (
         f"见 [[{uri}#芯片]] 的分析",
@@ -295,14 +295,14 @@ def test_citation_repair_covers_every_spelling():
     ):
         repaired, count = graph_mod._repair_citations(raw, citation_map)
         assert count == 1, raw
-        assert repaired == f"见 {section} 的分析", raw
+        assert repaired == f"见（{section}） 的分析", raw
 
     # An anchor this retrieval did not return still opens a retrieved section.
     invented, count = graph_mod._repair_citations(
         f"见 [[{uri}#不存在]] 的分析", citation_map
     )
     assert count == 1
-    assert invented == f"见 {section} 的分析"
+    assert invented == f"见（{section}） 的分析"
 
     # A real book title shares the 《》 spelling but is not a known episode.
     untouched, count = graph_mod._repair_citations("他读了《三体》", citation_map)
@@ -365,8 +365,8 @@ def test_backticks_around_a_citation_are_removed():
     repaired, count = graph_mod._repair_citations(raw, citation_map, documents)
     assert count == 1
     assert "`" not in repaired
-    assert repaired.startswith("据 [[参考信息17]](/transcripts/")
-    assert repaired.endswith(") 提供的信息")
+    assert repaired.startswith("据（[[参考信息17]](/transcripts/")
+    assert repaired.endswith(")） 提供的信息")
     assert quote(anchor, safe="") in repaired
 
 
@@ -429,8 +429,9 @@ def test_bare_title_opens_the_heading_the_paragraph_is_about():
         ),
     ]
     citation_map = graph_mod.build_citation_map(documents)
-    debt = f"地方债和政信债不是一回事。[[睡前消息588 · 地方债与政信债]]({url})"
-    virus = f"柳州被称为病毒绕着走的城市。[[睡前消息588 · 病毒绕着走的城市]]({url})"
+    # The chip sits inside the sentence, in parentheses, before the period.
+    debt = f"地方债和政信债不是一回事（[[睡前消息588 · 地方债与政信债]]({url})）。"
+    virus = f"柳州被称为病毒绕着走的城市（[[睡前消息588 · 病毒绕着走的城市]]({url})）。"
 
     repaired, count = graph_mod._repair_citations(
         "地方债和政信债不是一回事。[[睡前消息588]]", citation_map, documents
@@ -450,11 +451,11 @@ def test_bare_title_opens_the_heading_the_paragraph_is_about():
         "节目讨论了债务。[[睡前消息588]]", citation_map, documents
     )
     assert repaired == (
-        "节目讨论了债务。[[睡前消息588 · 病毒绕着走的城市]]("
+        "节目讨论了债务（[[睡前消息588 · 病毒绕着走的城市]]("
         + url
         + "#"
         + quote("病毒绕着走的城市", safe="")
-        + ")"
+        + ")）。"
     )
 
 
@@ -558,3 +559,72 @@ def test_chip_label_adds_the_section_only_when_the_link_has_one():
     assert citation_label("高见54", "总结", "") == "高见54"
     # An anchor whose heading is unknown falls back to the bare title.
     assert citation_label("高见54", None, "总结") == "高见54"
+
+
+def test_citation_runs_sit_inside_the_sentence_in_parentheses():
+    a = "[[参考信息29 · 招生]](/transcripts/C/0029.md#a)"
+    b = "[[参考信息211 · 在园]](/transcripts/C/0211.md#b)"
+    place = graph_mod._place_citation_runs
+
+    # After the period: moved before it, wrapped in full-width parentheses.
+    assert place(f"竞争很激烈。{a} 一个反差。{b}") == (
+        f"竞争很激烈（{a}）。 一个反差（{b}）。"
+    )
+    # Several chips form one group, and the other sentence-final marks work too.
+    assert place(f"竞争很激烈。 {a} {b} 下一句") == f"竞争很激烈（{a} {b}）。 下一句"
+    assert place(f"真的吗？{a} 是的！{b}") == f"真的吗（{a}）？ 是的（{b}）！"
+    assert place(f"成立；{a}") == f"成立（{a}）；"
+    # Already before the period: only wrapped.
+    assert place(f"竞争很激烈{a}。下一句") == f"竞争很激烈（{a}）。下一句"
+    # Mid-sentence and without punctuation: wrapped where it is.
+    assert place(f"句子，{a}继续") == f"句子，（{a}）继续"
+    assert place(f"他说“好。”{a}") == f"他说“好。”（{a}）"
+    # Each paragraph is handled on its own and keeps its break.
+    assert place(f"第一段。{a}\n\n第二段。{b}") == f"第一段（{a}）。\n\n第二段（{b}）。"
+
+
+def test_citation_placement_leaves_alone_what_it_must_and_is_idempotent():
+    a = "[[参考信息29 · 招生]](/transcripts/C/0029.md#a)"
+    b = "[[参考信息211 · 在园]](/transcripts/C/0211.md#b)"
+    place = graph_mod._place_citation_runs
+
+    # A source list (every line is a marker plus a link) is not wrapped.
+    listing = f"**参考来源**\n\n- {a}\n- {b}\n"
+    assert place(listing) == listing
+    assert place(f"1. {a}\n2. 内容。{b}") == f"1. {a}\n2. 内容（{b}）。"
+    # Inside an existing parenthetical: untouched.
+    assert place(f"见（来源：{a}）。下一句") == f"见（来源：{a}）。下一句"
+    assert place("没有任何引用。") == "没有任何引用。"
+
+    for text in (
+        f"竞争很激烈。{a} 下一句。{b}",
+        f"竞争很激烈。 {a} {b} 下一句",
+        f"句子，{a}继续",
+        listing,
+    ):
+        once = place(text)
+        assert place(once) == once
+
+
+def test_repaired_answer_places_the_chip_before_the_period():
+    from langchain_core.documents import Document
+
+    uri = "CanKaoXinXi/0001-0100/0029.md"
+    documents = [
+        Document(
+            page_content="",
+            metadata={
+                "doc_id": uri,
+                "title": "参考信息29",
+                "heading": "首轮幼儿园关停潮到来",
+                "heading_anchor": "首轮幼儿园关停潮到来",
+            },
+        )
+    ]
+    citation_map = graph_mod.build_citation_map(documents)
+    repaired, _count = graph_mod._repair_citations(
+        f"生源竞争也很激烈。[[{uri}]] 一个反差是新生儿减少。", citation_map, documents
+    )
+    label = "[[参考信息29 · 首轮幼儿园关停潮到来]]"
+    assert repaired.startswith("生源竞争也很激烈（" + label)
+    assert "）。 一个反差是新生儿减少。" in repaired

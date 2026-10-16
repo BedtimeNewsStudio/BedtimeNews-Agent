@@ -847,8 +847,8 @@ Guidelines:
 4. **Synthesize**: Combine information from ALL documents - don't just summarize individual documents
 5. **Be honest**: If the documents don't contain enough information to answer, say so clearly. This is about gaps in what the user asked; it is not a reason to report on off-topic passages the documents happen to contain.
 6. **Structure clearly**: Use paragraphs, bullets, or sections as appropriate
-7. **Cite beside the claim**: Put a source id immediately after the sentence it supports, before the next sentence starts. Never collect several ids at the end of a paragraph, and never write the same id twice in a row. When consecutive sentences draw on the same Source line, cite once after the last of them. If a paragraph would mix several sources, split it so each paragraph or sentence carries the ids of what it says. Two topics from one episode are two sources: cite each one next to its own claims. Pattern, with made-up ids:
-   甲方案在第一轮试验中失败。[[X/0001-0100/0001.md#试验]] 原因是材料过重。[[X/0001-0100/0001.md#原因]] 乙方案则已经量产。[[Y/0001-0100/0002.md#量产]]
+7. **Cite inside the sentence it supports**: Put a source id at the end of the sentence it supports, directly before that sentence's final punctuation, like `……生源竞争很激烈[[X/0001-0100/0001.md#招生]]。`. Never put it after the period, never collect several ids at the end of a paragraph, and never write the same id twice in a row. When consecutive sentences draw on the same Source line, cite once, in the last of them. If a paragraph would mix several sources, split it so each paragraph or sentence carries the ids of what it says. Two topics from one episode are two sources: cite each one in its own sentence. Pattern, with made-up ids:
+   甲方案在第一轮试验中失败[[X/0001-0100/0001.md#试验]]。原因是材料过重[[X/0001-0100/0001.md#原因]]。乙方案则已经量产[[Y/0001-0100/0002.md#量产]]。
 8. **Distinguish sources**: Make it clear when you're:
    - Reporting what 睡前消息 says (name that passage's Source id)
    - Adding general context (mark as background knowledge)
@@ -1143,7 +1143,7 @@ def _repair_citations(
         cursor = end
         previous = end
     pieces.append(answer[cursor:])
-    return _dedupe_citation_runs("".join(pieces)), repaired
+    return _place_citation_runs(_dedupe_citation_runs("".join(pieces))), repaired
 
 
 # One or more repaired citation links separated only by whitespace, e.g. a run
@@ -1166,6 +1166,50 @@ def _dedupe_citation_runs(text: str) -> str:
         return " ".join(dict.fromkeys(links))
 
     return _CITATION_RUN_RE.sub(collapse, text)
+
+
+# Where a citation run belongs: inside the sentence it supports, in full-width
+# parentheses, directly before the sentence's final punctuation.
+#   ...很激烈。[[a]] [[b]] 下一句   ->   ...很激烈（[[a]] [[b]]）。 下一句
+# The prompt asks for this, but the position is enforced here so it does not
+# depend on the model. Mirrored by the frontend's placeCitationRuns.
+_SENTENCE_END = "。！？；!?;…"
+_PLACE_RUN_RE = re.compile(rf"{_CITATION_LINK}(?:[ \t]*{_CITATION_LINK})*")
+# A line that holds nothing but a list marker before the run: a source-list item.
+_LIST_PREFIX_RE = re.compile(r"\s*(?:[-*+]|\d+[.)])?\s*")
+
+
+def _place_citation_runs(text: str) -> str:
+    """Wrap each citation run in （…） and put it before the sentence's punctuation.
+
+    Left alone: a run that is already inside a parenthetical, and a line that is
+    only a source-list item. Applying it twice gives the same text.
+    """
+    pieces: list[str] = []
+    cursor = 0
+    for match in _PLACE_RUN_RE.finditer(text):
+        start, end = match.span()
+        line_start = text.rfind("\n", 0, start) + 1
+        if _LIST_PREFIX_RE.fullmatch(text[line_start:start]):
+            continue
+        paragraph_break = text.rfind("\n\n", 0, start)
+        paragraph = text[paragraph_break + 2 if paragraph_break != -1 else 0 : start]
+        if max(paragraph.rfind("（"), paragraph.rfind("(")) > max(
+            paragraph.rfind("）"), paragraph.rfind(")")
+        ):
+            continue
+        run = " ".join(_CITATION_LINK_RE.findall(match.group(0)))
+        head = text[cursor:start]
+        stripped = head.rstrip(" \t")
+        split = len(stripped)
+        while split > 0 and stripped[split - 1] in _SENTENCE_END:
+            split -= 1
+        pieces.append(head[:split])
+        pieces.append(f"（{run}）")
+        pieces.append(stripped[split:])
+        cursor = end
+    pieces.append(text[cursor:])
+    return "".join(pieces)
 
 
 # The generation prompt asks for the answer, this delimiter, then the suggested
