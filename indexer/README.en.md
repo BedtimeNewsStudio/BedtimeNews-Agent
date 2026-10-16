@@ -102,14 +102,14 @@ validation:
 
 Run inside the indexer container:
 
-| Command                                                 | Effect                                                                                                   |
-| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `python -m src.snapshots list`                          | List snapshots: status, pinned, lineage (current/other), publish time, size, vector space               |
-| `python -m src.snapshots status`                        | Show `rag_meta.indexer_status` (last run, result, error, consecutive failures)                           |
-| `python -m src.snapshots retire <id>`                   | Retire a snapshot (data rollback); agents fall back to the previous readable snapshot within 15 s        |
-| `python -m src.snapshots unretire <id>`                 | Undo a retirement (retired snapshots are kept for 24 hours)                                              |
-| `python -m src.snapshots pin <id>` / `unpin <id>`       | Pin or unpin; pinned snapshots are never garbage-collected                                               |
-| `python -m src.snapshots build [--full]`                | Run a build now, protected by the same run lock and advisory lock as the scheduled run                   |
+| Command                                                     | Effect                                                                                                                                                                                    |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `python -m src.snapshots list`                              | List snapshots: status, pinned, lineage (current/other), publish time, size, vector space                                                                                                 |
+| `python -m src.snapshots status`                            | Show `rag_meta.indexer_status` (last run, result, error, consecutive failures)                                                                                                            |
+| `python -m src.snapshots retire <id>`                       | Retire a snapshot (data rollback); agents fall back to the previous readable snapshot within 15 s                                                                                         |
+| `python -m src.snapshots unretire <id>`                     | Undo a retirement (retired snapshots are kept for 24 hours)                                                                                                                               |
+| `python -m src.snapshots pin <id>` / `unpin <id>`           | Pin or unpin; pinned snapshots are never garbage-collected                                                                                                                                |
+| `python -m src.snapshots build [--full]`                    | Run a build now, protected by the same run lock and advisory lock as the scheduled run                                                                                                    |
 | `python -m src.snapshots drop-previous-lineage [--dry-run]` | Once the current lineage is published, drop the previous chunking in this embedding space immediately. Does not touch the current lineage and does not wait 7 days. Run `--dry-run` first |
 
 ```bash
@@ -213,7 +213,7 @@ Titles come from the upstream `URI映射.md`. A general rule (`{channel}/{bucket
 **`transcripts`**: rendered transcripts for the in-app reader
 
 - `doc_id`: transcript URI (primary key)
-- `canonical_title` / `source_title`: standardised title and the transcript's own `# ` title
+- `canonical_title` / `source_title`: standardised title and the transcript's own `#` title
 - `channel`, `publication_date`: channel name and the `**发布日期**` value
 - `body_html`: the rendered page served by the agent's `/transcripts` API. A body topic `h2` carries an `id` equal to its anchor. A projection-version change re-renders and does not re-embed
 - `source_hash`, `projection_version`: re-render triggers (source edits or a renderer change)
@@ -238,10 +238,10 @@ Titles come from the upstream `URI映射.md`. A general rule (`{channel}/{bucket
 
 ### Two compatibility dimensions
 
-| Dimension                                | Composition                                                                                                                  | Role                                                                                                    |
-| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| **Pipeline fingerprint**                 | Hash of (`format_version`, `normalization_version` = `BODY_NORMALIZATION_VERSION`, `chunker_version` = `CHUNKER_VERSION`)    | Incremental builds only between snapshots with the same fingerprint; otherwise a full build             |
-| **Vector space** `embedding_space`       | `<model>@<dimension>`, e.g. `Qwen/Qwen3-Embedding-4B@2560`; overridable with `embedding.space_id`                            | Vectors are reused, and snapshots read by an agent, only within one vector space                        |
+| Dimension                          | Composition                                                                                                               | Role                                                                                        |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| **Pipeline fingerprint**           | Hash of (`format_version`, `normalization_version` = `BODY_NORMALIZATION_VERSION`, `chunker_version` = `CHUNKER_VERSION`) | Incremental builds only between snapshots with the same fingerprint; otherwise a full build |
+| **Vector space** `embedding_space` | `<model>@<dimension>`, e.g. `Qwen/Qwen3-Embedding-4B@2560`; overridable with `embedding.space_id`                         | Vectors are reused, and snapshots read by an agent, only within one vector space            |
 
 - Bump `CHUNKER_VERSION` (`src/chunker.py`) whenever the chunking parameters or logic change, and `BODY_NORMALIZATION_VERSION` (`src/document_loader.py`) whenever normalization changes. Forgetting a bump mixes old and new chunking in one snapshot; code review must check for it.
 - Bump `FORMAT_VERSION` (`src/snapshot_schema.py`) whenever the structure or meaning of a table or column the agent reads changes, and add the new format to the agent's `SUPPORTED_FORMATS`.
@@ -255,13 +255,13 @@ The agent connects as `rag_agent`, which has only `USAGE` on `rag_meta` with `SE
 
 GC runs before and after every build, each deletion in its own transaction holding the advisory lock (`lock_timeout` 5 s; a snapshot still being read is retried on the next run):
 
-| Rule                                                                                                      | Rationale                                                         |
-| --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| The current lineage keeps its latest 2 published snapshots                                                | The current one plus an instant rollback target                   |
-| Every other lineage (including `legacy`) keeps only its latest 1, for 7 days after the current lineage superseded it | The previous code version can still be rolled back to   |
-| `pinned` snapshots are never deleted                                                                      | Explicit long-term pinning                                        |
-| `retired` snapshots are kept for 24 hours                                                                 | A mistaken retirement can be undone                               |
-| Nothing is deleted within 10 minutes of being superseded or retired                                       | Protects in-flight requests (the agent switches within 15 s)      |
+| Rule                                                                                                                 | Rationale                                                    |
+| -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| The current lineage keeps its latest 2 published snapshots                                                           | The current one plus an instant rollback target              |
+| Every other lineage (including `legacy`) keeps only its latest 1, for 7 days after the current lineage superseded it | The previous code version can still be rolled back to        |
+| `pinned` snapshots are never deleted                                                                                 | Explicit long-term pinning                                   |
+| `retired` snapshots are kept for 24 hours                                                                            | A mistaken retirement can be undone                          |
+| Nothing is deleted within 10 minutes of being superseded or retired                                                  | Protects in-flight requests (the agent switches within 15 s) |
 
 The 7 days above is the automatic collection. The format 2 full build reuses vectors from the old snapshot by chunk text, so wait until that build is published and the agent's `/health` names it before `drop-previous-lineage`. Dropping first discards vectors that have not been copied yet. The command then drops the previous chunking in the same embedding space: snapshots that did not cut the body on sibling `##` topics and have no `heading_anchor`, including `legacy`. It does not drop the previous snapshot kept in the current lineage. It refuses, and drops nothing, when no current-lineage snapshot is published or a previous snapshot is pinned. Run `--dry-run` first.
 

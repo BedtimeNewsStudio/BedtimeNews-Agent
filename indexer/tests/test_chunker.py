@@ -102,7 +102,8 @@ class TestExtractLastWords:
         text = "alpha beta gamma delta epsilon zeta eta theta"
         result = _extract_last_words(text, 2)
         # Result is a trailing slice of the original text, shorter than it.
-        assert result and result in text
+        assert result
+        assert result in text
         assert len(result) < len(text)
 
 

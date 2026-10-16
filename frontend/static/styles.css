@@ -739,6 +739,14 @@ body {
   transition: background 0.18s var(--ease), border-color 0.18s var(--ease);
 }
 
+/* A chip carries the episode title and a section name of up to 12 characters;
+   on a phone that can be wider than the line, so let it wrap there. */
+@media (max-width: 480px) {
+  .answer-body a[data-transcript-link] {
+    white-space: normal;
+  }
+}
+
 .answer-body a[data-transcript-link]:hover,
 .answer-body a[data-transcript-link]:focus-visible {
   background: rgba(var(--accent-rgb), 0.12);

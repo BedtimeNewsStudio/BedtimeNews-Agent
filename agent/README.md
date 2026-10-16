@@ -109,7 +109,7 @@ Indexer 把知识库发布为不可变的快照（`rag_s<id>` schema），登记
 
 ```json
 {
-  "answer": "根据[[睡前消息588]](/transcripts/ShuiQianXiaoXi/0501-0600/0588.md#%E5%9F%8E%E6%8A%95%E5%80%BA)…另见[[参考信息490]](/transcripts/CanKaoXinXi/0401-0500/0490.md)。",
+  "answer": "根据[[睡前消息588 · 城投债]](/transcripts/ShuiQianXiaoXi/0501-0600/0588.md#%E5%9F%8E%E6%8A%95%E5%80%BA)…另见[[参考信息490]](/transcripts/CanKaoXinXi/0401-0500/0490.md)。",
   "followups": ["独山县后来如何化解债务？"],
   "grounded": true
 }
@@ -119,7 +119,7 @@ Indexer 把知识库发布为不可变的快照（`rag_s<id>` schema），登记
 
 ```plaintext
 data: {"type": "step", "step": "route", "content": "..."}
-data: {"type": "citations", "urls": {"ShuiQianXiaoXi/0501-0600/0588.md#城投债": {"title": "睡前消息588", "url": "/transcripts/ShuiQianXiaoXi/0501-0600/0588.md#%E5%9F%8E%E6%8A%95%E5%80%BA"}, "ShuiQianXiaoXi/0501-0600/0588.md": {"title": "睡前消息588", "url": "/transcripts/ShuiQianXiaoXi/0501-0600/0588.md"}, "CanKaoXinXi/0401-0500/0490.md": {"title": "参考信息490", "url": "/transcripts/CanKaoXinXi/0401-0500/0490.md"}}}
+data: {"type": "citations", "urls": {"ShuiQianXiaoXi/0501-0600/0588.md#城投债": {"title": "睡前消息588", "label": "睡前消息588 · 城投债", "url": "/transcripts/ShuiQianXiaoXi/0501-0600/0588.md#%E5%9F%8E%E6%8A%95%E5%80%BA"}, "ShuiQianXiaoXi/0501-0600/0588.md": {"title": "睡前消息588", "label": "睡前消息588 · 城投债", "url": "/transcripts/ShuiQianXiaoXi/0501-0600/0588.md"}, "CanKaoXinXi/0401-0500/0490.md": {"title": "参考信息490", "label": "参考信息490", "url": "/transcripts/CanKaoXinXi/0401-0500/0490.md"}}}
 data: {"type": "answer_chunk", "content": "根据"}
 data: {"type": "answer_chunk", "content": "睡前"}
 data: {"type": "answer_meta", "grounded": true}
@@ -369,7 +369,7 @@ docker compose exec agent python -m src.eval_agent --limit 1
 
 ## 引用标题的来源
 
-每一节是一条独立来源，身份是 `URI#锚点`，在检索时由 `doc_id` 和 `heading_anchor` 拼成。模型不写标准化标题，也不写 URL。它最多抄来源 id。生成结束后标签一律是标准化标题，链接才带 `#`。模型若只写期名，链接仍打开这次检索到的一节（正文对得上的那节，否则相似度最高的一节），不打开文章开头。没有话题锚点的导语才是整篇链接。
+每一节是一条独立来源，身份是 `URI#锚点`，在检索时由 `doc_id` 和 `heading_anchor` 拼成。模型不写标准化标题，也不写 URL。它最多抄来源 id。生成结束后链接文字是标准化标题加 ` · ` 和小节名（标题的纯文本，最长 12 个字符，超出时截断并以一个 `…` 结尾），锚点放在链接里；整篇链接只显示标题。`citations` 事件同时带 `title` 与 `label`，相邻且指向同一链接的引用只显示一次。模型若只写期名，链接仍打开这次检索到的一节（正文对得上的那节，否则相似度最高的一节），不打开文章开头。没有话题锚点的导语才是整篇链接。
 
 标题优先取自检索时 LEFT JOIN 出来的快照 `documents.title`（由 indexer 从上游
 `URI映射.md` 写入）。该行缺失时退回通则推导：

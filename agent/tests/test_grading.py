@@ -1,6 +1,7 @@
 """Relevance grading maps the grader's document numbers back to documents."""
 
 from types import SimpleNamespace
+from typing import cast
 
 from langchain_core.documents import Document
 from src import graph as graph_mod
@@ -24,7 +25,11 @@ def test_parallel_batches_number_documents_from_one(monkeypatch):
 
     monkeypatch.setattr(graph_mod, "_parallel_llm_calls", fake_parallel)
 
-    state = {"question": "q", "standalone_question": "q", "documents": _docs(40)}
+    # The node reads only these three fields; the rest of AgentState is not needed.
+    state = cast(
+        graph_mod.AgentState,
+        {"question": "q", "standalone_question": "q", "documents": _docs(40)},
+    )
     result = graph_mod._documents_grade_node(state)
 
     assert all("Document 1 [" in p for p in prompts)

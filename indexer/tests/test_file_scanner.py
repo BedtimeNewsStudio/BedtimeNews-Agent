@@ -141,5 +141,5 @@ def test_scan_fails_when_a_required_sample_uri_is_missing(tmp_path, monkeypatch)
         lambda: {"required_uris": ["missing.md"], "include": ["*.md"]},
     )
 
-    with pytest.raises(RuntimeError, match="missing.md"):
+    with pytest.raises(RuntimeError, match=r"missing\.md"):
         file_scanner.scan_files()

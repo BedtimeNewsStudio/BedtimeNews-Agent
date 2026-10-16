@@ -344,7 +344,8 @@ def _transcripts_have_markdown(schema: str) -> bool:
             """,
             (schema,),
         )
-        found = bool(cursor.fetchone()["has_markdown"])
+        row = cursor.fetchone()
+        found = row is not None and bool(row["has_markdown"])
     _markdown_column[schema] = found
     return found
 

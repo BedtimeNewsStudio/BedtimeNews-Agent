@@ -135,17 +135,16 @@ def _format_summary(
     elapsed_time: float,
 ) -> str:
     """Format overall summary statistics."""
-    lines = []
-    lines.append("\n" + "=" * 80)
-    lines.append("SUMMARY")
-    lines.append("=" * 80)
-    lines.append(f"Total queries: {total_queries}")
-    lines.append(
-        f"Average answer length: {results_stats['avg_answer_length']:.1f} chars"
-    )
-    lines.append(f"Elapsed time: {elapsed_time:.2f}s")
-    lines.append(f"Average time per query: {elapsed_time / total_queries:.2f}s")
-    lines.append("=" * 80)
+    lines = [
+        "\n" + "=" * 80,
+        "SUMMARY",
+        "=" * 80,
+        f"Total queries: {total_queries}",
+        f"Average answer length: {results_stats['avg_answer_length']:.1f} chars",
+        f"Elapsed time: {elapsed_time:.2f}s",
+        f"Average time per query: {elapsed_time / total_queries:.2f}s",
+        "=" * 80,
+    ]
     return "\n".join(lines)
 
 
@@ -156,20 +155,20 @@ def _format_result(
     total_queries: int,
 ) -> str:
     """Format a single agent result for display."""
-    lines = []
-    lines.append("=" * 80)
-    lines.append(f"Query {query_num}/{total_queries}")
-    lines.append("=" * 80)
-    lines.append(f"Category: {query_info['category']}")
-    lines.append(f"Query: {query_info['query']}")
-    lines.append("")
-    lines.append("")
-    lines.append("Answer:")
-    lines.append("-" * 80)
-    lines.append(result.get("answer", ""))
-    lines.append("-" * 80)
-
-    lines.append("")
+    lines = [
+        "=" * 80,
+        f"Query {query_num}/{total_queries}",
+        "=" * 80,
+        f"Category: {query_info['category']}",
+        f"Query: {query_info['query']}",
+        "",
+        "",
+        "Answer:",
+        "-" * 80,
+        result.get("answer", ""),
+        "-" * 80,
+        "",
+    ]
     return "\n".join(lines)
 
 
@@ -245,7 +244,7 @@ def _run_agent_test(queries: list[dict[str, str]]) -> None:
                 print(f"Streaming error: {e}")
 
         except Exception as e:
-            error_msg = f"Error: {str(e)}"
+            error_msg = f"Error: {e!s}"
             print(error_msg)
             print(f"\nQuery {i}/{len(queries)}")
             print(f"Category: {query_info['category']}")

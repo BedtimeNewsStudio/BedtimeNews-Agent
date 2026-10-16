@@ -38,7 +38,7 @@ def hash_query(
         f"{snapshot_id}:{query}:{match_threshold}:{match_count}:{include_text}:{include_heading}"
         f":{sorted(doc_id_filter) if doc_id_filter else None}"
     )
-    return hashlib.md5(key_str.encode()).hexdigest()
+    return hashlib.md5(key_str.encode(), usedforsecurity=False).hexdigest()
 
 
 def _estimate_size(obj: Any) -> int:

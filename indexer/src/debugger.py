@@ -27,7 +27,7 @@ from psycopg2 import sql
 from psycopg2.extras import RealDictCursor
 
 from . import catalog
-from .db import connection
+from .db import connection, fetch_row
 from .scheduler import LOG_FILE
 
 logging.basicConfig(
@@ -75,7 +75,7 @@ def check_connection() -> bool:
     """Print the server and pgvector versions; True when pgvector is installed."""
     with connection() as conn, conn.cursor() as cursor:
         cursor.execute("SELECT version()")
-        print(cursor.fetchone()[0])
+        print(fetch_row(cursor)[0])
         cursor.execute("SELECT extversion FROM pg_extension WHERE extname = 'vector'")
         row = cursor.fetchone()
         print(f"pgvector: {row[0] if row else 'NOT INSTALLED'}")
@@ -249,7 +249,7 @@ def _cmd_logs(lines: int | None = None, show_all: bool = False):
             for line in all_lines:
                 logger.info(line.rstrip())
         else:
-            display_lines = lines if lines else 50
+            display_lines = lines or 50
             start_idx = max(0, len(all_lines) - display_lines)
             actual_lines = len(all_lines) - start_idx
 

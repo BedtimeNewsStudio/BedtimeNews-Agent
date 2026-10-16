@@ -33,7 +33,7 @@ from . import catalog, chunker, document_loader
 from .catalog import SnapshotInfo
 from .change_detector import ChangeSet, detect_changes
 from .chunker import chunk_document
-from .db import SHUTDOWN, transaction, try_advisory_xact_lock
+from .db import SHUTDOWN, fetch_row, transaction, try_advisory_xact_lock
 from .document_loader import load_indexable_source
 from .file_scanner import scan_files
 from .models import Chunk, LoadedIndexableSource, TranscriptProjection
@@ -158,7 +158,7 @@ def _fetch_histories(cursor: Cursor, schema: str) -> dict[str, dict[str, Any]]:
 
 def _has_table(cursor: Cursor, schema: str, table: str) -> bool:
     cursor.execute("SELECT to_regclass(%s) IS NOT NULL", (f'"{schema}".{table}',))
-    return bool(cursor.fetchone()[0])
+    return bool(fetch_row(cursor)[0])
 
 
 def plan_build(conn: Connection, *, full: bool, source_commit: str | None) -> BuildPlan:
@@ -223,9 +223,10 @@ def plan_build(conn: Connection, *, full: bool, source_commit: str | None) -> Bu
             plan.render.add(uri)
             continue
         stored_hash, stored_version, stored_title = stored
-        if stored_hash != changes.current_source_hashes[uri]:
-            plan.render.add(uri)
-        elif stored_version != TRANSCRIPT_PROJECTION_VERSION:
+        if (
+            stored_hash != changes.current_source_hashes[uri]
+            or stored_version != TRANSCRIPT_PROJECTION_VERSION
+        ):
             plan.render.add(uri)
         elif stored_title != titles[uri]:
             plan.titles_changed = True
@@ -681,7 +682,7 @@ def self_check(cursor: Cursor, target: str, *, check_model: bool) -> dict[str, A
         ).format(t=t),
         (dim,),
     )
-    total_chunks, bad_vectors = cursor.fetchone()
+    total_chunks, bad_vectors = fetch_row(cursor)
     if bad_vectors:
         raise SelfCheckFailed(
             f"{bad_vectors} chunks lack a non-zero {dim}-dimensional vector"
@@ -694,7 +695,7 @@ def self_check(cursor: Cursor, target: str, *, check_model: bool) -> dict[str, A
             "SELECT embedding::text FROM {t}.document_chunks ORDER BY random() LIMIT 1"
         ).format(t=t)
     )
-    probe = cursor.fetchone()[0]
+    probe = fetch_row(cursor)[0]
     cursor.execute("SET LOCAL enable_seqscan = off")
     cursor.execute(
         sql.SQL(
@@ -703,7 +704,7 @@ def self_check(cursor: Cursor, target: str, *, check_model: bool) -> dict[str, A
         ).format(t=t),
         (probe, k),
     )
-    got = cursor.fetchone()[0]
+    got = fetch_row(cursor)[0]
     cursor.execute("SET LOCAL enable_seqscan = on")
     if got != k:
         raise SelfCheckFailed(f"sampled top-{k} query returned {got} rows")
@@ -772,7 +773,7 @@ def _unused_snapshot_id(cursor: Cursor, source_commit: str | None) -> str:
             "OR EXISTS (SELECT 1 FROM rag_meta.snapshots WHERE snapshot_id = %s)",
             (schema_for(snapshot_id), snapshot_id),
         )
-        if not cursor.fetchone()[0]:
+        if not fetch_row(cursor)[0]:
             return snapshot_id
         now += timedelta(seconds=1)
 

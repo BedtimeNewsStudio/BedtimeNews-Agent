@@ -171,7 +171,7 @@ def test_condense_rewrites_a_follow_up_against_history(monkeypatch):
     )
     monkeypatch.setattr(graph_mod, "retriever", _RecordingRetriever())
     monkeypatch.setattr(
-        graph_mod, "fetch_chunk_texts", lambda _schema, ids: {i: "正文" for i in ids}
+        graph_mod, "fetch_chunk_texts", lambda _schema, ids: dict.fromkeys(ids, "正文")
     )
 
     history = [
@@ -227,7 +227,7 @@ def test_uncited_answer_gets_a_source_list(monkeypatch):
     )
     monkeypatch.setattr(graph_mod, "retriever", _FakeRetriever())
     monkeypatch.setattr(
-        graph_mod, "fetch_chunk_texts", lambda _schema, ids: {i: "正文" for i in ids}
+        graph_mod, "fetch_chunk_texts", lambda _schema, ids: dict.fromkeys(ids, "正文")
     )
 
     events = _collect("SHEIN出海为什么成功？")
@@ -429,8 +429,8 @@ def test_bare_title_opens_the_heading_the_paragraph_is_about():
         ),
     ]
     citation_map = graph_mod.build_citation_map(documents)
-    debt = f"地方债和政信债不是一回事。[[睡前消息588]]({url})"
-    virus = f"柳州被称为病毒绕着走的城市。[[睡前消息588]]({url})"
+    debt = f"地方债和政信债不是一回事。[[睡前消息588 · 地方债与政信债]]({url})"
+    virus = f"柳州被称为病毒绕着走的城市。[[睡前消息588 · 病毒绕着走的城市]]({url})"
 
     repaired, count = graph_mod._repair_citations(
         "地方债和政信债不是一回事。[[睡前消息588]]", citation_map, documents
@@ -450,7 +450,7 @@ def test_bare_title_opens_the_heading_the_paragraph_is_about():
         "节目讨论了债务。[[睡前消息588]]", citation_map, documents
     )
     assert repaired == (
-        "节目讨论了债务。[[睡前消息588]]("
+        "节目讨论了债务。[[睡前消息588 · 病毒绕着走的城市]]("
         + url
         + "#"
         + quote("病毒绕着走的城市", safe="")
@@ -490,7 +490,8 @@ def test_uri_citations_are_rewritten_into_titled_links(stub_pipeline):
         "or the reader keeps seeing raw URIs"
     )
     assert (
-        f"[[参考信息490]]({CITED_URL}#{quote('鹤岗', safe='')})" in terminal["content"]
+        f"[[参考信息490 · 大家好，欢迎收看睡前消息]]({CITED_URL}#{quote('鹤岗', safe='')})"
+        in terminal["content"]
     )
     assert f"[[{CITED_URI}]]" not in terminal["content"]
     urls = next(e for e in events if e["type"] == "citations")["urls"]
@@ -504,9 +505,56 @@ def test_citations_event_carries_titles_and_urls(stub_pipeline):
 
     section = f"{CITED_URI}#鹤岗"
     section_url = f"{CITED_URL}#{quote('鹤岗', safe='')}"
-    # The bare episode name opens that section. The label stays the episode title.
-    assert urls[CITED_URI] == {"title": "参考信息490", "url": section_url}
+    # The bare episode name opens that section. The title stays the episode
+    # title; the chip label adds the section name.
+    assert urls[CITED_URI] == {
+        "title": "参考信息490",
+        "label": "参考信息490 · 大家好，欢迎收看睡前消息",
+        "url": section_url,
+    }
     assert urls["参考信息490"] == urls[CITED_URI]
     assert urls[section]["title"] == "参考信息490"
     assert urls[section]["url"] == section_url
     assert "鹤岗" not in urls
+
+
+def test_adjacent_duplicate_citations_collapse_to_one():
+    a = "[[高见54]](/transcripts/G/0054.md#%E7%AB%A0A)"
+    b = "[[高见54]](/transcripts/G/0054.md#%E7%AB%A0B)"
+    c = "[[参考信息1]](/transcripts/C/0001.md)"
+    dedupe = graph_mod._dedupe_citation_runs
+    # Repeats inside one run collapse, order of first appearance is kept.
+    assert dedupe(f"句子。{a} {b} {a}") == f"句子。{a} {b}"
+    assert dedupe(f"句子。{a}{a}") == f"句子。{a}"
+    # The same link in two different runs supports two sentences and stays.
+    assert dedupe(f"甲。{a} 乙。{a}") == f"甲。{a} 乙。{a}"
+    # A different link is never merged, and a lone link is untouched.
+    assert dedupe(f"{a} {c}") == f"{a} {c}"
+    assert dedupe(a) == a
+    assert dedupe("没有引用") == "没有引用"
+
+
+def test_section_label_is_plain_and_at_most_twelve_characters():
+    label = graph_mod._section_label
+    assert label("总结") == "总结"
+    # Exactly at the limit stays whole.
+    assert label("一二三四五六七八九十甲乙") == "一二三四五六七八九十甲乙"
+    # Over the limit: 11 characters then a single ellipsis character, 12 in all.
+    cut = label("一二三四五六七八九十甲乙丙")
+    assert cut == "一二三四五六七八九十甲…"
+    assert len(cut) == 12
+    # Markdown source becomes plain text, and ASCII brackets are dropped.
+    assert label("**加粗** [链接](http://x) [^1]") == "加粗 链接"
+    assert label("[方括号]内容") == "方括号内容"
+    assert label("多个   空白\t折叠") == "多个 空白 折叠"
+    assert label(None) == ""
+    assert label("") == ""
+
+
+def test_chip_label_adds_the_section_only_when_the_link_has_one():
+    citation_label = graph_mod._citation_label
+    assert citation_label("高见54", "总结", "总结") == "高见54 · 总结"
+    # A whole-document link (no anchor) stays the bare title.
+    assert citation_label("高见54", "总结", "") == "高见54"
+    # An anchor whose heading is unknown falls back to the bare title.
+    assert citation_label("高见54", None, "总结") == "高见54"

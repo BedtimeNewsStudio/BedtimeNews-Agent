@@ -13,6 +13,7 @@ import os
 import random
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import psycopg2
 import pytest
@@ -41,7 +42,7 @@ DIM = 16
 MODEL = "test-embedding-model"
 
 
-def _pg_kwargs(dbname: str) -> dict:
+def _pg_kwargs(dbname: str) -> dict[str, Any]:
     return {
         "host": PGTEST_HOST,
         "port": int(os.environ.get("PGTEST_PORT", "5432")),
@@ -218,7 +219,7 @@ def test_first_build_is_full_then_no_change(corpus, fake_embed, query):
 
 def test_incremental_build_embeds_only_changed_chunks(corpus, fake_embed, query):
     build()
-    [(base_id, base_schema, *_)] = snapshot_rows(query)
+    [(_base_id, base_schema, *_)] = snapshot_rows(query)
 
     changed = "ShuiQianXiaoXi/0001-0100/0002.md"
     corpus.write(changed, transcript("doc2-edited"))
@@ -303,7 +304,8 @@ def test_chunker_bump_forces_full_build_reusing_vectors(
     assert stats["embedded_new"] == 0
     assert stats["embedding_reused"] == stats["chunks"]
     # Only the self-check's sampled re-embedding hit the API.
-    assert len(fake_embed.calls) == 1 and len(fake_embed.calls[0]) <= 5
+    assert len(fake_embed.calls) == 1
+    assert len(fake_embed.calls[0]) <= 5
 
 
 def test_failure_in_phase_b_leaves_nothing_behind(
@@ -345,6 +347,7 @@ def test_retiring_the_base_mid_build_abandons_the_build(
     monkeypatch.setattr(builder, "self_check", retire_then_check)
     result = build()
     assert result.result == "failed"
+    assert result.error is not None
     assert "retired" in result.error
     rows = snapshot_rows(query)
     assert [(r[0], r[2]) for r in rows] == [(base_id, "retired")]
@@ -360,6 +363,7 @@ def test_self_check_rejects_a_model_mismatch(corpus, fake_embed, query, monkeypa
     monkeypatch.setattr(pipeline, "publish", publish_with_other_model)
     result = build()
     assert result.result == "failed"
+    assert result.error is not None
     assert "re-embedded sample disagrees" in result.error
     assert snapshot_rows(query) == []
     assert snapshot_schemas(query) == set()
@@ -371,6 +375,7 @@ def test_self_check_rejects_a_transcript_without_chunks(corpus, fake_embed, quer
     )
     result = build()
     assert result.result == "failed"
+    assert result.error is not None
     assert "have no chunks" in result.error
     assert snapshot_rows(query) == []
 
@@ -382,6 +387,7 @@ def test_disk_precheck_refuses_to_build(
     monkeypatch.setattr(settings, "build_min_free_bytes", 1 << 60)
     result = build()
     assert result.result == "failed"
+    assert result.error is not None
     assert "Disk precheck failed" in result.error
     assert snapshot_rows(query) == []
 
@@ -576,9 +582,9 @@ def test_agent_role_is_read_only(corpus, fake_embed, query, monkeypatch, databas
     monkeypatch.setattr(settings, "postgres_agent_password", "agent-test-pw")
     build()
     [(_, schema, *_)] = snapshot_rows(query)
-    agent = psycopg2.connect(
-        **(_pg_kwargs(database) | {"user": "rag_agent", "password": "agent-test-pw"})
-    )
+    kwargs = _pg_kwargs(database)
+    kwargs.update(user="rag_agent", password="agent-test-pw")
+    agent = psycopg2.connect(**kwargs)
     agent.autocommit = True
     with agent.cursor() as cur:
         cur.execute(f'SELECT count(*) FROM "{schema}".document_chunks')

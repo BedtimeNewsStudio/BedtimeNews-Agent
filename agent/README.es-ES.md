@@ -132,7 +132,7 @@ resultados.
 
 ```json
 {
-  "answer": "根据[[睡前消息588]](/transcripts/ShuiQianXiaoXi/0501-0600/0588.md#%E5%9F%8E%E6%8A%95%E5%80%BA)…另见[[参考信息490]](/transcripts/CanKaoXinXi/0401-0500/0490.md)。",
+  "answer": "根据[[睡前消息588 · 城投债]](/transcripts/ShuiQianXiaoXi/0501-0600/0588.md#%E5%9F%8E%E6%8A%95%E5%80%BA)…另见[[参考信息490]](/transcripts/CanKaoXinXi/0401-0500/0490.md)。",
   "followups": ["独山县后来如何化解债务？"],
   "grounded": true
 }
@@ -142,7 +142,7 @@ resultados.
 
 ```plaintext
 data: {"type": "step", "step": "route", "content": "..."}
-data: {"type": "citations", "urls": {"ShuiQianXiaoXi/0501-0600/0588.md#城投债": {"title": "睡前消息588", "url": "/transcripts/ShuiQianXiaoXi/0501-0600/0588.md#%E5%9F%8E%E6%8A%95%E5%80%BA"}, "ShuiQianXiaoXi/0501-0600/0588.md": {"title": "睡前消息588", "url": "/transcripts/ShuiQianXiaoXi/0501-0600/0588.md"}, "CanKaoXinXi/0401-0500/0490.md": {"title": "参考信息490", "url": "/transcripts/CanKaoXinXi/0401-0500/0490.md"}}}
+data: {"type": "citations", "urls": {"ShuiQianXiaoXi/0501-0600/0588.md#城投债": {"title": "睡前消息588", "label": "睡前消息588 · 城投债", "url": "/transcripts/ShuiQianXiaoXi/0501-0600/0588.md#%E5%9F%8E%E6%8A%95%E5%80%BA"}, "ShuiQianXiaoXi/0501-0600/0588.md": {"title": "睡前消息588", "label": "睡前消息588 · 城投债", "url": "/transcripts/ShuiQianXiaoXi/0501-0600/0588.md"}, "CanKaoXinXi/0401-0500/0490.md": {"title": "参考信息490", "label": "参考信息490", "url": "/transcripts/CanKaoXinXi/0401-0500/0490.md"}}}
 data: {"type": "answer_chunk", "content": "根据"}
 data: {"type": "answer_chunk", "content": "睡前"}
 data: {"type": "answer_meta", "grounded": true}
@@ -431,7 +431,7 @@ docker compose exec agent python -m src.eval_agent --limit 1
 
 ## De dónde vienen los títulos de las citas
 
-Cada sección es una fuente propia. El id es `URI#ancla`, compuesto en la recuperación a partir de `doc_id` y `heading_anchor`. El modelo no escribe el título normalizado ni la URL. Como mucho copia el id de la fuente. La reparación pone el título normalizado como etiqueta y deja el ancla solo en el enlace. Si el modelo escribe únicamente el nombre del episodio, el enlace abre una sección de esta recuperación: la que coincide con el texto anterior o, si no hay coincidencia, la de mayor similitud. No abre el inicio de la transcripción. Un preámbulo sin ancla de tema sigue siendo un enlace al documento entero.
+Cada sección es una fuente propia. El id es `URI#ancla`, compuesto en la recuperación a partir de `doc_id` y `heading_anchor`. El modelo no escribe el título normalizado ni la URL. Como mucho copia el id de la fuente. La reparación escribe como texto del enlace el título normalizado seguido de ` · ` y el nombre de la sección (el encabezado en texto plano, de 12 caracteres como máximo, recortado con un único `…` si es más largo) y deja el ancla en el enlace. Un enlace a todo el documento muestra solo el título. El evento `citations` lleva `title` y `label`, y las citas adyacentes que apuntan al mismo enlace se muestran una sola vez. Si el modelo escribe únicamente el nombre del episodio, el enlace abre una sección de esta recuperación: la que coincide con el texto anterior o, si no hay coincidencia, la de mayor similitud. No abre el inicio de la transcripción. Un preámbulo sin ancla de tema sigue siendo un enlace al documento entero.
 
 Los títulos provienen de `documents.title` del snapshot, unido con LEFT JOIN durante la
 recuperación (escrito por el indexador desde el `URI映射.md` de origen). Si falta

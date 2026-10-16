@@ -110,7 +110,9 @@ def _locked_run(*, full: bool, sync: bool) -> RunResult:
             plan.titles_changed,
         )
         if not plan.has_changes:
-            logger.info("No changes against %s", plan.base.snapshot_id)
+            logger.info(
+                "No changes against %s", plan.base.snapshot_id if plan.base else None
+            )
             result = RunResult("no_change")
         else:
             catalog.collect_garbage(conn)

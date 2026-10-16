@@ -318,7 +318,7 @@ def _condense_node(state: AgentState) -> AgentState:
 
     try:
         resolved = str(_fast_llm.invoke(messages).content).strip()
-    except Exception:  # noqa: BLE001 - a failed rewrite must not fail the turn
+    except Exception:  # a failed rewrite must not fail the turn
         logger.exception("[CONDENSE] rewrite failed; falling back to raw question")
         resolved = ""
 
@@ -332,7 +332,7 @@ def _condense_node(state: AgentState) -> AgentState:
         f"({len(history)} prior turn(s))"
     )
 
-    steps = []
+    steps: list[BaseMessage] = []
     if resolved != question:
         steps = [HumanMessage(content=f"[CONDENSE] 结合上下文理解为：{resolved}")]
 
@@ -847,7 +847,8 @@ Guidelines:
 4. **Synthesize**: Combine information from ALL documents - don't just summarize individual documents
 5. **Be honest**: If the documents don't contain enough information to answer, say so clearly. This is about gaps in what the user asked; it is not a reason to report on off-topic passages the documents happen to contain.
 6. **Structure clearly**: Use paragraphs, bullets, or sections as appropriate
-7. **One source id per run of claims**: When several sentences draw on the same Source line, name that id once at the end of the run. Do not merge two topics into one episode name.
+7. **Cite beside the claim**: Put a source id immediately after the sentence it supports, before the next sentence starts. Never collect several ids at the end of a paragraph, and never write the same id twice in a row. When consecutive sentences draw on the same Source line, cite once after the last of them. If a paragraph would mix several sources, split it so each paragraph or sentence carries the ids of what it says. Two topics from one episode are two sources: cite each one next to its own claims. Pattern, with made-up ids:
+   甲方案在第一轮试验中失败。[[X/0001-0100/0001.md#试验]] 原因是材料过重。[[X/0001-0100/0001.md#原因]] 乙方案则已经量产。[[Y/0001-0100/0002.md#量产]]
 8. **Distinguish sources**: Make it clear when you're:
    - Reporting what 睡前消息 says (name that passage's Source id)
    - Adding general context (mark as background knowledge)
@@ -1142,7 +1143,29 @@ def _repair_citations(
         cursor = end
         previous = end
     pieces.append(answer[cursor:])
-    return "".join(pieces), repaired
+    return _dedupe_citation_runs("".join(pieces)), repaired
+
+
+# One or more repaired citation links separated only by whitespace, e.g. a run
+# the model stacked at the end of a paragraph.
+_CITATION_LINK = r"\[\[[^\[\]]+?\]\]\([^()\s]*\)"
+_CITATION_RUN_RE = re.compile(rf"{_CITATION_LINK}(?:\s*{_CITATION_LINK})+")
+_CITATION_LINK_RE = re.compile(_CITATION_LINK)
+
+
+def _dedupe_citation_runs(text: str) -> str:
+    """Keep each distinct link once inside a run of adjacent citations.
+
+    The model sometimes repeats a source back to back, or stacks the same link
+    around another. Links that are not adjacent stay: they can support different
+    sentences. Mirrored by the frontend's linkifyCitations.
+    """
+
+    def collapse(match: re.Match[str]) -> str:
+        links = _CITATION_LINK_RE.findall(match.group(0))
+        return " ".join(dict.fromkeys(links))
+
+    return _CITATION_RUN_RE.sub(collapse, text)
 
 
 # The generation prompt asks for the answer, this delimiter, then the suggested
@@ -1166,8 +1189,8 @@ def _split_followups(answer: str) -> tuple[str, list[str]]:
         return answer.strip(), []
 
     followups = []
-    for line in tail.splitlines():
-        line = _LIST_MARKER_RE.sub("", line).strip().strip("\"'“”")
+    for raw_line in tail.splitlines():
+        line = _LIST_MARKER_RE.sub("", raw_line).strip().strip("\"'“”")
         # A stray sentence of commentary is not a question; keep it out of the UI.
         if len(line) < 4 or len(line) > 60:
             continue
@@ -1246,12 +1269,65 @@ def _display_title(doc_id: str, title: str | None = None) -> str:
     return title or derive_title(doc_id) or doc_id
 
 
+# Longest section name shown in a citation chip, ellipsis included.
+_SECTION_LABEL_MAX = 12
+_MD_LINK_INNER = re.compile(r"\[([^\[\]]*)\]\([^)]*\)")
+_FOOTNOTE_REF = re.compile(r"\[\^[^\]]*\]")
+
+
+def _section_label(heading: str | None) -> str:
+    """Reader-facing section name for a chip: plain text, at most 12 characters.
+
+    Headings are Markdown source, so links, footnotes and emphasis are removed.
+    ASCII square brackets would break the ``[[...]]`` citation syntax and are
+    dropped. A name over the limit is cut and ends in one ``…`` character.
+    """
+    text = heading or ""
+    previous = None
+    while previous != text:
+        previous = text
+        text = _MD_LINK_INNER.sub(r"\1", text)
+    text = _FOOTNOTE_REF.sub("", text)
+    for mark in ("**", "__", "`", "[", "]"):
+        text = text.replace(mark, "")
+    text = re.sub(r"\s+", " ", text).strip()
+    if len(text) > _SECTION_LABEL_MAX:
+        text = text[: _SECTION_LABEL_MAX - 1].rstrip() + "…"
+    return text
+
+
+def _citation_label(display: str, heading: str | None = None, anchor: str = "") -> str:
+    """Chip text: the episode title, plus the section name when the link has one."""
+    section = _section_label(heading) if anchor else ""
+    return f"{display} · {section}" if section else display
+
+
 def _canonical_citation(
-    doc_id: str, title: str | None = None, anchor: str = ""
+    doc_id: str,
+    title: str | None = None,
+    anchor: str = "",
+    heading: str | None = None,
 ) -> tuple[str, str]:
-    """(display title, full markdown link) for a document or one of its sections."""
+    """(display title, full markdown link) for a document or one of its sections.
+
+    The display title is the lookup key. The link text adds the section name.
+    """
     display = _display_title(doc_id, title)
-    return display, f"[[{display}]]({_citation_url(doc_id, anchor)})"
+    label = _citation_label(display, heading, anchor)
+    return display, f"[[{label}]]({_citation_url(doc_id, anchor)})"
+
+
+def _section_headings(documents: list[Document]) -> dict[tuple[str, str], str]:
+    """(doc_id, anchor) -> heading text, for every retrieved section."""
+    headings: dict[tuple[str, str], str] = {}
+    for chunk in documents:
+        anchor = _chunk_anchor(chunk)
+        if anchor:
+            doc_id = str(chunk.metadata.get("doc_id", "unknown"))
+            headings.setdefault(
+                (doc_id, anchor), str(chunk.metadata.get("heading") or "")
+            )
+    return headings
 
 
 def _chunk_anchor(chunk: Document) -> str:
@@ -1282,7 +1358,7 @@ def _heading_coverage(text: str, phrase: str) -> int:
         return 0
     covered = [False] * len(phrase)
     for length in range(len(phrase), 1, -1):
-        for start in range(0, len(phrase) - length + 1):
+        for start in range(len(phrase) - length + 1):
             if any(covered[start : start + length]):
                 continue
             if phrase[start : start + length] in text:
@@ -1353,6 +1429,7 @@ def build_citation_map(documents: list[Document]) -> dict[str, str]:
     """
     citations: dict[str, str] = {}
     defaults = _default_section(documents)
+    headings = _section_headings(documents)
     seen: set[str] = set()
     for chunk in documents:
         doc_id = str(chunk.metadata.get("doc_id", "unknown"))
@@ -1360,7 +1437,10 @@ def build_citation_map(documents: list[Document]) -> dict[str, str]:
             continue
         seen.add(doc_id)
         title = chunk.metadata.get("title")
-        display, link = _canonical_citation(doc_id, title, defaults.get(doc_id, ""))
+        default = defaults.get(doc_id, "")
+        display, link = _canonical_citation(
+            doc_id, title, default, headings.get((doc_id, default))
+        )
         citations[doc_id] = link
         citations[display] = link
     for chunk in documents:
@@ -1368,7 +1448,9 @@ def build_citation_map(documents: list[Document]) -> dict[str, str]:
         if not anchor:
             continue
         doc_id = str(chunk.metadata.get("doc_id", "unknown"))
-        display, link = _canonical_citation(doc_id, chunk.metadata.get("title"), anchor)
+        display, link = _canonical_citation(
+            doc_id, chunk.metadata.get("title"), anchor, chunk.metadata.get("heading")
+        )
         citations[f"{doc_id}#{anchor}"] = link
         citations[f"{display}#{anchor}"] = link
     return citations
@@ -1376,7 +1458,10 @@ def build_citation_map(documents: list[Document]) -> dict[str, str]:
 
 def build_citation_urls(documents: list[Document]) -> dict[str, dict[str, str]]:
     """
-    Map citation name -> {"title", "url"} for the given documents.
+    Map citation name -> {"title", "label", "url"} for the given documents.
+
+    ``label`` is the chip text: the title plus the section name when the link
+    opens a section. ``title`` stays the standardised title.
 
     Sent to the streaming client so it can turn citations into links while the
     answer is still arriving. Server-side repair only runs once generation has
@@ -1388,6 +1473,7 @@ def build_citation_urls(documents: list[Document]) -> dict[str, dict[str, str]]:
     """
     urls: dict[str, dict[str, str]] = {}
     defaults = _default_section(documents)
+    headings = _section_headings(documents)
     seen: set[str] = set()
     for chunk in documents:
         doc_id = str(chunk.metadata.get("doc_id", "unknown"))
@@ -1395,9 +1481,11 @@ def build_citation_urls(documents: list[Document]) -> dict[str, dict[str, str]]:
             continue
         seen.add(doc_id)
         display = _display_title(doc_id, chunk.metadata.get("title"))
+        default = defaults.get(doc_id, "")
         entry = {
             "title": display,
-            "url": _citation_url(doc_id, defaults.get(doc_id, "")),
+            "label": _citation_label(display, headings.get((doc_id, default)), default),
+            "url": _citation_url(doc_id, default),
         }
         urls[doc_id] = entry
         urls[display] = entry
@@ -1407,7 +1495,11 @@ def build_citation_urls(documents: list[Document]) -> dict[str, dict[str, str]]:
             continue
         doc_id = str(chunk.metadata.get("doc_id", "unknown"))
         display = _display_title(doc_id, chunk.metadata.get("title"))
-        entry = {"title": display, "url": _citation_url(doc_id, anchor)}
+        entry = {
+            "title": display,
+            "label": _citation_label(display, chunk.metadata.get("heading"), anchor),
+            "url": _citation_url(doc_id, anchor),
+        }
         urls[f"{doc_id}#{anchor}"] = entry
         urls[f"{display}#{anchor}"] = entry
     return urls

@@ -98,6 +98,13 @@ def select(conn):
         return select_snapshot(cur)
 
 
+def selected(conn):
+    """The snapshot `select` picked; fails the test when none was selected."""
+    snap = select(conn)[0]
+    assert snap is not None
+    return snap
+
+
 @needs_db
 def test_newest_published_in_my_space_wins(db):
     db.cursor().execute(REGISTRY)
@@ -106,6 +113,8 @@ def test_newest_published_in_my_space_wins(db):
     register(db, "s_other_space", space="other@1024")
     register(db, "s_retired", status="retired")
     snap, reason, status = select(db)
+    assert snap is not None
+    assert status is not None
     assert (snap.snapshot_id, reason) == ("s_new", None)
     assert status["last_result"] == "published"
 
@@ -118,10 +127,10 @@ def test_higher_supported_format_beats_newer(db, monkeypatch):
     register(db, "s_v3", fmt=3)
     # Production supports {1, 2}. Format 2 beats a newer format 1.
     # Format 3 is not supported and is not selected.
-    assert select(db)[0].snapshot_id == "s_v2"
+    assert selected(db).snapshot_id == "s_v2"
     # A process that only supports {1} keeps reading format 1.
     monkeypatch.setattr(snapshots, "SUPPORTED_FORMATS", frozenset({1}))
-    assert select(db)[0].snapshot_id == "s_v1"
+    assert selected(db).snapshot_id == "s_v1"
 
 
 @needs_db
@@ -129,7 +138,9 @@ def test_no_snapshot_in_my_space_is_not_ready(db):
     db.cursor().execute(REGISTRY)
     register(db, "s_other", space="other@1024")
     snap, reason, _ = select(db)
-    assert snap is None and SPACE in reason
+    assert snap is None
+    assert reason
+    assert SPACE in reason
 
 
 @needs_db
@@ -138,14 +149,18 @@ def test_pinned_snapshot(db, monkeypatch):
     register(db, "s_a", minutes_ago=10)
     register(db, "s_b")
     monkeypatch.setattr(snapshots.settings, "rag_snapshot", "s_a")
-    assert select(db)[0].snapshot_id == "s_a"
+    assert selected(db).snapshot_id == "s_a"
     db.cursor().execute(
         "UPDATE rag_meta.snapshots SET status = 'retired' WHERE snapshot_id = 's_a'"
     )
     snap, reason, _ = select(db)
-    assert snap is None and "retired" in reason
+    assert snap is None
+    assert reason
+    assert "retired" in reason
     monkeypatch.setattr(snapshots.settings, "rag_snapshot", "s_missing")
-    assert "does not exist" in select(db)[1]
+    reason = select(db)[1]
+    assert reason
+    assert "does not exist" in reason
 
 
 @needs_db
@@ -156,22 +171,28 @@ def test_implicit_legacy_before_adoption(db, monkeypatch):
         "(chunk_id text, embedding halfvec(2560))"
     )
     snap, reason, _ = select(db)
-    assert snap is None and "empty" in reason
+    assert snap is None
+    assert reason
+    assert "empty" in reason
     cur.execute(
         "INSERT INTO rag.document_chunks VALUES "
         "('c', array_fill(0.1::real, ARRAY[2560])::halfvec)"
     )
     snap, reason, _ = select(db)
+    assert snap is not None
     assert (snap.snapshot_id, snap.schema_name, reason) == ("legacy", "rag", None)
     monkeypatch.setattr(snapshots.settings, "embedding_dim", 1024)
     snap, reason, _ = select(db)
-    assert snap is None and "2560" in reason
+    assert snap is None
+    assert reason
+    assert "2560" in reason
 
 
 @needs_db
 def test_empty_database_is_not_ready(db):
     snap, reason, _ = select(db)
-    assert snap is None and reason
+    assert snap is None
+    assert reason
 
 
 @needs_db
@@ -195,7 +216,8 @@ def test_manager_switches_and_falls_back_on_retire(db):
     manager.refresh()
     assert manager.require().snapshot_id == "s1"
     ready, body = manager.health()
-    assert ready and body["snapshot"]["id"] == "s1"
+    assert ready
+    assert body["snapshot"]["id"] == "s1"
     assert body["indexer_status"]["last_result"] == "published"
 
 
@@ -234,8 +256,10 @@ def test_retrieval_cache_is_per_snapshot(monkeypatch):
     monkeypatch.setattr(retriever_mod, "search_similar_chunks", search)
     r = retriever_mod._Retriever.__new__(retriever_mod._Retriever)
     r._result_cache = retriever_mod.LRUCache(capacity=10)
-    r._generate_embedding = lambda _text: [0.0]
-    r._generate_embeddings_batch = lambda texts: [[0.0] for _ in texts]
+    monkeypatch.setattr(r, "_generate_embedding", lambda _text: [0.0])
+    monkeypatch.setattr(
+        r, "_generate_embeddings_batch", lambda texts: [[0.0] for _ in texts]
+    )
     request = RetrieveRequest(query="q", match_count=5, match_threshold=0.1)
     old = Snapshot("s1", "rag_s1", 1, SPACE)
     new = Snapshot("s2", "rag_s2", 1, SPACE)

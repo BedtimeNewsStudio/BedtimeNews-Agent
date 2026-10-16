@@ -362,7 +362,8 @@ ALL_QUERIES = {
 }
 
 # 扁平化所有查询用于批量测试
-FLAT_QUERIES = []
-for category, queries in ALL_QUERIES.items():
-    for query in queries:
-        FLAT_QUERIES.append({"category": category, "query": query})
+FLAT_QUERIES = [
+    {"category": category, "query": query}
+    for category, queries in ALL_QUERIES.items()
+    for query in queries
+]

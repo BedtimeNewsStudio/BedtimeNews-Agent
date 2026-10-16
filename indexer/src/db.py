@@ -10,6 +10,7 @@ import logging
 import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
+from typing import Any
 
 import psycopg2
 import psycopg2.extras
@@ -84,9 +85,9 @@ def connection() -> Iterator[Connection]:
 @contextmanager
 def transaction(conn: Connection) -> Iterator[Cursor]:
     """One transaction: commit on success, roll back on any exception."""
+    cursor = conn.cursor()
     try:
-        with conn.cursor() as cursor:
-            yield cursor
+        yield cursor
         conn.commit()
     except BaseException:
         try:
@@ -94,11 +95,26 @@ def transaction(conn: Connection) -> Iterator[Cursor]:
         except Exception:
             logger.exception("Rollback failed")
         raise
+    finally:
+        cursor.close()
+
+
+def fetch_row(cursor: Cursor) -> tuple[Any, ...]:
+    """The single row an aggregate or EXISTS query always returns.
+
+    ``fetchone`` is typed to return None when a statement yields no row; for
+    these queries that would be a bug, so it fails loudly instead of being
+    subscripted.
+    """
+    row = cursor.fetchone()
+    if row is None:
+        raise RuntimeError("Query returned no row")
+    return row
 
 
 def try_advisory_xact_lock(cursor: Cursor) -> bool:
     cursor.execute("SELECT pg_try_advisory_xact_lock(%s)", (ADVISORY_LOCK_KEY,))
-    return bool(cursor.fetchone()[0])
+    return bool(fetch_row(cursor)[0])
 
 
 def cancel_active() -> None:

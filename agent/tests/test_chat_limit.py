@@ -93,7 +93,8 @@ def test_limit_layering_matches_the_deployment_files():
     app_compose = (root / "compose.app.yml").read_text()
     assert chat.CHAT_TIME_LIMIT_S == 240
     assert "--timeout-graceful-shutdown" in agent_docker
-    assert "270" in agent_docker and '"270"' in web_docker
+    assert "270" in agent_docker
+    assert '"270"' in web_docker
     assert app_compose.count("stop_grace_period: 300s") == 2
 
 

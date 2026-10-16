@@ -16,7 +16,7 @@ from psycopg2.extensions import connection as Connection
 from psycopg2.extensions import cursor as Cursor
 from psycopg2.extras import Json, RealDictCursor
 
-from .db import ADVISORY_LOCK_KEY, transaction, try_advisory_xact_lock
+from .db import ADVISORY_LOCK_KEY, fetch_row, transaction, try_advisory_xact_lock
 from .settings import settings
 from .snapshot_schema import (
     FORMAT_VERSION,
@@ -185,7 +185,7 @@ def _ensure_agent_role(cursor: Cursor) -> None:
 
 def _relation_exists(cursor: Cursor, name: str) -> bool:
     cursor.execute("SELECT to_regclass(%s) IS NOT NULL", (name,))
-    return bool(cursor.fetchone()[0])
+    return bool(fetch_row(cursor)[0])
 
 
 def legacy_embedding_dim(cursor: Cursor) -> int | None:
@@ -228,7 +228,7 @@ def _adopt_legacy(cursor: Cursor) -> None:
     # A freshly initialised database (old init.sh) has an empty `rag`: nothing
     # worth serving, so leave it unregistered and let the first build publish.
     cursor.execute("SELECT EXISTS (SELECT 1 FROM rag.document_chunks)")
-    if not cursor.fetchone()[0]:
+    if not fetch_row(cursor)[0]:
         logger.info("Schema rag is empty; not adopting it as a snapshot")
         return
 
@@ -243,7 +243,7 @@ def _adopt_legacy(cursor: Cursor) -> None:
         else embedding_space(model, dim)
     )
     cursor.execute("SELECT count(*), count(DISTINCT doc_id) FROM rag.document_chunks")
-    chunks, docs = cursor.fetchone()
+    chunks, docs = fetch_row(cursor)
     cursor.execute(
         """
         INSERT INTO rag_meta.snapshots (
@@ -356,7 +356,10 @@ def set_status(conn: Connection, snapshot_id: str, status: str) -> SnapshotInfo:
             """,
             (status, status, snapshot_id),
         )
-        return get_snapshot(cursor, snapshot_id)
+        updated = get_snapshot(cursor, snapshot_id)
+        if updated is None:
+            raise LookupError(f"No such snapshot: {snapshot_id}")
+        return updated
 
 
 def set_pinned(conn: Connection, snapshot_id: str, pinned: bool) -> SnapshotInfo:
@@ -367,7 +370,10 @@ def set_pinned(conn: Connection, snapshot_id: str, pinned: bool) -> SnapshotInfo
         )
         if cursor.rowcount != 1:
             raise LookupError(f"No such snapshot: {snapshot_id}")
-        return get_snapshot(cursor, snapshot_id)
+        updated = get_snapshot(cursor, snapshot_id)
+        if updated is None:
+            raise LookupError(f"No such snapshot: {snapshot_id}")
+        return updated
 
 
 # ---------------------------------------------------------------------------
@@ -545,7 +551,7 @@ def collect_garbage(conn: Connection) -> list[str]:
     """Drop snapshots past retention, one transaction each. Returns dropped ids."""
     with transaction(conn) as cursor:
         cursor.execute("SELECT now()")
-        now = cursor.fetchone()[0]
+        now = fetch_row(cursor)[0]
         doomed = gc_candidates(list_snapshots(cursor), current_lineage(), now)
 
     dropped: list[str] = []
@@ -576,20 +582,20 @@ def _is_snapshot_schema(schema: str) -> bool:
 __all__ = [
     "AGENT_ROLE",
     "FORMAT_VERSION",
+    "PreviousLineageBlocked",
     "SnapshotInfo",
     "bootstrap",
-    "PreviousLineageBlocked",
     "collect_garbage",
     "current_lineage",
     "drop_previous_lineage",
     "drop_registered_snapshot",
     "gc_candidates",
-    "previous_lineage_targets",
     "get_snapshot",
     "get_status",
     "grant_read",
     "latest_published",
     "list_snapshots",
+    "previous_lineage_targets",
     "record_run",
     "set_pinned",
     "set_status",

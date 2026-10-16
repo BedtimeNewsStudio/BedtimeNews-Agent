@@ -154,9 +154,7 @@ def test_embedding_space_override(monkeypatch):
 
 def test_run_lock_is_exclusive_and_non_blocking(tmp_path):
     lock = tmp_path / ".indexer.lock"
-    with run_lock(lock):
-        with pytest.raises(RunLockBusy):
-            with run_lock(lock):
-                pass
+    with run_lock(lock), pytest.raises(RunLockBusy), run_lock(lock):
+        pass
     with run_lock(lock):  # released again
         pass

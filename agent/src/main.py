@@ -187,7 +187,10 @@ def _transcripts_unavailable() -> HTTPException:
     )
 
 
-@app.get("/transcripts/{doc_id:path}")
+@app.get(
+    "/transcripts/{doc_id:path}",
+    responses={404: {"description": "No transcript with this URI"}},
+)
 async def transcript_detail(doc_id: str, request: Request) -> Response:
     """One sanitized reader document selected only by its exact DB URI."""
     canonical = _validate_transcript_uri(doc_id)

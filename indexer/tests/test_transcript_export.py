@@ -73,7 +73,7 @@ def test_footnotes_are_bidirectional_links():
 
     assert "footnote-ref" in html
     assert 'href="#' in html
-    assert "footnote-backref" in html or "fnref" in html
+    assert any(marker in html for marker in ("footnote-backref", "fnref"))
     assert 'id="' in html
 
 

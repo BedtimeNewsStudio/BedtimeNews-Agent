@@ -121,7 +121,7 @@ async def stream_chat(request: ChatRequest) -> AsyncGenerator[str]:
         except SnapshotUnavailable as e:
             logger.warning("Chat stream without a readable snapshot: %s", e)
             await queue.put(("error", CHAT_UNAVAILABLE_MESSAGE))
-        except Exception:  # noqa: BLE001 - reported to the client below
+        except Exception:  # reported to the client below
             logger.exception("Error streaming chat response")
             await queue.put(("error", CHAT_FAILED_MESSAGE))
         finally:

@@ -102,14 +102,14 @@ validation:
 
 Dentro del contenedor del indexador:
 
-| Comando                                           | Efecto                                                                                                   |
-| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `python -m src.snapshots list`                    | Lista los snapshots: estado, fijado, linaje (actual/otro), fecha de publicación, tamaño, espacio vectorial |
-| `python -m src.snapshots status`                  | Muestra `rag_meta.indexer_status` (última ejecución, resultado, error, fallos consecutivos)               |
-| `python -m src.snapshots retire <id>`             | Retira un snapshot (reversión de datos); los agentes vuelven al snapshot legible anterior en 15 s        |
-| `python -m src.snapshots unretire <id>`           | Deshace una retirada (los snapshots retirados se conservan 24 horas)                                     |
-| `python -m src.snapshots pin <id>` / `unpin <id>` | Fija o desfija; los snapshots fijados nunca se recolectan                                                |
-| `python -m src.snapshots build [--full]`          | Construye ahora, protegido por el mismo bloqueo de ejecución y bloqueo consultivo que la ejecución programada |
+| Comando                                                     | Efecto                                                                                                                                                                          |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `python -m src.snapshots list`                              | Lista los snapshots: estado, fijado, linaje (actual/otro), fecha de publicación, tamaño, espacio vectorial                                                                      |
+| `python -m src.snapshots status`                            | Muestra `rag_meta.indexer_status` (última ejecución, resultado, error, fallos consecutivos)                                                                                     |
+| `python -m src.snapshots retire <id>`                       | Retira un snapshot (reversión de datos); los agentes vuelven al snapshot legible anterior en 15 s                                                                               |
+| `python -m src.snapshots unretire <id>`                     | Deshace una retirada (los snapshots retirados se conservan 24 horas)                                                                                                            |
+| `python -m src.snapshots pin <id>` / `unpin <id>`           | Fija o desfija; los snapshots fijados nunca se recolectan                                                                                                                       |
+| `python -m src.snapshots build [--full]`                    | Construye ahora, protegido por el mismo bloqueo de ejecución y bloqueo consultivo que la ejecución programada                                                                   |
 | `python -m src.snapshots drop-previous-lineage [--dry-run]` | Con el linaje actual publicado, borra de inmediato la fragmentación anterior en este espacio vectorial. No toca el linaje actual ni espera 7 días. Ejecutar primero `--dry-run` |
 
 ```bash
@@ -213,7 +213,7 @@ Los títulos provienen del `URI映射.md` de origen. Una regla general (`{canal}
 **`transcripts`**: transcripciones renderizadas para el lector de la aplicación
 
 - `doc_id`: URI de la transcripción (clave primaria)
-- `canonical_title` / `source_title`: título estandarizado y el título `# ` propio de la transcripción
+- `canonical_title` / `source_title`: título estandarizado y el título `#` propio de la transcripción
 - `channel`, `publication_date`: nombre del canal y el valor de `**发布日期**`
 - `body_html`: la página renderizada que sirve la API `/transcripts` del agente. Un `h2` de tema del cuerpo lleva un `id` igual a su ancla. Un cambio de versión de proyección vuelve a renderizar y no vuelve a generar embeddings
 - `source_hash`, `projection_version`: disparadores de re-renderizado (ediciones del origen o un cambio del renderizador)
@@ -238,10 +238,10 @@ Los títulos provienen del `URI映射.md` de origen. Una regla general (`{canal}
 
 ### Dos dimensiones de compatibilidad
 
-| Dimensión                              | Composición                                                                                                                   | Función                                                                                       |
-| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| **Huella del pipeline**                | Hash de (`format_version`, `normalization_version` = `BODY_NORMALIZATION_VERSION`, `chunker_version` = `CHUNKER_VERSION`)     | Solo hay construcción incremental entre snapshots con la misma huella; si no, completa         |
-| **Espacio vectorial** `embedding_space`| `<modelo>@<dimensión>`, p. ej. `Qwen/Qwen3-Embedding-4B@2560`; sustituible con `embedding.space_id`                            | Los vectores se reutilizan, y un agente lee snapshots, solo dentro de un mismo espacio        |
+| Dimensión                               | Composición                                                                                                               | Función                                                                                |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| **Huella del pipeline**                 | Hash de (`format_version`, `normalization_version` = `BODY_NORMALIZATION_VERSION`, `chunker_version` = `CHUNKER_VERSION`) | Solo hay construcción incremental entre snapshots con la misma huella; si no, completa |
+| **Espacio vectorial** `embedding_space` | `<modelo>@<dimensión>`, p. ej. `Qwen/Qwen3-Embedding-4B@2560`; sustituible con `embedding.space_id`                       | Los vectores se reutilizan, y un agente lee snapshots, solo dentro de un mismo espacio |
 
 - Incrementa `CHUNKER_VERSION` (`src/chunker.py`) siempre que cambien los parámetros o la lógica de fragmentación, y `BODY_NORMALIZATION_VERSION` (`src/document_loader.py`) siempre que cambie la normalización. Olvidarlo mezcla fragmentación antigua y nueva en un mismo snapshot; la revisión de código debe comprobarlo.
 - Incrementa `FORMAT_VERSION` (`src/snapshot_schema.py`) cuando cambie la estructura o el significado de una tabla o columna que lea el agente, y añade el nuevo formato a `SUPPORTED_FORMATS` del agente.
@@ -255,13 +255,13 @@ El agente se conecta como `rag_agent`, que solo tiene `USAGE` sobre `rag_meta` c
 
 La GC se ejecuta antes y después de cada construcción; cada borrado va en su propia transacción con el bloqueo consultivo (`lock_timeout` 5 s; un snapshot que aún se está leyendo se reintenta en la siguiente ejecución):
 
-| Regla                                                                                                    | Justificación                                                  |
-| -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| El linaje actual conserva sus 2 últimos snapshots publicados                                             | El actual más un destino de reversión inmediata                |
-| Cualquier otro linaje (incluido `legacy`) conserva solo el último, durante 7 días tras ser sustituido por el linaje actual | La versión de código anterior aún puede volver a usarse |
-| Los snapshots `pinned` nunca se borran                                                                   | Fijación explícita a largo plazo                               |
-| Los snapshots `retired` se conservan 24 horas                                                            | Una retirada por error puede deshacerse                        |
-| Nada se borra en los 10 minutos siguientes a ser sustituido o retirado                                   | Protege las peticiones en curso (el agente cambia en 15 s)     |
+| Regla                                                                                                                      | Justificación                                              |
+| -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| El linaje actual conserva sus 2 últimos snapshots publicados                                                               | El actual más un destino de reversión inmediata            |
+| Cualquier otro linaje (incluido `legacy`) conserva solo el último, durante 7 días tras ser sustituido por el linaje actual | La versión de código anterior aún puede volver a usarse    |
+| Los snapshots `pinned` nunca se borran                                                                                     | Fijación explícita a largo plazo                           |
+| Los snapshots `retired` se conservan 24 horas                                                                              | Una retirada por error puede deshacerse                    |
+| Nada se borra en los 10 minutos siguientes a ser sustituido o retirado                                                     | Protege las peticiones en curso (el agente cambia en 15 s) |
 
 Los 7 días de arriba son la recolección automática. La construcción completa del formato 2 reutiliza los vectores del snapshot anterior por el texto del fragmento, así que hay que esperar a que esté publicado y a que `/health` del agente lo nombre antes de `drop-previous-lineage`. Borrarlo antes descarta vectores que aún no se han copiado. El comando borra entonces la fragmentación anterior en el mismo espacio vectorial: snapshots que no cortaban el cuerpo en `##` hermanos y no tienen `heading_anchor`, incluido `legacy`. No borra el snapshot anterior que el linaje actual conserva. Si no hay un snapshot publicado del linaje actual, o un snapshot anterior está fijado, el comando se niega y no borra nada. Ejecutar primero `--dry-run`.
 

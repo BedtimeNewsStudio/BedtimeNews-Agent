@@ -8,13 +8,13 @@ Citations shipped as flat sources. A topic chunk's id is `URI#anchor`, composed 
 
 "Snapshot", "pipeline fingerprint", "format version", "vector reuse", and the agent's selection rule mean the behavior already shipped in the indexer and the agent.
 
-| Constant                                                           | Before | After                                                                                                             |
-| ------------------------------------------------------------------ | ------ | ----------------------------------------------------------------------------------------------------------------- |
-| `indexer/src/chunker.py` `CHUNKER_VERSION`                         | 1      | 2                                                                                                                 |
-| `indexer/src/document_loader.py` `BODY_NORMALIZATION_VERSION`      | 3      | Stays 3. Body extraction does not change                                                                          |
-| `indexer/src/snapshot_schema.py` `FORMAT_VERSION`                  | 1      | 2                                                                                                                 |
-| `agent/src/snapshots.py` `SUPPORTED_FORMATS`                       | `{1}`  | `{1, 2}`. Do not narrow a running agent to format 2 before a format 2 snapshot is published                       |
-| `indexer/src/transcript_export.py` `TRANSCRIPT_PROJECTION_VERSION` | 4      | 5, heading `id`s are written on body topic `h2`s                                                                  |
+| Constant                                                           | Before | After                                                                                       |
+| ------------------------------------------------------------------ | ------ | ------------------------------------------------------------------------------------------- |
+| `indexer/src/chunker.py` `CHUNKER_VERSION`                         | 1      | 2                                                                                           |
+| `indexer/src/document_loader.py` `BODY_NORMALIZATION_VERSION`      | 3      | Stays 3. Body extraction does not change                                                    |
+| `indexer/src/snapshot_schema.py` `FORMAT_VERSION`                  | 1      | 2                                                                                           |
+| `agent/src/snapshots.py` `SUPPORTED_FORMATS`                       | `{1}`  | `{1, 2}`. Do not narrow a running agent to format 2 before a format 2 snapshot is published |
+| `indexer/src/transcript_export.py` `TRANSCRIPT_PROJECTION_VERSION` | 4      | 5, heading `id`s are written on body topic `h2`s                                            |
 
 `document_chunks.heading` already existed, and the agent's retrieval SQL already selected `c.heading`. This change adds `heading_anchor`, per-section citation repair, and reader scrolling. Overlap already stayed inside a heading.
 
@@ -24,11 +24,11 @@ Passed on 2026-10-15, before the indexer, agent, and frontend changes. The start
 
 The contract that rescan checked, and that each build still checks, looks only between `## 正文` and `## 附录`, not including those two lines:
 
-   - No line that starts with `# ` and does not start with `##`. A greeting is a paragraph.
-   - No `###` or deeper heading. `### 事实订正`, `已核对`, and `待核对` live in the appendix, outside this span, and stay.
-   - No `[^`. The appendix also has no `[^n]:` definitions left.
-   - Every `##` title is short plain text: no `](`, no `[^`, no wrapping `**` or `__`. The corpus gate also required titles to be unique in the file. A repeat is disambiguated, not rejected.
-   - Exactly one `## 正文` and one `## 附录`, with the body first.
+- No line that starts with `#` and does not start with `##`. A greeting is a paragraph.
+- No `###` or deeper heading. `### 事实订正`, `已核对`, and `待核对` live in the appendix, outside this span, and stay.
+- No `[^`. The appendix also has no `[^n]:` definitions left.
+- Every `##` title is short plain text: no `](`, no `[^`, no wrapping `**` or `__`. The corpus gate also required titles to be unique in the file. A repeat is disambiguated, not rejected.
+- Exactly one `## 正文` and one `## 附录`, with the body first.
 
 There is no indexer special case for a leftover `#`, `###`, or footnote, and the old fallback that treated every heading level as a cut is gone.
 
@@ -127,7 +127,7 @@ A section is a source in its own right, parallel to a whole episode. The indexer
 
 The model does not write the standardised title or the URL. Both are uncertain if they are left to generation, and both are a lookup. Each passage has one `Source:` line with that id. There is no second list of topic names for the model to copy. When it attributes a claim, it copies the source id between double square brackets. Title and link are added afterwards. A single pair of backticks around that token is removed during repair; left in place, the link renders as code and the reader sees the raw `[[title]](url)`.
 
-Repair produces what the reader sees. The label is always the standardised title, with no heading suffix. The link is `/transcripts/<URI>` or `/transcripts/<URI>#<percent-encoded anchor>`.
+Repair produces what the reader sees. The link text is the standardised title, plus ` · ` and the section name when the link opens a section (decided 2026-10-16, replacing the earlier title-only label: a reply that cites several sections of one episode showed identical chips). The section name is the heading as plain text with Markdown, footnotes and ASCII square brackets removed, at most 12 characters, cut to 11 plus one `…` when longer; the full heading appears as a tooltip. A whole-document link shows the title alone. Adjacent citations that resolve to the same link collapse to one. The streaming `citations` map carries `title` and `label`. The link is `/transcripts/<URI>` or `/transcripts/<URI>#<percent-encoded anchor>`.
 
 `[[睡前消息123]](/transcripts/<percent-encoded URI>#<percent-encoded anchor>)`
 
@@ -211,7 +211,7 @@ Give the anchor function its own tests, in its own test module. The chunker and 
 
 `agent/tests/test_graph_smoke.py`
 
-- `test_citation_map_is_keyed_by_uri_and_title`: two chunks with the same `doc_id` and different anchors put `URI#anchor` on the two sections. The label on both is the standardised title, with no heading suffix. The bare URI and the bare title open the strongest section, not the start of the transcript.
+- `test_citation_map_is_keyed_by_uri_and_title`: two chunks with the same `doc_id` and different anchors put `URI#anchor` on the two sections. The key is the standardised title, and the link text adds the section name (`test_section_label_is_plain_and_at_most_twelve_characters` and `test_chip_label_adds_the_section_only_when_the_link_has_one` pin the label rules; `test_adjacent_duplicate_citations_collapse_to_one` pins the run dedupe). The bare URI and the bare title open the strongest section, not the start of the transcript.
 - `test_citation_repair_covers_every_spelling`: `[[URI#anchor]]`, `[[title#anchor]]`, the bare URI (with or without `.md`), the bare title, and `《title》` all open that section when the retrieval has one. An invented anchor opens a retrieved section of that episode, not the article start. An unknown `《三体》` stays prose.
 - `test_bare_title_opens_the_heading_the_paragraph_is_about`: when several sections were retrieved, the text before a bare title picks the matching heading. When the text matches none, the link still opens the strongest retrieved section.
 - `test_heading_text_is_not_a_citation_key`: the bare heading is not a citation key. The source id is `URI#anchor`. A preamble's source id is the URI.

@@ -225,7 +225,7 @@ async def agent_stream_query(
 
         # Stream LLM tokens from answer generation nodes
         if event_name == "on_chat_model_stream":
-            if langgraph_node != "direct" and langgraph_node != "generate":
+            if langgraph_node not in {"direct", "generate"}:
                 continue
 
             chunk = event.get("data", {}).get("chunk")

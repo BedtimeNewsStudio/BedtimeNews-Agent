@@ -52,7 +52,7 @@ def test_transcript_detail_returns_sanitized_projection(client, monkeypatch):
         "body_html": "<h2>正文</h2><p>内容</p>",
         "body_markdown": "# 标题\n\n## 正文\n\n内容\n",
     }
-    monkeypatch.setattr(main, "get_transcript", lambda _schema, doc_id: article)
+    monkeypatch.setattr(main, "get_transcript", lambda _schema, _doc_id: article)
 
     response = client.get("/transcripts/ShuiQianXiaoXi/0501-0600/0588.md")
 

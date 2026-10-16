@@ -31,6 +31,7 @@ import re
 import time
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from datetime import date, datetime
 from html import escape
 from html.parser import HTMLParser
@@ -58,7 +59,8 @@ logger = logging.getLogger(__name__)
 
 AGENT_BACKEND_HOST = os.environ.get("AGENT_BACKEND_HOST", "agent")
 AGENT_BACKEND_PORT = os.environ.get("AGENT_BACKEND_PORT", "8000")
-AGENT_BASE_URL = f"http://{AGENT_BACKEND_HOST}:{AGENT_BACKEND_PORT}"  # noqa: S5332
+# Plain HTTP on purpose: the agent is only reachable on the private compose network.
+AGENT_BASE_URL = f"http://{AGENT_BACKEND_HOST}:{AGENT_BACKEND_PORT}"  # NOSONAR
 CHAT_ENDPOINT = f"{AGENT_BASE_URL}/chat"
 TRANSCRIPTS_ENDPOINT = f"{AGENT_BASE_URL}/transcripts"
 
@@ -346,7 +348,7 @@ async def _fetch_upstream_json(url: str) -> dict:
         raise _UpstreamError(503, "文稿服务暂时不可用")
     try:
         payload = response.json()
-    except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
+    except ValueError as exc:
         raise _UpstreamError(503, "文稿服务返回无效数据") from exc
     if not isinstance(payload, dict):
         raise _UpstreamError(503, "文稿服务返回无效数据")
@@ -439,8 +441,10 @@ def _safe_json_script(payload: dict) -> str:
         serialized.replace("&", "\\u0026")
         .replace("<", "\\u003c")
         .replace(">", "\\u003e")
-        .replace(" ", "\\u2028")
-        .replace(" ", "\\u2029")
+        # Written as escapes: the raw LINE/PARAGRAPH SEPARATOR characters are
+        # invisible and easily stripped by an editor or formatter.
+        .replace("\u2028", "\\u2028")
+        .replace("\u2029", "\\u2029")
     )
 
 
@@ -460,7 +464,7 @@ def _lastmod(value: object) -> str | None:
     if result := _valid_date(value):
         return result
     try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value)
     except ValueError:
         return None
     return parsed.isoformat(timespec="seconds").replace("+00:00", "Z")
@@ -560,12 +564,10 @@ def _seo_head(
             + _safe_json_script(article["json_ld"])
             + "</script>"
         )
-    for extra in extra_json_ld or []:
-        tags.append(
-            '<script type="application/ld+json">'
-            + _safe_json_script(extra)
-            + "</script>"
-        )
+    tags.extend(
+        '<script type="application/ld+json">' + _safe_json_script(extra) + "</script>"
+        for extra in extra_json_ld or []
+    )
     return "\n  ".join(tags)
 
 
@@ -585,6 +587,26 @@ def _breadcrumb_json_ld(*crumbs: tuple[str, str]) -> dict:
     }
 
 
+@dataclass(frozen=True)
+class _ArchiveShell:
+    title: str = ""
+    groups: str = ""
+    visible: bool = False
+
+
+@dataclass(frozen=True)
+class _ReaderShell:
+    title: str = ""
+    body: str = ""
+    state: str = ""
+    visible: bool = False
+
+
+# Frozen, so one shared instance is safe as the default for _render_shell.
+_NO_ARCHIVE = _ArchiveShell()
+_NO_READER = _ReaderShell()
+
+
 def _render_shell(
     *,
     title: str,
@@ -595,13 +617,8 @@ def _render_shell(
     body_view: str = "chat",
     body_panel: str = "",
     ssr_doc_id: str = "",
-    archive_title: str = "",
-    archive_groups: str = "",
-    archive_visible: bool = False,
-    reader_title: str = "",
-    reader_body: str = "",
-    reader_state: str = "",
-    reader_visible: bool = False,
+    archive: _ArchiveShell = _NO_ARCHIVE,
+    reader: _ReaderShell = _NO_READER,
     article: dict | None = None,
     extra_json_ld: list[dict] | None = None,
     noindex: bool = False,
@@ -624,15 +641,15 @@ def _render_shell(
         "__SSR_DOC_ID__": escape(ssr_doc_id, quote=True),
         "__CHANNEL_NAV__": _render_channel_nav(active_channel),
         "__READING_INERT__": "" if body_view == "browse" else "inert",
-        "__ARCHIVE_HIDDEN__": "" if archive_visible else "hidden",
-        "__ARCHIVE_TITLE__": escape(archive_title),
-        "__ARCHIVE_GROUPS__": archive_groups,
-        "__ARCHIVE_STATE_HIDDEN__": "hidden" if archive_groups else "",
-        "__ARCHIVE_STATE__": "" if archive_groups else "此栏目暂无文稿。",
-        "__READER_HIDDEN__": "" if reader_visible else "hidden",
-        "__READER_TITLE__": escape(reader_title),
-        "__READER_BODY__": reader_body,
-        "__READER_STATE__": escape(reader_state),
+        "__ARCHIVE_HIDDEN__": "" if archive.visible else "hidden",
+        "__ARCHIVE_TITLE__": escape(archive.title),
+        "__ARCHIVE_GROUPS__": archive.groups,
+        "__ARCHIVE_STATE_HIDDEN__": "hidden" if archive.groups else "",
+        "__ARCHIVE_STATE__": "" if archive.groups else "此栏目暂无文稿。",
+        "__READER_HIDDEN__": "" if reader.visible else "hidden",
+        "__READER_TITLE__": escape(reader.title),
+        "__READER_BODY__": reader.body,
+        "__READER_STATE__": escape(reader.state),
     }
     rendered = PAGE_TEMPLATE
     for placeholder, value in replacements.items():
@@ -648,9 +665,7 @@ def _render_error(status_code: int, message: str, path: str = "/") -> str:
         canonical_path=path,
         body_view="browse",
         body_panel="reader",
-        reader_title=title,
-        reader_state=message,
-        reader_visible=True,
+        reader=_ReaderShell(title=title, state=message, visible=True),
         noindex=True,
     )
 
@@ -689,13 +704,13 @@ def _render_sitemap(items: list[dict]) -> str:
                 max(channel_lastmods, default=None),
             )
         )
-    for doc_id in sorted(documents):
-        urls.append(
-            (
-                _absolute_url(_transcript_path(doc_id)),
-                _lastmod(documents[doc_id].get("updated_at")),
-            )
+    urls.extend(
+        (
+            _absolute_url(_transcript_path(doc_id)),
+            _lastmod(documents[doc_id].get("updated_at")),
         )
+        for doc_id in sorted(documents)
+    )
 
     entries = []
     for location, lastmod in urls:
@@ -857,7 +872,7 @@ async def chat(request: Request) -> Response:
                 yield _sse_error(f"服务错误（代码 {code}），请稍后重试。")
         except httpx.TimeoutException:
             yield _sse_error("信号超时，请稍后重试。")
-        except Exception:  # noqa: BLE001 - the client still gets a terminal event
+        except Exception:  # the client still gets a terminal event
             # The exception text stays in the log: it can name internal hosts
             # and ports, which a public error message must not.
             logger.exception("Chat stream from the agent failed")
@@ -1084,9 +1099,7 @@ async def transcript_archive(
         active_channel=selected,
         body_view="browse",
         body_panel="archive",
-        archive_title=channel_title,
-        archive_groups=groups,
-        archive_visible=True,
+        archive=_ArchiveShell(title=channel_title, groups=groups, visible=True),
         extra_json_ld=[breadcrumb],
     )
     return _generated_response(request, html, media_type="text/html")
@@ -1169,9 +1182,9 @@ async def transcript_page(doc_id: str, request: Request) -> Response:
         body_view="browse",
         body_panel="reader",
         ssr_doc_id=canonical_doc_id,
-        reader_title=display_title,
-        reader_body=article["body_html"],
-        reader_visible=True,
+        reader=_ReaderShell(
+            title=display_title, body=article["body_html"], visible=True
+        ),
         article=article_metadata,
         extra_json_ld=[breadcrumb],
     )

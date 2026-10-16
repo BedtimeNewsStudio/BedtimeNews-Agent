@@ -243,42 +243,52 @@ def _format_summary(
     elapsed_time: float,
 ) -> str:
     """Format overall summary statistics."""
-    lines = []
-    lines.append("\n" + "=" * 80)
-    lines.append("SUMMARY")
-    lines.append("=" * 80)
-    lines.append(f"Total queries: {total_queries}")
-    lines.append(f"Queries with results: {results_stats['queries_with_results']}")
-    lines.append(f"Queries with no results: {results_stats['queries_without_results']}")
-    lines.append(
-        f"Average results per query: {results_stats['avg_results_per_query']:.2f}"
-    )
-    lines.append(f"Total documents retrieved: {results_stats['total_results']}")
+    lines = [
+        "\n" + "=" * 80,
+        "SUMMARY",
+        "=" * 80,
+        f"Total queries: {total_queries}",
+        f"Queries with results: {results_stats['queries_with_results']}",
+        f"Queries with no results: {results_stats['queries_without_results']}",
+        f"Average results per query: {results_stats['avg_results_per_query']:.2f}",
+        f"Total documents retrieved: {results_stats['total_results']}",
+    ]
     if results_stats["labelled_queries"]:
         k = results_stats["recall_k"]
-        lines.append("")
-        lines.append(f"Recall@{k}: {results_stats['recall_at_k']:.3f}")
-        lines.append(
-            f"Labelled hits: {results_stats['labelled_hits']}/"
-            f"{results_stats['labelled_queries']}"
+        lines.extend(
+            [
+                "",
+                f"Recall@{k}: {results_stats['recall_at_k']:.3f}",
+                f"Labelled hits: {results_stats['labelled_hits']}/"
+                f"{results_stats['labelled_queries']}",
+            ]
         )
     if results_stats["errors"]:
         lines.append(f"Query errors: {results_stats['errors']}")
 
     # Greeting stats
     if results_stats["greeting_tested"] > 0:
-        lines.append("")
-        lines.append("Greeting queries (should have no results):")
-        lines.append(f"  Tested: {results_stats['greeting_tested']}")
-        lines.append(f"  With results: {results_stats['greeting_with_results']}")
-        lines.append(
-            f"  Without results: {results_stats['greeting_tested'] - results_stats['greeting_with_results']}"
+        without = (
+            results_stats["greeting_tested"] - results_stats["greeting_with_results"]
+        )
+        lines.extend(
+            [
+                "",
+                "Greeting queries (should have no results):",
+                f"  Tested: {results_stats['greeting_tested']}",
+                f"  With results: {results_stats['greeting_with_results']}",
+                f"  Without results: {without}",
+            ]
         )
 
-    lines.append("")
-    lines.append(f"Elapsed time: {elapsed_time:.2f}s")
-    lines.append(f"Average time per query: {elapsed_time / total_queries:.2f}s")
-    lines.append("=" * 80)
+    lines.extend(
+        [
+            "",
+            f"Elapsed time: {elapsed_time:.2f}s",
+            f"Average time per query: {elapsed_time / total_queries:.2f}s",
+            "=" * 80,
+        ]
+    )
     return "\n".join(lines)
 
 
@@ -396,7 +406,7 @@ def _run_retrieval_test(
                 }
             )
         except Exception as e:
-            error_msg = f"Error: {str(e)}"
+            error_msg = f"Error: {e!s}"
             print(error_msg)
             results_stats["errors"] += 1
             query_results.append(

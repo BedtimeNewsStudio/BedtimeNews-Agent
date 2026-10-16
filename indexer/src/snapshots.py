@@ -24,7 +24,7 @@ import json
 import sys
 
 from . import catalog
-from .db import connection, transaction
+from .db import connection, fetch_row, transaction
 
 
 def _fmt_size(size: int | None) -> str:
@@ -36,9 +36,9 @@ def _fmt_size(size: int | None) -> str:
 def cmd_list() -> int:
     with connection() as conn, transaction(conn) as cursor:
         cursor.execute("SELECT to_regclass('rag_meta.snapshots') IS NOT NULL")
-        if not cursor.fetchone()[0]:
+        if not fetch_row(cursor)[0]:
             print("No snapshot registry yet (the indexer has not started).")
-            return 0
+            return 1
         snapshots = catalog.list_snapshots(cursor)
         sizes = catalog.snapshot_sizes(cursor)
     lineage = catalog.current_lineage()

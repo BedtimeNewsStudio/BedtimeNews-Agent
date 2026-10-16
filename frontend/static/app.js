@@ -194,9 +194,21 @@ function renderMarkdown(md, raw) {
 // return falls back to the whole document.
 const CITATION_RE = /(?:\[\[([^[\]]+?)\]\]|《([^《》]+?)》)(\([^)]*\))?/g;
 
+// One or more citation links separated only by whitespace. Mirror of the
+// server's _dedupe_citation_runs: each distinct link stays once per run.
+const CITATION_LINK = "\\[\\[[^\\[\\]]+?\\]\\]\\([^()\\s]*\\)";
+const CITATION_RUN_RE = new RegExp(`${CITATION_LINK}(?:\\s*${CITATION_LINK})+`, "g");
+const CITATION_LINK_RE = new RegExp(CITATION_LINK, "g");
+
+function dedupeCitationRuns(text) {
+  return text.replace(CITATION_RUN_RE, (run) =>
+    [...new Set(run.match(CITATION_LINK_RE))].join(" "),
+  );
+}
+
 function linkifyCitations(text, urls) {
-  if (!urls) return text;
-  return text.replace(CITATION_RE, (whole, bracketName, cjkName, trailing) => {
+  if (!urls) return dedupeCitationRuns(text);
+  return dedupeCitationRuns(text.replace(CITATION_RE, (whole, bracketName, cjkName, trailing) => {
     const name = bracketName || cjkName;
     // answer_final is already [[标题]](/transcripts/<URI>#<anchor>). The bare
     // title in the map is the whole episode. Replacing it would drop the section.
@@ -212,8 +224,8 @@ function linkifyCitations(text, urls) {
       (hash === -1 ? null : urls[base] || urls[withMd(base)]);
     // Names we have no entry for are left exactly as written — that is what
     // keeps a genuine 《书名》 in the prose from being turned into a link.
-    return entry ? `[[${entry.title}]](${entry.url})` : whole;
-  });
+    return entry ? `[[${entry.label || entry.title}]](${entry.url})` : whole;
+  }));
 }
 
 // The follow-up block rides in the same completion as the answer, so the raw
@@ -237,6 +249,15 @@ function unwrapCitationLabels(root) {
     const label = link.textContent;
     if (label.length > 2 && label.startsWith("[") && label.endsWith("]")) {
       link.textContent = label.slice(1, -1);
+    }
+    // A section name cut to fit ends in "…"; the heading is the link's anchor
+    // (spaces were turned into "-"), so show it in full on hover.
+    if (link.textContent.endsWith("…") && link.hash.length > 1) {
+      try {
+        link.title = decodeURIComponent(link.hash.slice(1)).replaceAll("-", " ");
+      } catch {
+        /* malformed escape: no tooltip */
+      }
     }
   }
 }

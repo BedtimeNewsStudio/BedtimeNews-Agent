@@ -212,7 +212,7 @@ rag_s<id>   只读快照：document_chunks / documents / transcripts / index_sta
 **`transcripts`**：应用内阅读器使用的渲染文稿
 
 - `doc_id`：文稿 URI（主键）
-- `canonical_title` / `source_title`：标准化标题与文稿自身的 `# ` 标题
+- `canonical_title` / `source_title`：标准化标题与文稿自身的 `#` 标题
 - `channel`、`publication_date`：栏目名与 `**发布日期**` 的值
 - `body_html`：Agent 的 `/transcripts` API 返回的渲染页面。正文话题 `h2` 的 `id` 等于该话题的锚点。投影版本变化会重新渲染，不会重新 embedding
 - `source_hash`、`projection_version`：重新渲染的触发条件（源文件修改或渲染器变化）

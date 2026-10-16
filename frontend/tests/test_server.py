@@ -33,17 +33,17 @@ class _FakeUpstreamClient:
 
 
 @pytest.fixture
-def client():
+def client(monkeypatch):
+    # monkeypatch restores all three module globals after every test, so no
+    # test can leak a fake upstream or a warm short-link cache into the next.
+    monkeypatch.setattr(server, "_client", None)
+    monkeypatch.setattr(server, "_SHORT_ID_CACHE", None)
+    monkeypatch.setattr(server, "_SHORT_ID_BUILT_AT", 0.0)
     test_client = TestClient(server.app)
-    server._SHORT_ID_CACHE = None
-    server._SHORT_ID_BUILT_AT = 0.0
     try:
         yield test_client
     finally:
         test_client.close()
-        server._client = None
-        server._SHORT_ID_CACHE = None
-        server._SHORT_ID_BUILT_AT = 0.0
 
 
 def _upstream_response(status_code, content=b""):
@@ -69,8 +69,12 @@ def _error_event(response):
         (503, "档案服务暂时不可用，请稍后重试。"),
     ],
 )
-def test_chat_maps_upstream_status_errors_to_sse(client, status_code, message):
-    server._client = _FakeUpstreamClient(_upstream_response(status_code))
+def test_chat_maps_upstream_status_errors_to_sse(
+    client, status_code, message, monkeypatch
+):
+    monkeypatch.setattr(
+        server, "_client", _FakeUpstreamClient(_upstream_response(status_code))
+    )
 
     response = client.post("/chat", json={"question": "test"})
 
@@ -78,8 +82,12 @@ def test_chat_maps_upstream_status_errors_to_sse(client, status_code, message):
     assert _error_event(response) == {"type": "error", "content": message}
 
 
-def test_chat_maps_upstream_timeout_to_sse(client):
-    server._client = _FakeUpstreamClient(error=httpx.ReadTimeout("upstream timed out"))
+def test_chat_maps_upstream_timeout_to_sse(client, monkeypatch):
+    monkeypatch.setattr(
+        server,
+        "_client",
+        _FakeUpstreamClient(error=httpx.ReadTimeout("upstream timed out")),
+    )
 
     response = client.post("/chat", json={"question": "test"})
 
@@ -108,12 +116,14 @@ def test_static_assets_set_cache_headers_and_support_revalidation(client):
     assert vendored_asset.headers["cache-control"] == "public, max-age=604800"
 
 
-def test_gzip_compresses_static_text_but_not_event_stream(client):
+def test_gzip_compresses_static_text_but_not_event_stream(client, monkeypatch):
     static_response = client.get("/app.js", headers={"Accept-Encoding": "gzip"})
     assert static_response.headers["content-encoding"] == "gzip"
 
     event = b'data: {"type": "answer_chunk", "content": "' + b"x" * 2048 + b'"}\n\n'
-    server._client = _FakeUpstreamClient(_upstream_response(200, event))
+    monkeypatch.setattr(
+        server, "_client", _FakeUpstreamClient(_upstream_response(200, event))
+    )
     stream_response = client.post(
         "/chat",
         json={"question": "test"},
@@ -148,11 +158,11 @@ def _json_upstream(status_code=200, payload=None, headers=None):
     )
 
 
-def test_transcript_index_proxies_etag_and_revalidation(client):
+def test_transcript_index_proxies_etag_and_revalidation(client, monkeypatch):
     upstream = _FakeJsonClient(
         _json_upstream(200, {"items": [{"doc_id": "a.md"}]}, {"ETag": '"abc"'})
     )
-    server._client = upstream
+    monkeypatch.setattr(server, "_client", upstream)
 
     response = client.get("/api/transcripts", headers={"If-None-Match": '"old"'})
 
@@ -164,9 +174,9 @@ def test_transcript_index_proxies_etag_and_revalidation(client):
     ]
 
 
-def test_transcript_detail_percent_encodes_upstream_uri(client):
+def test_transcript_detail_percent_encodes_upstream_uri(client, monkeypatch):
     upstream = _FakeJsonClient(_json_upstream(404, {"detail": "not found"}))
-    server._client = upstream
+    monkeypatch.setattr(server, "_client", upstream)
 
     response = client.get("/api/transcripts/栏目/一期.md")
 
@@ -214,7 +224,7 @@ def test_root_is_server_rendered_with_crawlable_channel_links(client):
     assert '<meta name="twitter:card" content="summary" />' in response.text
     assert '<meta property="og:image:width" content="128" />' in response.text
     match = re.search(
-        r'<script type="application/ld\+json">(.*?)</script>', response.text, re.S
+        r'<script type="application/ld\+json">(.*?)</script>', response.text, re.DOTALL
     )
     assert match is not None
     assert json.loads(match.group(1))["@type"] == "WebSite"
@@ -227,7 +237,7 @@ def test_index_html_redirects_to_canonical_root(client):
     assert response.headers["location"] == "/"
 
 
-def test_channel_archive_is_server_rendered_and_sorted(client):
+def test_channel_archive_is_server_rendered_and_sorted(client, monkeypatch):
     items = [
         _index_item(
             "ShuiQianXiaoXi/0001-0100/0001.md",
@@ -243,7 +253,9 @@ def test_channel_archive_is_server_rendered_and_sorted(client):
             "GaoJian/0001-0100/0001.md", "【高见1】其它栏目", "2026-02-01", "GaoJian"
         ),
     ]
-    server._client = _FakeJsonClient(_json_upstream(200, {"items": items}))
+    monkeypatch.setattr(
+        server, "_client", _FakeJsonClient(_json_upstream(200, {"items": items}))
+    )
 
     response = client.get("/transcripts?channel=ShuiQianXiaoXi")
 
@@ -259,7 +271,7 @@ def test_channel_archive_is_server_rendered_and_sorted(client):
     assert "【高见1】其它栏目" not in response.text
     assert 'href="/transcripts/ShuiQianXiaoXi/0001-0100/0002.md"' in response.text
     match = re.search(
-        r'<script type="application/ld\+json">(.*?)</script>', response.text, re.S
+        r'<script type="application/ld\+json">(.*?)</script>', response.text, re.DOTALL
     )
     assert match is not None
     breadcrumb = json.loads(match.group(1))
@@ -270,13 +282,15 @@ def test_channel_archive_is_server_rendered_and_sorted(client):
     ]
 
 
-def test_transcript_page_contains_raw_ssr_body_and_safe_metadata(client):
+def test_transcript_page_contains_raw_ssr_body_and_safe_metadata(client, monkeypatch):
     hostile_title = '题目</title><script>alert("x")</script>'
     article = _article_payload(
         source_title=hostile_title,
         body_html='<h2 id="话题">话题</h2><p>这是已经清洗的<strong>正文内容</strong>。</p>',
     )
-    server._client = _FakeJsonClient(_json_upstream(200, article))
+    monkeypatch.setattr(
+        server, "_client", _FakeJsonClient(_json_upstream(200, article))
+    )
 
     response = client.get("/transcripts/ShuiQianXiaoXi/0501-0600/0588.md")
 
@@ -291,7 +305,7 @@ def test_transcript_page_contains_raw_ssr_body_and_safe_metadata(client):
         in response.text
     )
     matches = re.findall(
-        r'<script type="application/ld\+json">(.*?)</script>', response.text, re.S
+        r'<script type="application/ld\+json">(.*?)</script>', response.text, re.DOTALL
     )
     assert len(matches) == 2
     for raw in matches:
@@ -311,8 +325,10 @@ def test_transcript_page_contains_raw_ssr_body_and_safe_metadata(client):
     assert "frame-src 'none'" in response.headers["content-security-policy"]
 
 
-def test_transcript_html_supports_etag_revalidation(client):
-    server._client = _FakeJsonClient(_json_upstream(200, _article_payload()))
+def test_transcript_html_supports_etag_revalidation(client, monkeypatch):
+    monkeypatch.setattr(
+        server, "_client", _FakeJsonClient(_json_upstream(200, _article_payload()))
+    )
     first = client.get("/transcripts/ShuiQianXiaoXi/0501-0600/0588.md")
 
     second = client.get(
@@ -340,8 +356,10 @@ def test_malformed_transcript_routes_are_real_404s(client, path):
     assert '<meta name="robots" content="noindex"' in response.text
 
 
-def test_missing_transcript_is_a_real_404(client):
-    server._client = _FakeJsonClient(_json_upstream(404, {"detail": "not found"}))
+def test_missing_transcript_is_a_real_404(client, monkeypatch):
+    monkeypatch.setattr(
+        server, "_client", _FakeJsonClient(_json_upstream(404, {"detail": "not found"}))
+    )
 
     response = client.get("/transcripts/ShuiQianXiaoXi/0001-0100/0001.md")
 
@@ -361,8 +379,10 @@ def test_invalid_or_missing_channel_does_not_create_soft_200(client):
     assert "noindex" in unknown.text
 
 
-def test_upstream_timeout_returns_controlled_503_page(client):
-    server._client = _FakeJsonClient(error=httpx.ReadTimeout("timed out"))
+def test_upstream_timeout_returns_controlled_503_page(client, monkeypatch):
+    monkeypatch.setattr(
+        server, "_client", _FakeJsonClient(error=httpx.ReadTimeout("timed out"))
+    )
 
     response = client.get("/transcripts/ShuiQianXiaoXi/0001-0100/0001.md")
 
@@ -390,11 +410,11 @@ def _stale_connection():
     return httpx.RemoteProtocolError("Server disconnected without sending a response.")
 
 
-def test_transcript_page_retries_once_on_stale_upstream_connection(client):
+def test_transcript_page_retries_once_on_stale_upstream_connection(client, monkeypatch):
     upstream = _FlakyJsonClient(
         _json_upstream(200, _article_payload()), _stale_connection(), failures=1
     )
-    server._client = upstream
+    monkeypatch.setattr(server, "_client", upstream)
 
     response = client.get("/transcripts/ShuiQianXiaoXi/0501-0600/0588.md")
 
@@ -402,9 +422,15 @@ def test_transcript_page_retries_once_on_stale_upstream_connection(client):
     assert len(upstream.calls) == 2
 
 
-def test_persistent_upstream_disconnect_is_a_controlled_503_not_500(client):
-    server._client = _FlakyJsonClient(
-        _json_upstream(200, _article_payload()), _stale_connection(), failures=99
+def test_persistent_upstream_disconnect_is_a_controlled_503_not_500(
+    client, monkeypatch
+):
+    monkeypatch.setattr(
+        server,
+        "_client",
+        _FlakyJsonClient(
+            _json_upstream(200, _article_payload()), _stale_connection(), failures=99
+        ),
     )
 
     page = client.get("/transcripts/ShuiQianXiaoXi/0501-0600/0588.md")
@@ -416,11 +442,13 @@ def test_persistent_upstream_disconnect_is_a_controlled_503_not_500(client):
     assert api.json() == {"detail": "文稿服务暂时不可用"}
 
 
-def test_api_transcript_proxy_retries_once_on_stale_upstream_connection(client):
+def test_api_transcript_proxy_retries_once_on_stale_upstream_connection(
+    client, monkeypatch
+):
     upstream = _FlakyJsonClient(
         _json_upstream(200, {"items": []}), _stale_connection(), failures=1
     )
-    server._client = upstream
+    monkeypatch.setattr(server, "_client", upstream)
 
     response = client.get("/api/transcripts")
 
@@ -460,14 +488,18 @@ def test_head_matches_get_for_local_pages(client, path):
     _assert_head_matches_get(client, path)
 
 
-def test_head_matches_get_for_ssr_transcript(client):
-    server._client = _FakeJsonClient(_json_upstream(200, _article_payload()))
+def test_head_matches_get_for_ssr_transcript(client, monkeypatch):
+    monkeypatch.setattr(
+        server, "_client", _FakeJsonClient(_json_upstream(200, _article_payload()))
+    )
 
     _assert_head_matches_get(client, "/transcripts/ShuiQianXiaoXi/0501-0600/0588.md")
 
 
-def test_head_on_missing_transcript_is_still_a_404(client):
-    server._client = _FakeJsonClient(_json_upstream(404, {"detail": "not found"}))
+def test_head_on_missing_transcript_is_still_a_404(client, monkeypatch):
+    monkeypatch.setattr(
+        server, "_client", _FakeJsonClient(_json_upstream(404, {"detail": "not found"}))
+    )
 
     response = client.head("/transcripts/ShuiQianXiaoXi/0001-0100/0001.md")
 
@@ -475,7 +507,7 @@ def test_head_on_missing_transcript_is_still_a_404(client):
     assert response.content == b""
 
 
-def test_sitemap_contains_root_channels_articles_and_lastmods(client):
+def test_sitemap_contains_root_channels_articles_and_lastmods(client, monkeypatch):
     items = [
         _index_item(
             "ShuiQianXiaoXi/0001-0100/0001.md",
@@ -490,7 +522,7 @@ def test_sitemap_contains_root_channels_articles_and_lastmods(client):
         ),
     ]
     fake = _FakeJsonClient(_json_upstream(200, {"items": items}))
-    server._client = fake
+    monkeypatch.setattr(server, "_client", fake)
 
     response = client.get("/sitemap.xml")
 
@@ -510,8 +542,10 @@ def test_sitemap_contains_root_channels_articles_and_lastmods(client):
     assert len(fake.calls) == 1
 
 
-def test_sitemap_does_not_return_partial_success_on_bad_upstream(client):
-    server._client = _FakeJsonClient(error=httpx.ConnectError("offline"))
+def test_sitemap_does_not_return_partial_success_on_bad_upstream(client, monkeypatch):
+    monkeypatch.setattr(
+        server, "_client", _FakeJsonClient(error=httpx.ConnectError("offline"))
+    )
 
     response = client.get("/sitemap.xml")
 
@@ -519,10 +553,12 @@ def test_sitemap_does_not_return_partial_success_on_bad_upstream(client):
     assert "temporarily unavailable" in response.text
 
 
-def test_short_link_redirects_to_the_matching_transcript(client):
+def test_short_link_redirects_to_the_matching_transcript(client, monkeypatch):
     doc_id = "ShuiQianXiaoXi/0001-0100/0001.md"
     items = [_index_item(doc_id, "【睡前消息1】测试", "2025-01-01")]
-    server._client = _FakeJsonClient(_json_upstream(200, {"items": items}))
+    monkeypatch.setattr(
+        server, "_client", _FakeJsonClient(_json_upstream(200, {"items": items}))
+    )
 
     response = client.get(f"/s/{server._short_id_for(doc_id)}", follow_redirects=False)
 
@@ -540,9 +576,11 @@ def test_short_link_is_deterministic_and_uses_the_restricted_alphabet(client):
     assert set(short_id) <= server._BASE58_SET
 
 
-def test_short_link_rejects_malformed_ids_without_querying_upstream(client):
+def test_short_link_rejects_malformed_ids_without_querying_upstream(
+    client, monkeypatch
+):
     fake = _FakeJsonClient(_json_upstream(200, {"items": []}))
-    server._client = fake
+    monkeypatch.setattr(server, "_client", fake)
 
     too_short = client.get("/s/abc", follow_redirects=False)
     bad_char = client.get("/s/0OIl1234", follow_redirects=False)
@@ -556,7 +594,7 @@ def test_short_link_rebuilds_on_a_cache_miss_once_the_interval_passed(
     client, monkeypatch
 ):
     fake = _FakeJsonClient(_json_upstream(200, {"items": []}))
-    server._client = fake
+    monkeypatch.setattr(server, "_client", fake)
     now = [1000.0]
     monkeypatch.setattr(server, "_now", lambda: now[0])
 
@@ -570,7 +608,7 @@ def test_short_link_rebuilds_on_a_cache_miss_once_the_interval_passed(
 
 def test_short_link_misses_do_not_refetch_within_the_interval(client, monkeypatch):
     fake = _FakeJsonClient(_json_upstream(200, {"items": []}))
-    server._client = fake
+    monkeypatch.setattr(server, "_client", fake)
     monkeypatch.setattr(server, "_now", lambda: 1000.0)
 
     for suffix in "12345":
@@ -580,8 +618,10 @@ def test_short_link_misses_do_not_refetch_within_the_interval(client, monkeypatc
     assert len(fake.calls) == 1
 
 
-def test_short_link_returns_503_when_upstream_is_down(client):
-    server._client = _FakeJsonClient(error=httpx.ConnectError("offline"))
+def test_short_link_returns_503_when_upstream_is_down(client, monkeypatch):
+    monkeypatch.setattr(
+        server, "_client", _FakeJsonClient(error=httpx.ConnectError("offline"))
+    )
 
     response = client.get(
         f"/s/{server._short_id_for('ShuiQianXiaoXi/0001-0100/0001.md')}",
@@ -636,7 +676,7 @@ AGENT_HEALTH = {
 def test_healthz_reports_instance_and_never_calls_the_agent(client, monkeypatch):
     monkeypatch.setattr(server, "APP_INSTANCE", "bedtimenews-app-green")
     fake = _FakeHealthClient(error=AssertionError("healthz must not call the agent"))
-    server._client = fake
+    monkeypatch.setattr(server, "_client", fake)
 
     response = client.get("/healthz")
 
@@ -649,9 +689,9 @@ def test_healthz_reports_instance_and_never_calls_the_agent(client, monkeypatch)
     assert fake.calls == []
 
 
-def test_readyz_forwards_readiness_with_a_trimmed_body(client):
+def test_readyz_forwards_readiness_with_a_trimmed_body(client, monkeypatch):
     fake = _FakeHealthClient(_health_response(200, AGENT_HEALTH))
-    server._client = fake
+    monkeypatch.setattr(server, "_client", fake)
 
     response = client.get("/readyz")
 
@@ -664,19 +704,22 @@ def test_readyz_forwards_readiness_with_a_trimmed_body(client):
             "embedding_space": "Qwen/Qwen3-Embedding-4B@2560",
         },
     }
-    assert "password" not in response.text and "indexer_status" not in response.text
+    assert "password" not in response.text
+    assert "indexer_status" not in response.text
     assert response.headers["cache-control"] == "no-store"
     assert fake.calls[0][0] == server.HEALTH_ENDPOINT
     assert fake.calls[0][1]["timeout"] == server.READY_TIMEOUT_S
 
 
-def test_readyz_is_503_when_the_agent_is_not_ready(client):
+def test_readyz_is_503_when_the_agent_is_not_ready(client, monkeypatch):
     body = AGENT_HEALTH | {
         "ready": False,
         "snapshot": None,
         "reason": "no published snapshot",
     }
-    server._client = _FakeHealthClient(_health_response(503, body))
+    monkeypatch.setattr(
+        server, "_client", _FakeHealthClient(_health_response(503, body))
+    )
 
     response = client.get("/readyz")
 
@@ -692,8 +735,8 @@ def test_readyz_is_503_when_the_agent_is_not_ready(client):
 @pytest.mark.parametrize(
     "error", [httpx.ConnectError("refused"), httpx.ReadTimeout("slow")]
 )
-def test_readyz_is_503_when_the_agent_is_unreachable(client, error):
-    server._client = _FakeHealthClient(error=error)
+def test_readyz_is_503_when_the_agent_is_unreachable(client, error, monkeypatch):
+    monkeypatch.setattr(server, "_client", _FakeHealthClient(error=error))
 
     response = client.get("/readyz")
 
@@ -705,8 +748,12 @@ def test_readyz_is_503_when_the_agent_is_unreachable(client, error):
     }
 
 
-def test_readyz_never_trusts_a_200_without_ready(client):
-    server._client = _FakeHealthClient(_health_response(200, {"unexpected": True}))
+def test_readyz_never_trusts_a_200_without_ready(client, monkeypatch):
+    monkeypatch.setattr(
+        server,
+        "_client",
+        _FakeHealthClient(_health_response(200, {"unexpected": True})),
+    )
 
     response = client.get("/readyz")
 
@@ -737,11 +784,11 @@ class _RecordingGetClient:
         "/api/transcripts/channel/not-markdown.txt",
     ],
 )
-def test_transcript_api_never_proxies_a_non_canonical_uri(client, path):
+def test_transcript_api_never_proxies_a_non_canonical_uri(client, path, monkeypatch):
     # httpx normalizes dot segments, so an unvalidated "../health" would reach
     # the agent's internal /health (with indexer error text) from the internet.
     fake = _RecordingGetClient()
-    server._client = fake
+    monkeypatch.setattr(server, "_client", fake)
 
     response = client.get(path)
 
@@ -749,9 +796,9 @@ def test_transcript_api_never_proxies_a_non_canonical_uri(client, path):
     assert fake.urls == []
 
 
-def test_transcript_api_proxies_a_canonical_uri(client):
+def test_transcript_api_proxies_a_canonical_uri(client, monkeypatch):
     fake = _RecordingGetClient()
-    server._client = fake
+    monkeypatch.setattr(server, "_client", fake)
 
     response = client.get("/api/transcripts/ShuiQianXiaoXi/0501-0600/0588.md")
 
@@ -773,7 +820,7 @@ class _MarkdownGetClient:
         )
 
 
-def test_transcript_markdown_download_uses_title_filename(client):
+def test_transcript_markdown_download_uses_title_filename(client, monkeypatch):
     fake = _MarkdownGetClient(
         {
             "doc_id": "ShuiQianXiaoXi/0501-0600/0588.md",
@@ -782,7 +829,7 @@ def test_transcript_markdown_download_uses_title_filename(client):
             "body_markdown": "# 【睡前消息588】城投债四大网红，柳州第一\n\n## 正文\n",
         }
     )
-    server._client = fake
+    monkeypatch.setattr(server, "_client", fake)
 
     response = client.get(
         "/api/transcripts/ShuiQianXiaoXi/0501-0600/0588.md?download=markdown"
@@ -799,9 +846,9 @@ def test_transcript_markdown_download_uses_title_filename(client):
     ]
 
 
-def test_transcript_markdown_download_rejects_non_canonical_uri(client):
+def test_transcript_markdown_download_rejects_non_canonical_uri(client, monkeypatch):
     fake = _RecordingGetClient()
-    server._client = fake
+    monkeypatch.setattr(server, "_client", fake)
 
     response = client.get("/api/transcripts/../health?download=markdown")
 
@@ -809,7 +856,7 @@ def test_transcript_markdown_download_rejects_non_canonical_uri(client):
     assert fake.urls == []
 
 
-def test_transcript_markdown_download_is_404_without_source(client):
+def test_transcript_markdown_download_is_404_without_source(client, monkeypatch):
     fake = _MarkdownGetClient(
         {
             "doc_id": "ShuiQianXiaoXi/0501-0600/0588.md",
@@ -817,7 +864,7 @@ def test_transcript_markdown_download_is_404_without_source(client):
             "body_html": "<p>x</p>",
         }
     )
-    server._client = fake
+    monkeypatch.setattr(server, "_client", fake)
 
     response = client.get(
         "/api/transcripts/ShuiQianXiaoXi/0501-0600/0588.md?download=markdown"
@@ -832,9 +879,11 @@ def test_no_generated_api_docs_are_public(client, path):
     assert client.get(path).status_code == 404
 
 
-def test_chat_refuses_an_oversized_body_without_calling_the_agent(client):
-    server._client = _FakeUpstreamClient(
-        error=AssertionError("the agent must not be called")
+def test_chat_refuses_an_oversized_body_without_calling_the_agent(client, monkeypatch):
+    monkeypatch.setattr(
+        server,
+        "_client",
+        _FakeUpstreamClient(error=AssertionError("the agent must not be called")),
     )
     question = "问" * (server.MAX_CHAT_BODY_BYTES // 3 + 10)
 
@@ -843,9 +892,13 @@ def test_chat_refuses_an_oversized_body_without_calling_the_agent(client):
     assert response.status_code == 413
 
 
-def test_chat_does_not_leak_unexpected_error_text(client):
-    server._client = _FakeUpstreamClient(
-        error=RuntimeError("connect to http://agent:8000 failed: secret detail")
+def test_chat_does_not_leak_unexpected_error_text(client, monkeypatch):
+    monkeypatch.setattr(
+        server,
+        "_client",
+        _FakeUpstreamClient(
+            error=RuntimeError("connect to http://agent:8000 failed: secret detail")
+        ),
     )
 
     response = client.post("/chat", json={"question": "test"})

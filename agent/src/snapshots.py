@@ -88,7 +88,7 @@ def select_snapshot(cursor) -> tuple[Snapshot | None, str | None, dict | None]:
         )
         row = cursor.fetchone()
         indexer_status = dict(row) if row else None
-    except Exception:  # noqa: BLE001 - status is informational only
+    except Exception:  # status is informational only
         cursor.connection.rollback()
 
     columns = (
@@ -238,7 +238,7 @@ class SnapshotManager:
         try:
             with read_cursor() as cursor:
                 snapshot, reason, indexer_status = select_snapshot(cursor)
-        except Exception as exc:  # noqa: BLE001 - stay up, report not ready
+        except Exception as exc:  # stay up, report not ready
             logger.warning("Snapshot poll failed: %s", exc)
             with self._lock:
                 self._db_ok = False
