@@ -847,7 +847,7 @@ Guidelines:
 4. **Synthesize**: Combine information from ALL documents - don't just summarize individual documents
 5. **Be honest**: If the documents don't contain enough information to answer, say so clearly. This is about gaps in what the user asked; it is not a reason to report on off-topic passages the documents happen to contain.
 6. **Structure clearly**: Use paragraphs, bullets, or sections as appropriate
-7. **Cite inside the sentence it supports**: Put a source id at the end of the sentence it supports, directly before that sentence's final punctuation, like `……生源竞争很激烈[[X/0001-0100/0001.md#招生]]。`. Never put it after the period, never collect several ids at the end of a paragraph, and never write the same id twice in a row. When consecutive sentences draw on the same Source line, cite once, in the last of them. If a paragraph would mix several sources, split it so each paragraph or sentence carries the ids of what it says. Two topics from one episode are two sources: cite each one in its own sentence. Pattern, with made-up ids:
+7. **Cite inside the sentence it supports**: Put a source id at the end of the sentence it supports, directly before that sentence's final punctuation, like `……生源竞争很激烈[[X/0001-0100/0001.md#招生]]。`. Never put it after the period, never collect several ids at the end of a paragraph, and never write the same id twice in a row. When consecutive sentences or clauses (even ones split by a semicolon) draw on the same Source line, cite once, in the last of them; do not repeat the id for each sentence. If a paragraph would mix several sources, split it so each paragraph or sentence carries the ids of what it says. Two topics from one episode are two sources: cite each one in its own sentence. Pattern, with made-up ids:
    甲方案在第一轮试验中失败[[X/0001-0100/0001.md#试验]]。原因是材料过重[[X/0001-0100/0001.md#原因]]。乙方案则已经量产[[Y/0001-0100/0002.md#量产]]。
 8. **Distinguish sources**: Make it clear when you're:
    - Reporting what 睡前消息 says (name that passage's Source id)
@@ -1143,7 +1143,8 @@ def _repair_citations(
         cursor = end
         previous = end
     pieces.append(answer[cursor:])
-    return _place_citation_runs(_dedupe_citation_runs("".join(pieces))), repaired
+    cleaned = _dedupe_citation_runs("".join(pieces))
+    return _place_citation_runs(_collapse_repeated_citations(cleaned)), repaired
 
 
 # One or more repaired citation links separated only by whitespace, e.g. a run
@@ -1179,6 +1180,56 @@ _PLACE_RUN_RE = re.compile(rf"{_CITATION_LINK}(?:[ \t]*{_CITATION_LINK})*")
 _LIST_PREFIX_RE = re.compile(r"\s*(?:[-*+]|\d+[.)])?\s*")
 
 
+def _inside_parenthetical(paragraph: str) -> bool:
+    return max(paragraph.rfind("（"), paragraph.rfind("(")) > max(
+        paragraph.rfind("）"), paragraph.rfind(")")
+    )
+
+
+def _cut_citation_run(text: str, start: int, end: int) -> str:
+    """Remove ``text[start:end]`` and the spaces that would be left around it."""
+    after = end
+    while after < len(text) and text[after] in " \t":
+        after += 1
+    following = text[after] if after < len(text) else "\n"
+    if following == "\n" or following in _SENTENCE_END:
+        before = start
+        while before > 0 and text[before - 1] in " \t":
+            before -= 1
+        return text[:before] + text[after:]
+    return text[:start] + text[after:]
+
+
+def _collapse_repeated_citations(text: str) -> str:
+    """Within a paragraph, cite a source once for a run of sentences, at the last.
+
+    The same citation run repeated with no different citation in between (the
+    model tends to cite every sentence, or every clause split by a semicolon)
+    is kept only at its last occurrence. Alternating sources, other paragraphs,
+    source-list lines and runs inside a parenthetical are left alone. Mirrored by
+    the frontend's collapseRepeatedCitations.
+    """
+    drop: list[tuple[int, int]] = []
+    previous: tuple[tuple[str, ...], int, tuple[int, int]] | None = None
+    for match in _PLACE_RUN_RE.finditer(text):
+        start, end = match.span()
+        line_start = text.rfind("\n", 0, start) + 1
+        if _LIST_PREFIX_RE.fullmatch(text[line_start:start]):
+            previous = None
+            continue
+        paragraph_break = text.rfind("\n\n", 0, start)
+        paragraph = text[paragraph_break + 2 if paragraph_break != -1 else 0 : start]
+        if _inside_parenthetical(paragraph):
+            continue
+        links = tuple(_CITATION_LINK_RE.findall(match.group(0)))
+        if previous and previous[0] == links and previous[1] == paragraph_break:
+            drop.append(previous[2])
+        previous = (links, paragraph_break, (start, end))
+    for start, end in reversed(drop):
+        text = _cut_citation_run(text, start, end)
+    return text
+
+
 def _place_citation_runs(text: str) -> str:
     """Wrap each citation run in （…） and put it before the sentence's punctuation.
 
@@ -1194,9 +1245,7 @@ def _place_citation_runs(text: str) -> str:
             continue
         paragraph_break = text.rfind("\n\n", 0, start)
         paragraph = text[paragraph_break + 2 if paragraph_break != -1 else 0 : start]
-        if max(paragraph.rfind("（"), paragraph.rfind("(")) > max(
-            paragraph.rfind("）"), paragraph.rfind(")")
-        ):
+        if _inside_parenthetical(paragraph):
             continue
         run = " ".join(_CITATION_LINK_RE.findall(match.group(0)))
         head = text[cursor:start]

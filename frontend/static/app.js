@@ -214,6 +214,54 @@ const SENTENCE_END = "。！？；!?;…";
 const PLACE_RUN_RE = new RegExp(String.raw`${CITATION_LINK}(?:[ \t]*${CITATION_LINK})*`, "g");
 const LIST_PREFIX_RE = /^\s*(?:[-*+]|\d+[.)])?\s*$/;
 
+function insideParenthetical(paragraph) {
+  return (
+    Math.max(paragraph.lastIndexOf("（"), paragraph.lastIndexOf("(")) >
+    Math.max(paragraph.lastIndexOf("）"), paragraph.lastIndexOf(")"))
+  );
+}
+
+// Remove text[start:end] and the spaces that would be left around it.
+function cutCitationRun(text, start, end) {
+  let after = end;
+  while (after < text.length && (text[after] === " " || text[after] === "\t")) after++;
+  const following = after < text.length ? text[after] : "\n";
+  if (following === "\n" || SENTENCE_END.includes(following)) {
+    let before = start;
+    while (before > 0 && (text[before - 1] === " " || text[before - 1] === "\t")) before--;
+    return text.slice(0, before) + text.slice(after);
+  }
+  return text.slice(0, start) + text.slice(after);
+}
+
+// Within a paragraph, cite a source once for a run of sentences, at the last:
+// the same citation run repeated with no different citation in between is kept
+// only at its last occurrence. Mirror of the server's _collapse_repeated_citations.
+function collapseRepeatedCitations(text) {
+  const drop = [];
+  let previous = null;
+  for (const match of text.matchAll(PLACE_RUN_RE)) {
+    const start = match.index;
+    const end = start + match[0].length;
+    const lineStart = text.lastIndexOf("\n", start - 1) + 1;
+    if (LIST_PREFIX_RE.test(text.slice(lineStart, start))) {
+      previous = null;
+      continue;
+    }
+    const paragraphBreak = text.lastIndexOf("\n\n", start - 1);
+    const paragraph = text.slice(paragraphBreak === -1 ? 0 : paragraphBreak + 2, start);
+    if (insideParenthetical(paragraph)) continue;
+    const links = match[0].match(CITATION_LINK_RE).join("\u0000");
+    if (previous && previous.links === links && previous.paragraph === paragraphBreak) {
+      drop.push(previous.span);
+    }
+    previous = { links, paragraph: paragraphBreak, span: [start, end] };
+  }
+  let out = text;
+  for (const [start, end] of drop.reverse()) out = cutCitationRun(out, start, end);
+  return out;
+}
+
 function placeCitationRuns(text) {
   let out = "";
   let cursor = 0;
@@ -226,12 +274,7 @@ function placeCitationRuns(text) {
     const paragraphBreak = text.lastIndexOf("\n\n", start - 1);
     const paragraph = text.slice(paragraphBreak === -1 ? 0 : paragraphBreak + 2, start);
     // Already inside a parenthetical: leave it, so running twice changes nothing.
-    if (
-      Math.max(paragraph.lastIndexOf("（"), paragraph.lastIndexOf("(")) >
-      Math.max(paragraph.lastIndexOf("）"), paragraph.lastIndexOf(")"))
-    ) {
-      continue;
-    }
+    if (insideParenthetical(paragraph)) continue;
     const run = match[0].match(CITATION_LINK_RE).join(" ");
     const head = text.slice(cursor, start);
     const stripped = head.replace(/[ \t]+$/, "");
@@ -244,8 +287,8 @@ function placeCitationRuns(text) {
 }
 
 function linkifyCitations(text, urls) {
-  if (!urls) return placeCitationRuns(dedupeCitationRuns(text));
-  return placeCitationRuns(dedupeCitationRuns(text.replace(CITATION_RE, (whole, bracketName, cjkName, trailing) => {
+  if (!urls) return placeCitationRuns(collapseRepeatedCitations(dedupeCitationRuns(text)));
+  return placeCitationRuns(collapseRepeatedCitations(dedupeCitationRuns(text.replace(CITATION_RE, (whole, bracketName, cjkName, trailing) => {
     const name = bracketName || cjkName;
     // answer_final is already [[标题]](/transcripts/<URI>#<anchor>). The bare
     // title in the map is the whole episode. Replacing it would drop the section.
@@ -262,7 +305,7 @@ function linkifyCitations(text, urls) {
     // Names we have no entry for are left exactly as written — that is what
     // keeps a genuine 《书名》 in the prose from being turned into a link.
     return entry ? `[[${entry.label || entry.title}]](${entry.url})` : whole;
-  })));
+  }))));
 }
 
 // The follow-up block rides in the same completion as the answer, so the raw

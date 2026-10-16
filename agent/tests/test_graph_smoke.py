@@ -628,3 +628,59 @@ def test_repaired_answer_places_the_chip_before_the_period():
     label = "[[参考信息29 · 首轮幼儿园关停潮到来]]"
     assert repaired.startswith("生源竞争也很激烈（" + label)
     assert "）。 一个反差是新生儿减少。" in repaired
+
+
+def test_a_repeated_citation_is_kept_once_for_a_run_of_sentences():
+    p = "[[参考信息598 · 物业费]](/transcripts/C/0598.md#p)"
+    q = "[[睡前消息1054 · 缴费]](/transcripts/S/1054.md#q)"
+    r = "[[睡前消息1054 · 别处]](/transcripts/S/1054.md#r)"
+    collapse = graph_mod._collapse_repeated_citations
+    place = graph_mod._place_citation_runs
+
+    # Consecutive sentences and semicolon clauses from one source: cited once, at the last.
+    text = f"甲。{p} 乙，成立；{q} 丙也成立。{q} 丁认为。{q}"
+    assert collapse(text) == f"甲。{p} 乙，成立；丙也成立。丁认为。{q}"
+    assert place(collapse(text)) == f"甲（{p}）。 乙，成立；丙也成立。丁认为（{q}）。"
+    # A different source in between keeps both mentions: they support different sentences.
+    assert collapse(f"甲。{q} 乙。{p} 丙。{q}") == f"甲。{q} 乙。{p} 丙。{q}"
+    # Another section of the same episode is another link, not a repeat.
+    assert collapse(f"甲。{q} 乙。{r}") == f"甲。{q} 乙。{r}"
+    # A new paragraph starts over.
+    assert collapse(f"甲。{q}\n\n乙。{q}") == f"甲。{q}\n\n乙。{q}"
+    # A run of several chips repeats as a whole, not chip by chip.
+    assert collapse(f"甲。{q} {p} 乙。{q} {p} 丙。") == f"甲。乙。{q} {p} 丙。"
+    assert collapse(f"甲。{q} {p} 乙。{q}") == f"甲。{q} {p} 乙。{q}"
+    # Source lists and runs inside a parenthetical are not touched.
+    listing = f"**参考来源**\n\n- {q}\n- {q}\n"
+    assert collapse(listing) == listing
+    inside = f"见（来源：{q}）。又见（来源：{q}）。"
+    assert collapse(inside) == inside
+    assert collapse("没有引用。") == "没有引用。"
+    # Applying the whole pipeline twice changes nothing.
+    once = place(collapse(text))
+    assert place(collapse(once)) == once
+
+
+def test_repaired_answer_cites_a_series_of_sentences_once():
+    from langchain_core.documents import Document
+
+    uri = "ShuiQianXiaoXi/1001-1100/1054.md"
+    documents = [
+        Document(
+            page_content="",
+            metadata={
+                "doc_id": uri,
+                "title": "睡前消息1054",
+                "heading": "缴费",
+                "heading_anchor": "缴费",
+            },
+        )
+    ]
+    citation_map = graph_mod.build_citation_map(documents)
+    cite = f"[[{uri}]]"
+    repaired, _count = graph_mod._repair_citations(
+        f"甲认为。{cite} 乙也认为；{cite} 丙还指出。{cite}", citation_map, documents
+    )
+    assert repaired.count("[[睡前消息1054") == 1
+    assert repaired.startswith("甲认为。乙也认为；丙还指出（[[睡前消息1054 · 缴费]]")
+    assert repaired.endswith("）。")
