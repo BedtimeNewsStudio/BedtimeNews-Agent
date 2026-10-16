@@ -270,7 +270,7 @@ function scrollToEnd() {
 // One question per category, every category shown. Which subjects the archive
 // covers is the thing a first-time visitor has no way to guess, and it is real
 // structure from starters.py rather than decoration — so breadth wins over depth
-// here, and the whole set stays above the fold. 换一批 cycles the other ~60.
+// here, and the whole set stays above the fold. 换一批 cycles through the rest.
 const PER_CATEGORY = 1;
 const UINT32_RANGE = 2 ** 32;
 
