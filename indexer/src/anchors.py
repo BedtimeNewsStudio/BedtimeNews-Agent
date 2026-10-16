@@ -12,7 +12,7 @@ import re
 from urllib.parse import quote
 
 # Exactly two hashes. ``###`` must not match.
-H2_LINE = re.compile(r"^##(?!#)[ \t]+(.+?)\s*$", re.MULTILINE)
+H2_LINE = re.compile(r"^##(?!#)[ \t]+([^\r\n]+)", re.MULTILINE)
 
 _LEADING_H2 = re.compile(r"^##(?!#)[ \t]+")
 # Innermost link only, so ``[[text](url)](url2)`` unwraps in two passes.
