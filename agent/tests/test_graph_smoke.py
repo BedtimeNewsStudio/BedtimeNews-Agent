@@ -277,6 +277,10 @@ def test_citation_repair_covers_every_spelling():
         # This retrieval has a section, so none of these open the article start.
         f"见 [[{uri}]] 的分析",
         f"见 [[{uri}]](...) 的分析",
+        # The model drops the .md suffix it was shown.
+        f"见 [[{uri[:-3]}]] 的分析",
+        f"见 [[{uri[:-3]}#芯片]] 的分析",
+        f"见 [[{uri[:-3]}#不存在]] 的分析",
         "见 [[产经破壁机67]] 的分析",
         "见 《产经破壁机67》 的分析",
     )

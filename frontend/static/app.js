@@ -201,10 +201,15 @@ function linkifyCitations(text, urls) {
     // answer_final is already [[标题]](/transcripts/<URI>#<anchor>). The bare
     // title in the map is the whole episode. Replacing it would drop the section.
     if (trailing && trailing.includes("#")) return whole;
-    let entry = urls[name];
-    if (!entry && name.includes("#")) {
-      entry = urls[name.slice(0, name.indexOf("#"))];
-    }
+    // The model often drops the `.md` the index keeps on a URI.
+    const withMd = (n) => (n.includes("/") && !n.endsWith(".md") ? `${n}.md` : n);
+    const hash = name.indexOf("#");
+    const base = hash === -1 ? name : name.slice(0, hash);
+    const rest = hash === -1 ? "" : name.slice(hash);
+    const entry =
+      urls[name] ||
+      urls[withMd(base) + rest] ||
+      (hash === -1 ? null : urls[base] || urls[withMd(base)]);
     // Names we have no entry for are left exactly as written — that is what
     // keeps a genuine 《书名》 in the prose from being turned into a link.
     return entry ? `[[${entry.title}]](${entry.url})` : whole;

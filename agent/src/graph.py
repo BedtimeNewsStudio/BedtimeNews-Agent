@@ -842,7 +842,7 @@ CRITICAL REQUIREMENTS:
 
 Guidelines:
 1. **Ground your response in the documents**: Only make claims supported by the retrieved content
-2. **Name the source id only**: A passage's Source line is its id. Two topics from one episode are two sources. When you attribute a claim, copy that id between double square brackets. Do not wrap the citation in backticks, and do not write the episode title, a URL, or a markdown link. Those are added after you answer.
+2. **Name the source id only**: A passage's Source line is its id. Two topics from one episode are two sources. When you attribute a claim, copy that id exactly as shown, including its `.md` suffix and any `#section`, between double square brackets. Do not wrap the citation in backticks, and do not write the episode title, a URL, or a markdown link. Those are added after you answer.
 3. **Be specific**: Use the examples and arguments from the passage.
 4. **Synthesize**: Combine information from ALL documents - don't just summarize individual documents
 5. **Be honest**: If the documents don't contain enough information to answer, say so clearly. This is about gaps in what the user asked; it is not a reason to report on off-topic passages the documents happen to contain.
@@ -1210,13 +1210,25 @@ def _lookup_citation(name: str, citation_map: dict[str, str]) -> str | None:
     An unknown ``#anchor`` falls back to that episode's retrieved section, not
     to the start of the transcript.
     """
-    found = citation_map.get(name)
-    if found is not None:
-        return found
+    for candidate in (name, _with_md_suffix(name)):
+        found = citation_map.get(candidate)
+        if found is not None:
+            return found
     base, sep, _anchor = name.partition("#")
     if sep:
-        return citation_map.get(base)
+        return citation_map.get(base) or citation_map.get(_with_md_suffix(base))
     return None
+
+
+def _with_md_suffix(name: str) -> str:
+    """``URI`` or ``URI#anchor`` -> the same with the ``.md`` the index keeps.
+
+    The model often drops the suffix when it copies a Source id.
+    """
+    base, sep, anchor = name.partition("#")
+    if "/" not in base or base.endswith(".md"):
+        return name
+    return f"{base}.md{sep}{anchor}"
 
 
 def _source_list_links(citation_map: dict[str, str]) -> list[str]:
