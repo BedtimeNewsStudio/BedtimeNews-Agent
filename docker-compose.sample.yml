@@ -12,7 +12,7 @@ services:
     environment:
       POSTGRES_DB: postgres_local
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres_user} -d postgres_local"]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres_user} -d postgres_local" ]
 
   indexer:
     container_name: bedtimenews-sample-indexer

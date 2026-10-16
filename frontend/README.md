@@ -70,21 +70,21 @@ Frontend：
 
 ## 端点
 
-| 方法 | 路径                                  | 用途                           |
-| ---- | ------------------------------------- | ------------------------------ |
-| GET  | `/`                                   | 首页：带规范链接与 SEO 元数据渲染的 SPA 外壳（`static/index.html`） |
-| GET  | `/transcripts?channel={channel}`      | 服务端渲染的栏目列表（不带 channel 的 `/transcripts`：`308` 到 `/`） |
-| GET  | `/transcripts/{doc_id}`               | 服务端渲染的文稿页             |
-| GET  | `/api/starters`                       | 示例问题 JSON（`categories`）  |
-| GET  | `/api/transcripts`                    | 文稿索引（代理 agent）         |
-| GET  | `/api/transcripts/{doc_id}`           | 单篇文稿（代理 agent；格式不合法的 `doc_id` 直接返回 `404`，不调用 agent） |
-| POST | `/chat`                               | 将 agent 的 SSE 流代理给浏览器（请求体超过 128 KiB：`413`） |
-| GET  | `/healthz`                            | 仅 `web` 自身的存活检查（从不调用 Agent）：`status`、`version`、`instance` |
-| GET  | `/readyz`                             | 本实例的就绪检查：Agent `/health` 的状态码（200 / 503），响应体经裁剪 |
-| GET  | `/index.html`                         | `308` 重定向到 `/`             |
-| GET  | `/robots.txt`                         | 允许全部抓取，并指向 sitemap   |
-| GET  | `/sitemap.xml`                        | 首页、各栏目列表及全部文稿     |
-| GET  | `/s/{short_id}`                       | 短链接，`302` 跳转到文稿       |
+| 方法 | 路径                             | 用途                                                                       |
+| ---- | -------------------------------- | -------------------------------------------------------------------------- |
+| GET  | `/`                              | 首页：带规范链接与 SEO 元数据渲染的 SPA 外壳（`static/index.html`）        |
+| GET  | `/transcripts?channel={channel}` | 服务端渲染的栏目列表（不带 channel 的 `/transcripts`：`308` 到 `/`）       |
+| GET  | `/transcripts/{doc_id}`          | 服务端渲染的文稿页                                                         |
+| GET  | `/api/starters`                  | 示例问题 JSON（`categories`）                                              |
+| GET  | `/api/transcripts`               | 文稿索引（代理 agent）                                                     |
+| GET  | `/api/transcripts/{doc_id}`      | 单篇文稿（代理 agent；格式不合法的 `doc_id` 直接返回 `404`，不调用 agent） |
+| POST | `/chat`                          | 将 agent 的 SSE 流代理给浏览器（请求体超过 128 KiB：`413`）                |
+| GET  | `/healthz`                       | 仅 `web` 自身的存活检查（从不调用 Agent）：`status`、`version`、`instance` |
+| GET  | `/readyz`                        | 本实例的就绪检查：Agent `/health` 的状态码（200 / 503），响应体经裁剪      |
+| GET  | `/index.html`                    | `308` 重定向到 `/`                                                         |
+| GET  | `/robots.txt`                    | 允许全部抓取，并指向 sitemap                                               |
+| GET  | `/sitemap.xml`                   | 首页、各栏目列表及全部文稿                                                 |
+| GET  | `/s/{short_id}`                  | 短链接，`302` 跳转到文稿                                                   |
 
 ## 开发流程
 
@@ -121,14 +121,14 @@ AGENT_BACKEND_HOST=localhost AGENT_BACKEND_PORT=8000 \
 
 ## 配置
 
-| 变量                 | 默认值  | 用途                         |
-| -------------------- | ------- | ---------------------------- |
-| `AGENT_BACKEND_HOST` | `agent` | Docker 网络上的 agent 服务名 |
-| `AGENT_BACKEND_PORT` | `8000`  | Agent 端口                   |
-| `APP_PORT` / `FRONTEND_PORT` | `8080` | Frontend 发布到的宿主机端口：蓝绿部署时每个实例用 `APP_PORT`，未设置时回退为 `.env` 中的 `FRONTEND_PORT` |
-| `APP_VERSION`        | （空）  | 页头与 `/healthz` 显示的版本；compose 取自 `APP_IMAGE_TAG`，未设置时回退为 `IMAGE_TAG`（`latest`/空时回退为包版本） |
-| `APP_INSTANCE`       | `local` | `/healthz` 报告的实例标签（蓝绿部署时为 compose 项目名） |
-| `PUBLIC_BASE_URL`    | `https://bedtime.blog` | canonical、sitemap 与 robots 中 URL 的源站 |
+| 变量                         | 默认值                 | 用途                                                                                                                |
+| ---------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `AGENT_BACKEND_HOST`         | `agent`                | Docker 网络上的 agent 服务名                                                                                        |
+| `AGENT_BACKEND_PORT`         | `8000`                 | Agent 端口                                                                                                          |
+| `APP_PORT` / `FRONTEND_PORT` | `8080`                 | Frontend 发布到的宿主机端口：蓝绿部署时每个实例用 `APP_PORT`，未设置时回退为 `.env` 中的 `FRONTEND_PORT`            |
+| `APP_VERSION`                | （空）                 | 页头与 `/healthz` 显示的版本；compose 取自 `APP_IMAGE_TAG`，未设置时回退为 `IMAGE_TAG`（`latest`/空时回退为包版本） |
+| `APP_INSTANCE`               | `local`                | `/healthz` 报告的实例标签（蓝绿部署时为 compose 项目名）                                                            |
+| `PUBLIC_BASE_URL`            | `https://bedtime.blog` | canonical、sitemap 与 robots 中 URL 的源站                                                                          |
 
 ### 健康检查端点
 

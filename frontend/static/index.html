@@ -3,7 +3,8 @@
 
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#212121" id="theme-color-meta" />
   <title>__PAGE_TITLE__</title>
   <meta name="description" content="__PAGE_DESCRIPTION__" />
@@ -70,10 +71,13 @@
         <!-- Dark mode shows sun (switch to light); light mode shows moon. -->
         <svg class="icon icon-sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
           <circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.75" />
-          <path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M18.4 5.6l-1.6 1.6M7.2 16.8l-1.6 1.6" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
+          <path
+            d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M18.4 5.6l-1.6 1.6M7.2 16.8l-1.6 1.6"
+            fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
         </svg>
         <svg class="icon icon-moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
-          <path d="M19 13.5A7.5 7.5 0 1 1 10.5 5 6 6 0 0 0 19 13.5z" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M19 13.5A7.5 7.5 0 1 1 10.5 5 6 6 0 0 0 19 13.5z" fill="none" stroke="currentColor"
+            stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
       </button>
     </div>
@@ -100,13 +104,14 @@
         <form class="composer-form" id="composer-form">
           <span class="composer-prompt" aria-hidden="true">&gt;</span>
           <label class="sr-only" for="composer-input">输入你的问题</label>
-          <textarea id="composer-input" class="composer-input" rows="1" placeholder="输入你的问题"
-            autocomplete="off" spellcheck="false" enterkeyhint="send"></textarea>
+          <textarea id="composer-input" class="composer-input" rows="1" placeholder="输入你的问题" autocomplete="off"
+            spellcheck="false" enterkeyhint="send"></textarea>
           <button type="submit" class="composer-send" id="composer-send" aria-label="发送问题">
             <!-- Desktop shows the label text; mobile swaps it for icons:
                  up arrow = send, square = stop. -->
             <svg class="icon icon-send" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
-              <path d="M12 19V5M5 12l7-7 7 7" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M12 19V5M5 12l7-7 7 7" fill="none" stroke="currentColor" stroke-width="1.75"
+                stroke-linecap="round" stroke-linejoin="round" />
             </svg>
             <span class="composer-send-label">发送</span>
             <svg class="icon icon-stop" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
@@ -123,33 +128,41 @@
          and inert while closed; app.js drives the rest. -->
     <aside class="reading-pane" id="reading-pane" aria-label="文稿" __READING_INERT__>
       <header class="reading-bar">
-        <button class="reading-back is-slot-hidden" id="reading-back" type="button" aria-label="返回文稿列表" title="返回文稿列表" tabindex="-1" aria-hidden="true">
+        <button class="reading-back is-slot-hidden" id="reading-back" type="button" aria-label="返回文稿列表" title="返回文稿列表"
+          tabindex="-1" aria-hidden="true">
           <svg class="icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
-            <path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
+            <path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="1.75"
+              stroke-linecap="round" />
           </svg>
         </button>
-        <button class="reading-doc-back is-slot-hidden" id="reading-doc-back" type="button" aria-label="返回上一篇文稿" title="返回上一篇文稿" tabindex="-1" aria-hidden="true">
+        <button class="reading-doc-back is-slot-hidden" id="reading-doc-back" type="button" aria-label="返回上一篇文稿"
+          title="返回上一篇文稿" tabindex="-1" aria-hidden="true">
           <svg class="icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
-            <path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+              stroke-linejoin="round" />
           </svg>
         </button>
-        <button class="reading-share is-slot-hidden" id="reading-share" type="button" aria-label="分享" title="分享" aria-haspopup="dialog" aria-expanded="false" aria-controls="share-sheet" tabindex="-1" aria-hidden="true">
+        <button class="reading-share is-slot-hidden" id="reading-share" type="button" aria-label="分享" title="分享"
+          aria-haspopup="dialog" aria-expanded="false" aria-controls="share-sheet" tabindex="-1" aria-hidden="true">
           <svg class="icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
             <circle cx="18" cy="5" r="2.5" fill="none" stroke="currentColor" stroke-width="1.75" />
             <circle cx="6" cy="12" r="2.5" fill="none" stroke="currentColor" stroke-width="1.75" />
             <circle cx="18" cy="19" r="2.5" fill="none" stroke="currentColor" stroke-width="1.75" />
-            <path d="M8.2 10.7l7.6-4.2M8.2 13.3l7.6 4.2" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
+            <path d="M8.2 10.7l7.6-4.2M8.2 13.3l7.6 4.2" fill="none" stroke="currentColor" stroke-width="1.75"
+              stroke-linecap="round" />
           </svg>
         </button>
         <a class="reading-edit is-slot-hidden" id="reading-edit" href="#" target="_blank" rel="noopener noreferrer"
           aria-label="在 GitHub 上编辑文稿" title="在 GitHub 上编辑" tabindex="-1" aria-hidden="true">
           <svg class="icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
-            <path d="M14.5 5.5l4 4M5 15.5V19h3.5L18.5 9 14.5 5 5 14.5z" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M14.5 5.5l4 4M5 15.5V19h3.5L18.5 9 14.5 5 5 14.5z" fill="none" stroke="currentColor"
+              stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" />
           </svg>
         </a>
         <button class="reading-close" id="reading-close" type="button" aria-label="关闭文稿面板" title="关闭文稿面板">
           <svg class="icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
-            <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
+            <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="1.75"
+              stroke-linecap="round" />
           </svg>
         </button>
       </header>
@@ -158,8 +171,8 @@
           <section class="archive-view" id="archive-view" __ARCHIVE_HIDDEN__ aria-labelledby="archive-title">
             <header class="archive-head">
               <h1 id="archive-title">__ARCHIVE_TITLE__</h1>
-              <input class="archive-search" id="archive-search" type="search" placeholder="输入标题或期号"
-                aria-label="输入标题或期号" autocomplete="off" />
+              <input class="archive-search" id="archive-search" type="search" placeholder="输入标题或期号" aria-label="输入标题或期号"
+                autocomplete="off" />
             </header>
             <div class="archive-groups" id="archive-groups">__ARCHIVE_GROUPS__</div>
             <p class="archive-state" id="archive-state" role="status" __ARCHIVE_STATE_HIDDEN__>__ARCHIVE_STATE__</p>
@@ -207,12 +220,18 @@
           <span class="signal-toggle" aria-hidden="true"></span>
         </button>
         <ol class="signal-stages">
-          <li class="stage-item" data-stage="condense"><span class="stage-name">理解</span><span class="stage-line"></span></li>
-          <li class="stage-item" data-stage="route"><span class="stage-name">路由</span><span class="stage-line"></span></li>
-          <li class="stage-item" data-stage="rewrite"><span class="stage-name">优化</span><span class="stage-line"></span></li>
-          <li class="stage-item" data-stage="retrieve"><span class="stage-name">检索</span><span class="stage-line"></span></li>
-          <li class="stage-item" data-stage="grade"><span class="stage-name">评分</span><span class="stage-line"></span></li>
-          <li class="stage-item" data-stage="generate"><span class="stage-name">生成</span><span class="stage-line"></span></li>
+          <li class="stage-item" data-stage="condense"><span class="stage-name">理解</span><span
+              class="stage-line"></span></li>
+          <li class="stage-item" data-stage="route"><span class="stage-name">路由</span><span class="stage-line"></span>
+          </li>
+          <li class="stage-item" data-stage="rewrite"><span class="stage-name">优化</span><span class="stage-line"></span>
+          </li>
+          <li class="stage-item" data-stage="retrieve"><span class="stage-name">检索</span><span
+              class="stage-line"></span></li>
+          <li class="stage-item" data-stage="grade"><span class="stage-name">评分</span><span class="stage-line"></span>
+          </li>
+          <li class="stage-item" data-stage="generate"><span class="stage-name">生成</span><span
+              class="stage-line"></span></li>
         </ol>
       </div>
       <div class="answer" hidden>
@@ -220,8 +239,10 @@
         <div class="answer-actions" hidden>
           <button type="button" class="answer-copy" aria-label="复制 Markdown">
             <svg class="icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
-              <rect x="8.25" y="3.5" width="11.25" height="14" rx="2.25" fill="none" stroke="currentColor" stroke-width="1.75" />
-              <rect x="4.5" y="6.5" width="11.25" height="14" rx="2.25" fill="none" stroke="currentColor" stroke-width="1.75" />
+              <rect x="8.25" y="3.5" width="11.25" height="14" rx="2.25" fill="none" stroke="currentColor"
+                stroke-width="1.75" />
+              <rect x="4.5" y="6.5" width="11.25" height="14" rx="2.25" fill="none" stroke="currentColor"
+                stroke-width="1.75" />
             </svg>
             <span class="answer-copy-label">复制</span>
           </button>
@@ -241,8 +262,10 @@
         <button class="share-action" id="share-copy" type="button">
           <span class="share-action-icon" aria-hidden="true">
             <svg class="icon" viewBox="0 0 24 24" width="20" height="20" focusable="false">
-              <rect x="8.25" y="3.5" width="11.25" height="14" rx="2.25" fill="none" stroke="currentColor" stroke-width="1.75" />
-              <rect x="4.5" y="6.5" width="11.25" height="14" rx="2.25" fill="var(--share-icon-well)" stroke="currentColor" stroke-width="1.75" />
+              <rect x="8.25" y="3.5" width="11.25" height="14" rx="2.25" fill="none" stroke="currentColor"
+                stroke-width="1.75" />
+              <rect x="4.5" y="6.5" width="11.25" height="14" rx="2.25" fill="var(--share-icon-well)"
+                stroke="currentColor" stroke-width="1.75" />
             </svg>
           </span>
           <span class="share-action-label">复制链接</span>
@@ -251,7 +274,8 @@
           <span class="share-action-icon" aria-hidden="true">
             <svg class="icon" viewBox="0 0 24 24" width="20" height="20" focusable="false">
               <path d="M12 4v11" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
-              <path d="M8 11.5l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M8 11.5l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+                stroke-linejoin="round" />
               <path d="M5.5 18.5h13" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
             </svg>
           </span>

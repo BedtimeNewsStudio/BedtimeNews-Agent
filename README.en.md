@@ -263,9 +263,9 @@ and requires isolated `POSTGRES_DATA_DIR` / `INDEXER_DATA_DIR` paths.
 The stack is two layers
 ([design](docs/designs/20261008_blue-green-deployment.md)):
 
-| Layer       | Compose file       | Services            | Upgrade                                  |
-| ----------- | ------------------ | ------------------- | ---------------------------------------- |
-| Data        | `compose.data.yml` | `postgres`, indexer | In place                                 |
+| Layer       | Compose file       | Services            | Upgrade                                      |
+| ----------- | ------------------ | ------------------- | -------------------------------------------- |
+| Data        | `compose.data.yml` | `postgres`, indexer | In place                                     |
 | Application | `compose.app.yml`  | `agent`, `web`      | Blue-green: one compose project per instance |
 
 `docker-compose.yml` includes both and is what `docker compose up -d` runs for

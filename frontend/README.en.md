@@ -84,21 +84,21 @@ The frontend:
 
 ## Endpoints
 
-| Method | Path                                  | Purpose                              |
-| ------ | ------------------------------------- | ------------------------------------ |
-| GET    | `/`                                   | Home page: the SPA shell (`static/index.html`) rendered with canonical/SEO metadata |
-| GET    | `/transcripts?channel={channel}`      | Server-rendered channel list (`/transcripts` without a channel: `308` to `/`) |
-| GET    | `/transcripts/{doc_id}`               | Server-rendered transcript page      |
-| GET    | `/api/starters`                       | Sample questions JSON (`categories`) |
-| GET    | `/api/transcripts`                    | Transcript index (proxied)           |
-| GET    | `/api/transcripts/{doc_id}`           | One transcript (proxied; a malformed `doc_id` is a `404` without calling the agent) |
-| POST   | `/chat`                               | Proxies the agent SSE stream (body over 128 KiB: `413`) |
-| GET    | `/healthz`                            | Liveness of `web` alone (never calls the agent): `status`, `version`, `instance` |
-| GET    | `/readyz`                             | Readiness of this instance: status code of the agent's `/health` (200 / 503), trimmed body |
-| GET    | `/index.html`                         | `308` redirect to `/`                |
-| GET    | `/robots.txt`                         | Allows all; points at the sitemap    |
-| GET    | `/sitemap.xml`                        | Home, channel lists, every transcript |
-| GET    | `/s/{short_id}`                       | Short link, `302` to the transcript  |
+| Method | Path                             | Purpose                                                                                    |
+| ------ | -------------------------------- | ------------------------------------------------------------------------------------------ |
+| GET    | `/`                              | Home page: the SPA shell (`static/index.html`) rendered with canonical/SEO metadata        |
+| GET    | `/transcripts?channel={channel}` | Server-rendered channel list (`/transcripts` without a channel: `308` to `/`)              |
+| GET    | `/transcripts/{doc_id}`          | Server-rendered transcript page                                                            |
+| GET    | `/api/starters`                  | Sample questions JSON (`categories`)                                                       |
+| GET    | `/api/transcripts`               | Transcript index (proxied)                                                                 |
+| GET    | `/api/transcripts/{doc_id}`      | One transcript (proxied; a malformed `doc_id` is a `404` without calling the agent)        |
+| POST   | `/chat`                          | Proxies the agent SSE stream (body over 128 KiB: `413`)                                    |
+| GET    | `/healthz`                       | Liveness of `web` alone (never calls the agent): `status`, `version`, `instance`           |
+| GET    | `/readyz`                        | Readiness of this instance: status code of the agent's `/health` (200 / 503), trimmed body |
+| GET    | `/index.html`                    | `308` redirect to `/`                                                                      |
+| GET    | `/robots.txt`                    | Allows all; points at the sitemap                                                          |
+| GET    | `/sitemap.xml`                   | Home, channel lists, every transcript                                                      |
+| GET    | `/s/{short_id}`                  | Short link, `302` to the transcript                                                        |
 
 ## Development Workflow
 
@@ -135,14 +135,14 @@ AGENT_BACKEND_HOST=localhost AGENT_BACKEND_PORT=8000 \
 
 ## Configuration
 
-| Variable             | Default | Purpose                                  |
-| -------------------- | ------- | ---------------------------------------- |
-| `AGENT_BACKEND_HOST` | `agent` | Agent service name on the Docker network |
-| `AGENT_BACKEND_PORT` | `8000`  | Agent port                               |
-| `APP_PORT` / `FRONTEND_PORT` | `8080` | Host port the frontend is published on: `APP_PORT` per instance (blue-green), falling back to `FRONTEND_PORT` in `.env` |
-| `APP_VERSION`        | (empty) | Masthead and `/healthz` version; compose sets it from `APP_IMAGE_TAG`, falling back to `IMAGE_TAG` (`latest`/empty falls back to the package version) |
-| `APP_INSTANCE`       | `local` | Instance label reported by `/healthz` (the compose project name in blue-green deployments) |
-| `PUBLIC_BASE_URL`    | `https://bedtime.blog` | Origin for canonical, sitemap and robots URLs |
+| Variable                     | Default                | Purpose                                                                                                                                               |
+| ---------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENT_BACKEND_HOST`         | `agent`                | Agent service name on the Docker network                                                                                                              |
+| `AGENT_BACKEND_PORT`         | `8000`                 | Agent port                                                                                                                                            |
+| `APP_PORT` / `FRONTEND_PORT` | `8080`                 | Host port the frontend is published on: `APP_PORT` per instance (blue-green), falling back to `FRONTEND_PORT` in `.env`                               |
+| `APP_VERSION`                | (empty)                | Masthead and `/healthz` version; compose sets it from `APP_IMAGE_TAG`, falling back to `IMAGE_TAG` (`latest`/empty falls back to the package version) |
+| `APP_INSTANCE`               | `local`                | Instance label reported by `/healthz` (the compose project name in blue-green deployments)                                                            |
+| `PUBLIC_BASE_URL`            | `https://bedtime.blog` | Origin for canonical, sitemap and robots URLs                                                                                                         |
 
 ### Health endpoints
 

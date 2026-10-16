@@ -245,10 +245,10 @@ Detalles: [indexer/README.es-ES.md](indexer/README.es-ES.md#actualización-desde
 
 La pila tiene dos capas ([diseño](docs/designs/20261008_blue-green-deployment.md)):
 
-| Capa       | Archivo compose    | Servicios              | Actualización                                 |
-| ---------- | ------------------ | ---------------------- | --------------------------------------------- |
-| Datos      | `compose.data.yml` | `postgres`, indexador  | En el sitio                                   |
-| Aplicación | `compose.app.yml`  | `agent`, `web`         | Blue-green: un proyecto compose por instancia |
+| Capa       | Archivo compose    | Servicios             | Actualización                                 |
+| ---------- | ------------------ | --------------------- | --------------------------------------------- |
+| Datos      | `compose.data.yml` | `postgres`, indexador | En el sitio                                   |
+| Aplicación | `compose.app.yml`  | `agent`, `web`        | Blue-green: un proyecto compose por instancia |
 
 `docker-compose.yml` incluye ambas y es lo que ejecuta `docker compose up -d` al autoalojar; ahí no cambia nada. Una actualización blue-green arranca la nueva versión como un segundo proyecto de aplicación en otro puerto, junto a la que está en marcha y con la misma base de datos, espera a su `/readyz`, cambia el proxy de borde, deja que la instancia antigua se vacíe y la retira con `down -v`. Como los datos servidos son snapshots inmutables que cada agente selecciona por sí mismo, dos versiones pueden funcionar a la vez sin reglas de compatibilidad de esquema.
 

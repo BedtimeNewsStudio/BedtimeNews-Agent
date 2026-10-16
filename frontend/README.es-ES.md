@@ -99,21 +99,21 @@ El frontend:
 
 ## Endpoints
 
-| Método | Ruta                                  | Propósito                                        |
-| ------ | ------------------------------------- | ------------------------------------------------ |
-| GET    | `/`                                   | Inicio: el armazón de la SPA (`static/index.html`) con metadatos canónicos/SEO |
-| GET    | `/transcripts?channel={channel}`      | Lista de un programa renderizada en el servidor (`/transcripts` sin programa: `308` a `/`) |
-| GET    | `/transcripts/{doc_id}`               | Página de transcripción renderizada en el servidor |
-| GET    | `/api/starters`                       | JSON de preguntas de muestra (`categories`)      |
-| GET    | `/api/transcripts`                    | Índice de transcripciones (proxy)                |
-| GET    | `/api/transcripts/{doc_id}`           | Una transcripción (proxy; un `doc_id` mal formado da `404` sin llamar al agente) |
-| POST   | `/chat`                               | Hace proxy del flujo SSE del agente al navegador (cuerpo de más de 128 KiB: `413`) |
-| GET    | `/healthz`                            | Vitalidad de `web` por sí solo (nunca llama al agente): `status`, `version`, `instance` |
-| GET    | `/readyz`                             | Disponibilidad de esta instancia: código de estado del `/health` del agente (200 / 503), cuerpo recortado |
-| GET    | `/index.html`                         | Redirección `308` a `/`                          |
-| GET    | `/robots.txt`                         | Permite todo; apunta al sitemap                  |
-| GET    | `/sitemap.xml`                        | Inicio, listas por programa y cada transcripción |
-| GET    | `/s/{short_id}`                       | Enlace corto, `302` a la transcripción           |
+| Método | Ruta                             | Propósito                                                                                                 |
+| ------ | -------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| GET    | `/`                              | Inicio: el armazón de la SPA (`static/index.html`) con metadatos canónicos/SEO                            |
+| GET    | `/transcripts?channel={channel}` | Lista de un programa renderizada en el servidor (`/transcripts` sin programa: `308` a `/`)                |
+| GET    | `/transcripts/{doc_id}`          | Página de transcripción renderizada en el servidor                                                        |
+| GET    | `/api/starters`                  | JSON de preguntas de muestra (`categories`)                                                               |
+| GET    | `/api/transcripts`               | Índice de transcripciones (proxy)                                                                         |
+| GET    | `/api/transcripts/{doc_id}`      | Una transcripción (proxy; un `doc_id` mal formado da `404` sin llamar al agente)                          |
+| POST   | `/chat`                          | Hace proxy del flujo SSE del agente al navegador (cuerpo de más de 128 KiB: `413`)                        |
+| GET    | `/healthz`                       | Vitalidad de `web` por sí solo (nunca llama al agente): `status`, `version`, `instance`                   |
+| GET    | `/readyz`                        | Disponibilidad de esta instancia: código de estado del `/health` del agente (200 / 503), cuerpo recortado |
+| GET    | `/index.html`                    | Redirección `308` a `/`                                                                                   |
+| GET    | `/robots.txt`                    | Permite todo; apunta al sitemap                                                                           |
+| GET    | `/sitemap.xml`                   | Inicio, listas por programa y cada transcripción                                                          |
+| GET    | `/s/{short_id}`                  | Enlace corto, `302` a la transcripción                                                                    |
 
 ## Flujo de Desarrollo
 
@@ -151,14 +151,14 @@ AGENT_BACKEND_HOST=localhost AGENT_BACKEND_PORT=8000 \
 
 ## Configuración
 
-| Variable             | Por defecto | Propósito                                    |
-| -------------------- | ----------- | -------------------------------------------- |
-| `AGENT_BACKEND_HOST` | `agent`     | Nombre del servicio agente en la red Docker  |
-| `AGENT_BACKEND_PORT` | `8000`      | Puerto del agente                            |
-| `APP_PORT` / `FRONTEND_PORT` | `8080` | Puerto del host donde se publica el frontend: `APP_PORT` por instancia (blue-green), o `FRONTEND_PORT` de `.env` si no se define |
-| `APP_VERSION`        | (vacío)     | Versión en la cabecera y en `/healthz`; compose la toma de `APP_IMAGE_TAG`, o de `IMAGE_TAG` si no se define (`latest`/vacío recurre a la versión del paquete) |
-| `APP_INSTANCE`       | `local`     | Etiqueta de instancia que informa `/healthz` (el nombre del proyecto compose en despliegues blue-green) |
-| `PUBLIC_BASE_URL`    | `https://bedtime.blog` | Origen de las URL canónicas, del sitemap y de robots |
+| Variable                     | Por defecto            | Propósito                                                                                                                                                      |
+| ---------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AGENT_BACKEND_HOST`         | `agent`                | Nombre del servicio agente en la red Docker                                                                                                                    |
+| `AGENT_BACKEND_PORT`         | `8000`                 | Puerto del agente                                                                                                                                              |
+| `APP_PORT` / `FRONTEND_PORT` | `8080`                 | Puerto del host donde se publica el frontend: `APP_PORT` por instancia (blue-green), o `FRONTEND_PORT` de `.env` si no se define                               |
+| `APP_VERSION`                | (vacío)                | Versión en la cabecera y en `/healthz`; compose la toma de `APP_IMAGE_TAG`, o de `IMAGE_TAG` si no se define (`latest`/vacío recurre a la versión del paquete) |
+| `APP_INSTANCE`               | `local`                | Etiqueta de instancia que informa `/healthz` (el nombre del proyecto compose en despliegues blue-green)                                                        |
+| `PUBLIC_BASE_URL`            | `https://bedtime.blog` | Origen de las URL canónicas, del sitemap y de robots                                                                                                           |
 
 ### Endpoints de salud
 
