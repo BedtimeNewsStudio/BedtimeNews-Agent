@@ -136,6 +136,7 @@ Keys:
 - `<URI>#<anchor>` and `<standardised title>#<anchor>`: that section, only when this retrieval returned the pair.
 - The bare `<URI>` and the bare standardised title: when this retrieval has any section of that episode, the strongest section by similarity, not the start of the transcript. Passage repair may replace it with another retrieved section of the same episode when the text before the citation matches that heading. When the text matches none, the link still opens a retrieved section. An episode with no topic anchor stays a whole-document link.
 - An invented `#anchor` falls back to that episode's retrieved section, not to the article start.
+- A `<URI>` written without its `.md` suffix, with or without `#anchor`, resolves as if the suffix were there. The model often drops it when it copies a source id. Both the server (`_lookup_citation`) and the frontend (`linkifyCitations`) add it before a lookup fails.
 
 Streaming `citation_urls` uses the same keys. The bare title therefore already carries a section URL while the answer is streaming. Server-side repair still runs after generation and can choose a different retrieved section per occurrence. The frontend `CITATION_RE` accepts a `#` inside `[[...]]`. Do not cut the token at `#`. A citation that is already `[[标题]](url#fragment)` is left as written: looking the bare title up again would replace that fragment.
 
@@ -211,7 +212,7 @@ Give the anchor function its own tests, in its own test module. The chunker and 
 `agent/tests/test_graph_smoke.py`
 
 - `test_citation_map_is_keyed_by_uri_and_title`: two chunks with the same `doc_id` and different anchors put `URI#anchor` on the two sections. The label on both is the standardised title, with no heading suffix. The bare URI and the bare title open the strongest section, not the start of the transcript.
-- `test_citation_repair_covers_every_spelling`: `[[URI#anchor]]`, `[[title#anchor]]`, the bare URI, the bare title, and `《title》` all open that section when the retrieval has one. An invented anchor opens a retrieved section of that episode, not the article start. An unknown `《三体》` stays prose.
+- `test_citation_repair_covers_every_spelling`: `[[URI#anchor]]`, `[[title#anchor]]`, the bare URI (with or without `.md`), the bare title, and `《title》` all open that section when the retrieval has one. An invented anchor opens a retrieved section of that episode, not the article start. An unknown `《三体》` stays prose.
 - `test_bare_title_opens_the_heading_the_paragraph_is_about`: when several sections were retrieved, the text before a bare title picks the matching heading. When the text matches none, the link still opens the strongest retrieved section.
 - `test_heading_text_is_not_a_citation_key`: the bare heading is not a citation key. The source id is `URI#anchor`. A preamble's source id is the URI.
 - `test_citations_event_carries_titles_and_urls` and `test_uri_citations_are_rewritten_into_titled_links`: a chunk with `heading_anchor` makes the bare URI and the bare title carry that section URL. The label stays the standardised title. An empty anchor is a whole-document link.
