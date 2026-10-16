@@ -107,16 +107,15 @@ def test_previous_lineage_targets_the_old_chunking_in_this_space():
 
 
 def test_previous_lineage_refuses_without_a_published_current_snapshot():
+    snapshots = [snap("old", 10, OTHER)]
     with pytest.raises(catalog.PreviousLineageBlocked):
-        catalog.previous_lineage_targets([snap("old", 10, OTHER)], CURRENT)
+        catalog.previous_lineage_targets(snapshots, CURRENT)
 
 
 def test_previous_lineage_refuses_a_pinned_old_snapshot():
+    snapshots = [snap("new", 1), snap("old", 10, OTHER, pinned=True)]
     with pytest.raises(catalog.PreviousLineageBlocked):
-        catalog.previous_lineage_targets(
-            [snap("new", 1), snap("old", 10, OTHER, pinned=True)],
-            CURRENT,
-        )
+        catalog.previous_lineage_targets(snapshots, CURRENT)
 
 
 def test_only_snapshot_schemas_are_droppable():

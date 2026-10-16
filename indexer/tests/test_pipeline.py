@@ -204,7 +204,8 @@ def test_first_build_is_full_then_no_change(corpus, fake_embed, query):
     result = build()
     assert result.result == "published"
     [(sid, schema, st, _fp, stats)] = snapshot_rows(query)
-    assert (sid, st) == (result.snapshot_id, "published")
+    assert sid == result.snapshot_id
+    assert st == "published"
     assert stats["build"] == "full"
     assert stats["transcripts"] == 4
     assert stats["embedded_new"] == stats["chunks"]
@@ -285,8 +286,8 @@ def test_title_only_change_makes_no_embedding_calls(corpus, fake_embed, query):
     )[0]
     assert title == "新标题"
     assert markdown.startswith("# 新标题")
-    assert "附录也改了" in markdown
-    assert "附录也改了" in html
+    assert markdown.find("附录也改了") >= 0
+    assert html.find("附录也改了") >= 0
 
 
 def test_chunker_bump_forces_full_build_reusing_vectors(
@@ -312,7 +313,8 @@ def test_failure_in_phase_b_leaves_nothing_behind(
     corpus, fake_embed, query, monkeypatch
 ):
     build()
-    before = (snapshot_rows(query), snapshot_schemas(query))
+    rows_before = snapshot_rows(query)
+    schemas_before = snapshot_schemas(query)
     corpus.write("ShuiQianXiaoXi/0001-0100/0003.md", transcript("doc3-edited"))
 
     def explode(*_args, **_kwargs):
@@ -321,7 +323,8 @@ def test_failure_in_phase_b_leaves_nothing_behind(
     monkeypatch.setattr(builder, "create_hnsw_sql", explode)
     result = build()
     assert result.result == "failed"
-    assert (snapshot_rows(query), snapshot_schemas(query)) == before
+    assert snapshot_rows(query) == rows_before
+    assert snapshot_schemas(query) == schemas_before
     assert status(query)[0] == "failed"
     assert status(query)[2] == 1
 
@@ -348,7 +351,7 @@ def test_retiring_the_base_mid_build_abandons_the_build(
     result = build()
     assert result.result == "failed"
     assert result.error is not None
-    assert "retired" in result.error
+    assert result.error.find("retired") >= 0
     rows = snapshot_rows(query)
     assert [(r[0], r[2]) for r in rows] == [(base_id, "retired")]
 
@@ -364,7 +367,7 @@ def test_self_check_rejects_a_model_mismatch(corpus, fake_embed, query, monkeypa
     result = build()
     assert result.result == "failed"
     assert result.error is not None
-    assert "re-embedded sample disagrees" in result.error
+    assert result.error.find("re-embedded sample disagrees") >= 0
     assert snapshot_rows(query) == []
     assert snapshot_schemas(query) == set()
 
@@ -376,7 +379,7 @@ def test_self_check_rejects_a_transcript_without_chunks(corpus, fake_embed, quer
     result = build()
     assert result.result == "failed"
     assert result.error is not None
-    assert "have no chunks" in result.error
+    assert result.error.find("have no chunks") >= 0
     assert snapshot_rows(query) == []
 
 
@@ -388,7 +391,7 @@ def test_disk_precheck_refuses_to_build(
     result = build()
     assert result.result == "failed"
     assert result.error is not None
-    assert "Disk precheck failed" in result.error
+    assert result.error.find("Disk precheck failed") >= 0
     assert snapshot_rows(query) == []
 
 
@@ -575,7 +578,7 @@ def test_empty_legacy_schema_is_not_adopted(corpus, fake_embed, query):
     query("CREATE EXTENSION IF NOT EXISTS vector")
     query(LEGACY_DDL)
     build()
-    assert "legacy" not in [r[0] for r in snapshot_rows(query)]
+    assert [r[0] for r in snapshot_rows(query)].count("legacy") == 0
 
 
 def test_agent_role_is_read_only(corpus, fake_embed, query, monkeypatch, database):
