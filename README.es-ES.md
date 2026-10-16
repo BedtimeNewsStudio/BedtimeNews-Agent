@@ -70,7 +70,7 @@ PostgreSQL + pgvector.
 
 Alcance de la indexación: solo se indexa la sección `## 正文` (cuerpo) de cada
 transcripción; `## 附录` (apéndice: correcciones y notas de verificación) y la
-línea de metadatos `**发布日期**` quedan fuera de la recuperación. La etiqueta
+línea de metadatos `发布日期 YYYY-MM-DD | ...` quedan fuera de la recuperación. La etiqueta
 de la cita es el título normalizado, y el enlace abre el `##` correspondiente
 del cuerpo. Sin ancla de tema, el enlace abre el inicio de la transcripción.
 

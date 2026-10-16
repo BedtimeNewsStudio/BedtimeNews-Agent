@@ -14,7 +14,7 @@ See the [main README](../README.en.md) for setup instructions, and the [design d
 - **Vector reuse by chunk text**: vectors are reused by `sha256(chunk text)` from the latest snapshot in the same vector space, so full builds (after a chunking or normalization change, a format upgrade, or adoption) only embed text that actually changed
 - **Self-check before publishing**: completeness, a sampled HNSW query, and a sampled re-embedding (cosine ≥ 0.99) guard against broken builds
 - **Scheduled execution**: in-process scheduler with a configurable cron expression (default: hourly); runs that overrun their slot are not caught up, and a run lock prevents concurrent runs
-- **Body-only indexing**: only the span between `## 正文` and `## 附录` is extracted; the title line, the `**发布日期**` metadata line and the appendix's fact-correction notes are all dropped
+- **Body-only indexing**: only the span between `## 正文` and `## 附录` is extracted; the title line, the `发布日期 YYYY-MM-DD | ...` metadata line and the appendix's fact-correction notes are all dropped
 - **URI as doc_id**: a transcript's path relative to `contents/` (with `.md`) is its identifier
 - **Standardised titles**: the upstream `URI映射.md` is parsed and the URI → title mapping written to the snapshot's `documents` table
 - **Smart chunking**: each sibling `##` inside the body is one section, and the text before the first `##` is the preamble; overlap does not cross a section, and a chunk under 50 words is dropped. A `#` or `###` still present in the body rejects that file (it is logged, and it contributes zero chunks)
@@ -214,7 +214,7 @@ Titles come from the upstream `URI映射.md`. A general rule (`{channel}/{bucket
 
 - `doc_id`: transcript URI (primary key)
 - `canonical_title` / `source_title`: standardised title and the transcript's own `#` title
-- `channel`, `publication_date`: channel name and the `**发布日期**` value
+- `channel`, `publication_date`: channel name and the date on the `发布日期 YYYY-MM-DD | ...` header line (the only accepted form: a plain ISO date, optionally followed by `|` and the source links; the bold `**发布日期**` form is not read and leaves the date empty)
 - `body_html`: the rendered page served by the agent's `/transcripts` API. A body topic `h2` carries an `id` equal to its anchor. A projection-version change re-renders and does not re-embed
 - `source_hash`, `projection_version`: re-render triggers (source edits or a renderer change)
 

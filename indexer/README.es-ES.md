@@ -14,7 +14,7 @@ Consulta el [README principal](../README.es-ES.md) para las instrucciones de con
 - **Reutilización de vectores por texto del fragmento**: los vectores se reutilizan por `sha256(texto del fragmento)` desde el último snapshot del mismo espacio vectorial, de modo que las construcciones completas (tras un cambio de fragmentación o normalización, una actualización de formato o la adopción) solo incrustan el texto que realmente cambió
 - **Autocomprobación antes de publicar**: completitud, una consulta HNSW de muestra y una reincrustación de muestra (coseno ≥ 0,99) protegen frente a construcciones defectuosas
 - **Ejecución programada**: planificador en proceso con expresión cron configurable (por defecto: cada hora); las ejecuciones que se exceden de su franja no se recuperan, y un bloqueo de ejecución impide ejecuciones simultáneas
-- **Indexación solo del cuerpo**: solo se extrae el tramo entre `## 正文` y `## 附录`; se descartan la línea del título, la línea de metadatos `**发布日期**` y las notas de corrección del apéndice
+- **Indexación solo del cuerpo**: solo se extrae el tramo entre `## 正文` y `## 附录`; se descartan la línea del título, la línea de metadatos `发布日期 YYYY-MM-DD | ...` y las notas de corrección del apéndice
 - **URI como doc_id**: la ruta de la transcripción relativa a `contents/` (con `.md`) es su identificador
 - **Títulos estandarizados**: se analiza el `URI映射.md` del repositorio de origen y la correspondencia URI → título se escribe en la tabla `documents` del snapshot
 - **Fragmentación inteligente**: cada `##` del mismo nivel dentro del cuerpo es una sección, y el texto anterior al primer `##` es el preámbulo; el solapamiento no cruza una sección, y un fragmento de menos de 50 palabras se descarta. Un `#` o `###` que siga en el cuerpo rechaza ese archivo (se registra y aporta cero fragmentos)
@@ -214,7 +214,7 @@ Los títulos provienen del `URI映射.md` de origen. Una regla general (`{canal}
 
 - `doc_id`: URI de la transcripción (clave primaria)
 - `canonical_title` / `source_title`: título estandarizado y el título `#` propio de la transcripción
-- `channel`, `publication_date`: nombre del canal y el valor de `**发布日期**`
+- `channel`, `publication_date`: nombre del canal y la fecha de la línea de cabecera `发布日期 YYYY-MM-DD | ...` (la única forma aceptada: una fecha ISO sin formato, seguida opcionalmente de `|` y los enlaces de origen; la forma en negrita `**发布日期**` no se lee y deja la fecha vacía)
 - `body_html`: la página renderizada que sirve la API `/transcripts` del agente. Un `h2` de tema del cuerpo lleva un `id` igual a su ancla. Un cambio de versión de proyección vuelve a renderizar y no vuelve a generar embeddings
 - `source_hash`, `projection_version`: disparadores de re-renderizado (ediciones del origen o un cambio del renderizador)
 

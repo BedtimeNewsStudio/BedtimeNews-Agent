@@ -8,7 +8,7 @@ from src.transcript_export import _rewrite_href, project_transcript
 
 TRANSCRIPT = """# 【睡前消息588】城投债四大网红
 
-**发布日期** 2023-05-12 | [YouTube](https://example.com/watch) | [B站](https://www.bilibili.com/video/x)
+发布日期 2023-05-12 | [YouTube](https://example.com/watch) | [B站](https://www.bilibili.com/video/x)
 
 ## 正文
 
@@ -144,18 +144,30 @@ def test_title_extraction_ignores_trailing_whitespace_and_stays_linear():
     assert time.perf_counter() - started < 1.0
 
 
-def test_publication_date_comes_from_the_marker_line_only():
+def test_publication_date_is_read_only_from_the_plain_header_line():
     def date_of(markdown):
         return project_transcript(
-            "ShuiQianXiaoXi/0501-0600/0588.md", markdown.encode(), "标题"
+            "ShuiQianXiaoXi/1001-1100/1075.md", markdown.encode(), "标题"
         ).publication_date
 
-    assert date_of("# 标题\n\n**发布日期** 2026-01-01\n\n正文\n") == "2026-01-01"
-    assert date_of("# 标题\n\n**发布日期**2026-01-01\n") == "2026-01-01"
-    assert date_of("# 标题\n\n**发布日期** 2026-01-01\r\n正文\n") == "2026-01-01"
-    # A value without an ISO date is kept as plain text, with no stray asterisk.
-    assert date_of("# 标题\n\n**发布日期** 待定\n") == "待定"
-    # A marker with nothing after it is no date, and it never takes the next line.
-    assert date_of("# 标题\n\n**发布日期**\n2026-02-02 正文\n") is None
-    assert date_of("# 标题\n\n**发布日期**   \n") is None
-    assert date_of("# 标题\n\n**发布日期**") is None
+    links = "[B站](https://example.com/v) | [YouTube](https://example.com/y)"
+    assert (
+        date_of(f"# 标题\n\n发布日期 2026-07-07 | {links}\n\n## 正文\n") == "2026-07-07"
+    )
+    assert date_of("# 标题\n\n发布日期 2026-07-07\n\n正文\n") == "2026-07-07"
+    assert date_of("# 标题\n\n发布日期   2026-07-07   \n") == "2026-07-07"
+    assert date_of(f"# 标题\r\n\r\n发布日期 2026-07-07 | {links}\r\n") == "2026-07-07"
+    # The bold form is no longer recognised.
+    assert date_of(f"# 标题\n\n**发布日期** 2026-07-07 | {links}\n") is None
+    # No date, no ISO date, or text after the date that is not the link list.
+    assert date_of("# 标题\n\n只有正文\n") is None
+    assert date_of("# 标题\n\n发布日期\n2026-07-07\n") is None
+    assert date_of("# 标题\n\n发布日期 待定\n") is None
+    assert date_of("# 标题\n\n发布日期 2026-07-07 之后补发\n") is None
+    # A body sentence that starts with the same words is not the header.
+    assert date_of("# 标题\n\n发布日期是下周，具体待定。\n") is None
+    # The first header line wins.
+    assert (
+        date_of("# 标题\n\n发布日期 2026-01-01\n\n发布日期 2026-02-02\n")
+        == "2026-01-01"
+    )

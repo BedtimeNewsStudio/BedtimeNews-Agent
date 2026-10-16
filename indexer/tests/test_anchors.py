@@ -76,7 +76,7 @@ def test_chunker_anchor_matches_exported_h2_id():
             "乙" * 60,
         ]
     )
-    markdown = f"# 标题\n\n**发布日期** 2024-01-02\n\n## 正文\n\n{body}\n\n## 附录\n"
+    markdown = f"# 标题\n\n发布日期 2024-01-02\n\n## 正文\n\n{body}\n\n## 附录\n"
     chunks = chunk_document(
         Document(
             file_path=URI,
@@ -103,4 +103,4 @@ def test_copy_columns_list_heading_anchor_after_heading():
 
 
 def _transcript(body: str) -> str:
-    return f"# 标题\n\n**发布日期** 2024-01-02\n\n## 正文\n\n{body}\n\n## 附录\n"
+    return f"# 标题\n\n发布日期 2024-01-02\n\n## 正文\n\n{body}\n\n## 附录\n"

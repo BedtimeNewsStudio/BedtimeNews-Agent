@@ -13,7 +13,7 @@ from src.document_loader import (
 # whose own sub-headings are also level 2, then the 附录 section.
 TRANSCRIPT = """# 【睡前消息588】城投债四大网红，柳州第一
 
-**发布日期** 2023-05-12 | [YouTube](https://example.invalid/x)
+发布日期 2023-05-12 | [YouTube](https://example.invalid/x)
 
 ## 正文
 

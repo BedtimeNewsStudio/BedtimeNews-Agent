@@ -9,8 +9,7 @@ from src.document_loader import BODY_NORMALIZATION_VERSION, clean_text, extract_
 
 def _transcript(body="正文内容", *, title="标题", date="2026-01-01", appendix="订正"):
     return (
-        f"# {title}\n\n**发布日期** {date}\n\n## 正文\n\n{body}"
-        f"\n\n## 附录\n\n{appendix}\n"
+        f"# {title}\n\n发布日期 {date}\n\n## 正文\n\n{body}\n\n## 附录\n\n{appendix}\n"
     )
 
 

@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 #   3: text before a body's first sub-heading is no longer dropped
 BODY_NORMALIZATION_VERSION = 3
 
-# Every transcript is laid out as a `# 标题` line, a `**发布日期**` line, then
+# Every transcript is laid out as a `# 标题` line, a `发布日期 YYYY-MM-DD | ...` line, then
 # exactly one `## 正文` section followed by exactly one `## 附录` section (verified
 # across all 1812 upstream transcripts). Only 正文 is indexed: 附录 holds fact
 # corrections and verification notes about the transcript rather than anything
@@ -71,7 +71,7 @@ def extract_body(content: str, uri: str = "") -> str:
     The body's own sub-headings are `##` too, so the section cannot be delimited
     by "the next heading of the same level" — it runs from the `## 正文` line to
     the `## 附录` line. Everything before 正文 (the `# 标题` line and the
-    `**发布日期**` metadata line) is dropped along with everything from 附录 on.
+    `发布日期 ...` metadata line) is dropped along with everything from 附录 on.
 
     A transcript with no `## 正文` yields an empty string rather than raising:
     the file is then indexed as zero chunks and logged, which is preferable to

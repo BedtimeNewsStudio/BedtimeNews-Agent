@@ -126,7 +126,7 @@ def _body(seed: str, paragraphs: int = 2) -> str:
 
 def transcript(seed: str, *, title: str | None = None, appendix: str = "订正") -> str:
     return (
-        f"# {title or seed}\n\n**发布日期** 2026-01-01\n\n## 正文\n\n{_body(seed)}"
+        f"# {title or seed}\n\n发布日期 2026-01-01\n\n## 正文\n\n{_body(seed)}"
         f"\n\n## 附录\n\n{appendix}\n"
     )
 
@@ -373,9 +373,7 @@ def test_self_check_rejects_a_model_mismatch(corpus, fake_embed, query, monkeypa
 
 
 def test_self_check_rejects_a_transcript_without_chunks(corpus, fake_embed, query):
-    corpus.write(
-        "ShuiQianXiaoXi/0001-0100/0009.md", "# 空\n\n**发布日期** 2026-01-01\n"
-    )
+    corpus.write("ShuiQianXiaoXi/0001-0100/0009.md", "# 空\n\n发布日期 2026-01-01\n")
     result = build()
     assert result.result == "failed"
     assert result.error is not None

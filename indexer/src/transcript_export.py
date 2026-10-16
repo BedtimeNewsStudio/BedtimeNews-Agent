@@ -18,7 +18,8 @@ from .models import TranscriptProjection
 # Bump whenever the stored projection changes so stale rows re-render without
 # touching RAG embeddings (which still key only on normalized ## 正文).
 #   5: topic h2 elements carry the shared heading anchor as id.
-TRANSCRIPT_PROJECTION_VERSION = 5
+#   6: the date is read only from a plain `发布日期 YYYY-MM-DD | ...` header line.
+TRANSCRIPT_PROJECTION_VERSION = 6
 
 _OLD_TRANSCRIPT_HOST = "bedtimenewsstudio.github.io"
 _OLD_TRANSCRIPT_PREFIX = "/BedtimeNews-Transcripts/contents/"
@@ -26,12 +27,15 @@ _OLD_TRANSCRIPT_PREFIX = "/BedtimeNews-Transcripts/contents/"
 # backtracks quadratically on a title line with a long run of trailing spaces.
 # Trailing whitespace is removed by _plain_title.
 _TITLE_RE = re.compile(r"^#[ \t]+([^\r\n]+)", re.MULTILINE)
-# The value is optional and stays on the marker's own line: a date line with
-# nothing after it must not pick up the next line. `\r?` lets CRLF files match.
+# The one header line that carries the publication date:
+#   发布日期 YYYY-MM-DD | [B站](...) | [YouTube](...)
+# A plain ISO date after the label, then the end of the line or a "|" and the
+# source links. Nothing else is a date: the bold `**发布日期**` form is not
+# recognised, and a body sentence that merely starts with these words is not
+# taken for the header.
 _DATE_LINE_RE = re.compile(
-    r"^\*\*发布日期\*\*[ \t]*([^ \t\r\n][^\r\n]*)?\r?$", re.MULTILINE
+    r"^发布日期[ \t]+(\d{4}-\d{2}-\d{2})[ \t]*(?:\|[^\r\n]*)?\r?$", re.MULTILINE
 )
-_ISO_DATE_RE = re.compile(r"\b(\d{4}-\d{2}-\d{2})\b")
 _MARKDOWN_LINK_RE = re.compile(r"\[([^\]]+)\]\([^)]*\)")
 _LEADING_H1_RE = re.compile(r"^\s*#\s+.+?(?:\n+|$)")
 
@@ -98,13 +102,7 @@ def _plain_title(value: str) -> str:
 
 def _publication_date(markdown: str) -> str | None:
     match = _DATE_LINE_RE.search(markdown)
-    if not match:
-        return None
-    value = (match.group(1) or "").strip()
-    if not value:
-        return None
-    date = _ISO_DATE_RE.search(value)
-    return date.group(1) if date else _plain_title(value)
+    return match.group(1) if match else None
 
 
 def _reader_markdown(markdown: str) -> str:
