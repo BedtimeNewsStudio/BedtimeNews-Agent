@@ -106,7 +106,7 @@ def clean_text(text: str) -> str:
     text = text.replace("\r\n", "\n").replace("\r", "\n")
 
     # Remove multiple consecutive blank lines
-    text = re.sub(r"\n\s*\n\s*\n+", "\n\n", text)
+    text = re.sub(r"\n(?:[^\S\n]*\n){2,}", "\n\n", text)
 
     return text.strip()
 

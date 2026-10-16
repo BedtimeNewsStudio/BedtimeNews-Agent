@@ -22,8 +22,15 @@ TRANSCRIPT_PROJECTION_VERSION = 5
 
 _OLD_TRANSCRIPT_HOST = "bedtimenewsstudio.github.io"
 _OLD_TRANSCRIPT_PREFIX = "/BedtimeNews-Transcripts/contents/"
-_TITLE_RE = re.compile(r"^#\s+(.+?)\s*$", re.MULTILINE)
-_DATE_LINE_RE = re.compile(r"^\*\*发布日期\*\*\s*(.+?)\s*$", re.MULTILINE)
+# Character classes instead of a lazy `.+?` followed by `\s*$`: that shape
+# backtracks quadratically on a title line with a long run of trailing spaces.
+# Trailing whitespace is removed by _plain_title.
+_TITLE_RE = re.compile(r"^#[ \t]+([^\r\n]+)", re.MULTILINE)
+# The value is optional and stays on the marker's own line: a date line with
+# nothing after it must not pick up the next line. `\r?` lets CRLF files match.
+_DATE_LINE_RE = re.compile(
+    r"^\*\*发布日期\*\*[ \t]*([^ \t\r\n][^\r\n]*)?\r?$", re.MULTILINE
+)
 _ISO_DATE_RE = re.compile(r"\b(\d{4}-\d{2}-\d{2})\b")
 _MARKDOWN_LINK_RE = re.compile(r"\[([^\]]+)\]\([^)]*\)")
 _LEADING_H1_RE = re.compile(r"^\s*#\s+.+?(?:\n+|$)")
@@ -93,7 +100,9 @@ def _publication_date(markdown: str) -> str | None:
     match = _DATE_LINE_RE.search(markdown)
     if not match:
         return None
-    value = match.group(1).strip()
+    value = (match.group(1) or "").strip()
+    if not value:
+        return None
     date = _ISO_DATE_RE.search(value)
     return date.group(1) if date else _plain_title(value)
 

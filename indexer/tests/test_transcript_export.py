@@ -1,6 +1,7 @@
 """Safe Markdown-to-reader projection tests."""
 
 import hashlib
+import time
 
 from src.anchors import encode_fragment
 from src.transcript_export import _rewrite_href, project_transcript
@@ -121,3 +122,40 @@ def test_projection_handles_missing_title_and_date():
     assert projection.source_title == "标准标题"
     assert projection.publication_date is None
     assert "只有正文" in projection.body_html
+
+
+def test_title_extraction_ignores_trailing_whitespace_and_stays_linear():
+    def title_of(markdown):
+        return project_transcript(
+            "ShuiQianXiaoXi/0501-0600/0588.md", markdown.encode(), "回退标题"
+        ).source_title
+
+    assert title_of("# 标题\n\n正文\n") == "标题"
+    assert title_of("# 标题   \t\n\n正文\n") == "标题"
+    assert title_of("# 标题\r\n\r\n正文\n") == "标题"
+    # A bare "#" line is not a title; the next real one is.
+    assert title_of("#\n# 真标题\n") == "真标题"
+    assert title_of("没有标题\n") == "回退标题"
+
+    # A title line followed by a very long run of spaces used to take seconds
+    # (quadratic backtracking); it must stay fast.
+    started = time.perf_counter()
+    title_of("# T" + " " * 40000 + "x\n")
+    assert time.perf_counter() - started < 1.0
+
+
+def test_publication_date_comes_from_the_marker_line_only():
+    def date_of(markdown):
+        return project_transcript(
+            "ShuiQianXiaoXi/0501-0600/0588.md", markdown.encode(), "标题"
+        ).publication_date
+
+    assert date_of("# 标题\n\n**发布日期** 2026-01-01\n\n正文\n") == "2026-01-01"
+    assert date_of("# 标题\n\n**发布日期**2026-01-01\n") == "2026-01-01"
+    assert date_of("# 标题\n\n**发布日期** 2026-01-01\r\n正文\n") == "2026-01-01"
+    # A value without an ISO date is kept as plain text, with no stray asterisk.
+    assert date_of("# 标题\n\n**发布日期** 待定\n") == "待定"
+    # A marker with nothing after it is no date, and it never takes the next line.
+    assert date_of("# 标题\n\n**发布日期**\n2026-02-02 正文\n") is None
+    assert date_of("# 标题\n\n**发布日期**   \n") is None
+    assert date_of("# 标题\n\n**发布日期**") is None
