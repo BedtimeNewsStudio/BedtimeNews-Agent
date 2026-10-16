@@ -196,8 +196,8 @@ const CITATION_RE = /(?:\[\[([^[\]]+?)\]\]|《([^《》]+?)》)(\([^)]*\))?/g;
 
 // One or more citation links separated only by whitespace. Mirror of the
 // server's _dedupe_citation_runs: each distinct link stays once per run.
-const CITATION_LINK = "\\[\\[[^\\[\\]]+?\\]\\]\\([^()\\s]*\\)";
-const CITATION_RUN_RE = new RegExp(`${CITATION_LINK}(?:\\s*${CITATION_LINK})+`, "g");
+const CITATION_LINK = String.raw`\[\[[^\[\]]+?\]\]\([^()\s]*\)`;
+const CITATION_RUN_RE = new RegExp(String.raw`${CITATION_LINK}(?:\s*${CITATION_LINK})+`, "g");
 const CITATION_LINK_RE = new RegExp(CITATION_LINK, "g");
 
 function dedupeCitationRuns(text) {
@@ -212,7 +212,7 @@ function linkifyCitations(text, urls) {
     const name = bracketName || cjkName;
     // answer_final is already [[标题]](/transcripts/<URI>#<anchor>). The bare
     // title in the map is the whole episode. Replacing it would drop the section.
-    if (trailing && trailing.includes("#")) return whole;
+    if (trailing?.includes("#")) return whole;
     // The model often drops the `.md` the index keeps on a URI.
     const withMd = (n) => (n.includes("/") && !n.endsWith(".md") ? `${n}.md` : n);
     const hash = name.indexOf("#");
@@ -417,7 +417,7 @@ let docHistory = [];
 let suppressDocHistoryPush = false;
 
 function docBackTarget() {
-  return docHistory.length ? docHistory[docHistory.length - 1] : null;
+  return docHistory.length ? docHistory.at(-1) : null;
 }
 
 function transcriptPath(uri) {
@@ -527,7 +527,9 @@ function renderArchive(items = transcriptItems || []) {
   const visible = filtered.sort((a, b) => {
     const ka = archiveSortKey(a);
     const kb = archiveSortKey(b);
-    return ka < kb ? 1 : ka > kb ? -1 : 0;
+    if (ka < kb) return 1;
+    if (ka > kb) return -1;
+    return 0;
   });
   els.archiveGroups.replaceChildren();
 
@@ -669,7 +671,7 @@ function setPanelLevel(level) {
   els.archiveView.hidden = level !== "archive";
   els.readerView.hidden = level !== "reader";
   updateReadingBar();
-  updateShareButton();
+  void updateShareButton();
   updateChannelBar();
 }
 
@@ -835,7 +837,7 @@ function showShareToast(message) {
   // Reflow so re-triggering the class while it is still visible restarts
   // the fade rather than being a no-op.
   els.shareToast.classList.remove("is-visible");
-  void els.shareToast.offsetWidth;
+  els.shareToast.getBoundingClientRect();
   els.shareToast.classList.add("is-visible");
   if (shareToastTimer) clearTimeout(shareToastTimer);
   shareToastTimer = setTimeout(() => {
@@ -876,7 +878,7 @@ function hideShareButton() {
   els.readingShare.setAttribute("aria-hidden", "true");
   els.readingShare.setAttribute("aria-expanded", "false");
   els.readingShare.tabIndex = -1;
-  els.readingShare.removeAttribute("data-share-text");
+  delete els.readingShare.dataset.shareText;
 }
 
 function revealShareButton() {
@@ -905,6 +907,9 @@ async function updateShareButton() {
   }
 }
 
+// Fallback for browsers (notably in-app webviews) where the Clipboard API is
+// missing or rejects the write. execCommand is deprecated but still the only
+// option there, so it stays.
 function copyTextFallback(text) {
   const input = document.createElement("textarea");
   input.value = text;
@@ -913,7 +918,13 @@ function copyTextFallback(text) {
   input.style.left = "-9999px";
   document.body.appendChild(input);
   input.select();
-  const ok = document.execCommand("copy");
+  // Called through a narrow type: lib.dom marks execCommand deprecated, which is
+  // known and accepted here (see the comment above), and the flag would otherwise
+  // sit on this line forever.
+  const legacyDocument = /** @type {{ execCommand: (command: string) => boolean }} */ (
+    document
+  );
+  const ok = legacyDocument.execCommand("copy");
   input.remove();
   if (!ok) throw new Error("execCommand copy failed");
 }
@@ -1052,11 +1063,11 @@ function prepareReader(uri) {
   // Re-trigger the page-in. The element is reused between articles, so the
   // animation has to be dropped and reflowed back on to run again.
   els.readerView.classList.remove("is-entering");
-  void els.readerView.offsetWidth;
+  els.readerView.getBoundingClientRect();
   els.readerView.classList.add("is-entering");
 }
 
-async function showReader(uri, generation) {
+function updateDocHistory(uri) {
   const previousLevel = panelLevel;
   const previousDocId = currentArticle?.doc_id;
   if (suppressDocHistoryPush) {
@@ -1069,6 +1080,25 @@ async function showReader(uri, generation) {
     // Entering the reader from the archive/chat starts a new trail.
     docHistory = [];
   }
+}
+
+function prepareTranscriptLinks(body) {
+  for (const link of body.querySelectorAll("a")) {
+    const href = link.getAttribute("href") || "";
+    if (href.startsWith("/transcripts/")) {
+      link.dataset.route = "";
+    } else if (href.startsWith("#")) {
+      // Footnote refs / backrefs stay inside the reading pane.
+      link.classList.add("transcript-fragment-link");
+    } else if (href) {
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+    }
+  }
+}
+
+async function showReader(uri, generation) {
+  updateDocHistory(uri);
   currentChannel = null;
   setView("browse");
   setPanelLevel("reader");
@@ -1089,7 +1119,7 @@ async function showReader(uri, generation) {
     currentArticle = article;
     currentChannel = article.channel;
     updateReadingBar();
-    updateShareButton();
+    void updateShareButton();
     updateChannelBar();
     // Same rule as the server's _display_title, so the tab title doesn't change on hydration.
     const displayTitle =
@@ -1098,18 +1128,7 @@ async function showReader(uri, generation) {
     els.readerTitle.textContent = displayTitle;
     els.readerBody.innerHTML = article.body_html;
     delete document.body.dataset.ssrDocId;
-    for (const link of els.readerBody.querySelectorAll("a")) {
-      const href = link.getAttribute("href") || "";
-      if (href.startsWith("/transcripts/")) {
-        link.dataset.route = "";
-      } else if (href.startsWith("#")) {
-        // Footnote refs / backrefs stay inside the reading pane.
-        link.classList.add("transcript-fragment-link");
-      } else if (href) {
-        link.target = "_blank";
-        link.rel = "noopener noreferrer";
-      }
-    }
+    prepareTranscriptLinks(els.readerBody);
     els.readerState.textContent = "";
     scrollToLocationHash();
   } catch (error) {
@@ -1159,11 +1178,9 @@ async function renderRoute() {
     if (uri) {
       // Same transcript, hash only: the article is already in the pane.
       if (
-        currentArticle &&
-        currentArticle.doc_id === uri &&
+        currentArticle?.doc_id === uri &&
         panelLevel === "reader" &&
-        els.readerBody &&
-        els.readerBody.innerHTML.trim()
+        els.readerBody?.innerHTML.trim()
       ) {
         scrollToLocationHash();
         return;
@@ -1205,7 +1222,7 @@ function navigate(href) {
     scrollToLocationHash();
     return;
   }
-  renderRoute();
+  void renderRoute();
 }
 
 /* --------------------------------------------------------- chat pane state */
@@ -1239,10 +1256,10 @@ els.channelBar.addEventListener("click", (event) => {
 els.readingClose.addEventListener("click", () => navigate("/"));
 els.readingShare?.addEventListener("click", () => {
   if (els.shareSheet?.open) closeShareSheet();
-  else openShareSheet();
+  else void openShareSheet();
 });
 els.shareCopy?.addEventListener("click", () => {
-  copyShareLink();
+  void copyShareLink();
 });
 els.shareDownload?.addEventListener("click", () => {
   downloadMarkdown();
@@ -1260,7 +1277,7 @@ els.tabChat?.addEventListener("click", (event) => {
 });
 els.tabArchive?.addEventListener("click", (event) => {
   event.preventDefault();
-  openArchiveTab();
+  void openArchiveTab();
 });
 mobileLayout.addEventListener("change", () => {
   syncChatPanelAccessibility();
@@ -1346,7 +1363,7 @@ function scrollToLocationHash() {
   // wait can be replaced when the fetched article HTML arrives.
   whenReadingPaneSettled(() => {
     const target =
-      (els.readerBody && els.readerBody.querySelector(`#${CSS.escape(id)}`)) ||
+      els.readerBody?.querySelector(`#${CSS.escape(id)}`) ||
       scroller.querySelector(`#${CSS.escape(id)}`);
     if (!target) {
       scroller.scrollTo({ top: 0 });
@@ -1452,7 +1469,7 @@ function addTransmissionTurn() {
 
   const answerCopy = turn.querySelector(".answer-copy");
   answerCopy.addEventListener("click", () => {
-    copyAnswerMarkdown(answerCopy);
+    void copyAnswerMarkdown(answerCopy);
   });
 
   return {
@@ -1938,7 +1955,7 @@ els.form.addEventListener("submit", (e) => {
   const q = els.input.value;
   els.input.value = "";
   autoGrow();
-  askQuestion(q);
+  void askQuestion(q);
 });
 
 els.input.addEventListener("input", autoGrow);
