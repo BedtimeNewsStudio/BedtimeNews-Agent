@@ -1603,7 +1603,32 @@ function recordTurn(question, answer, grounded) {
 function answerMarkdownSource(state) {
   const text = stripFollowupBlock(state.finalText || state.answerText).trim();
   if (!text) return "";
-  return normalizeMarkdown(linkifyCitations(text, state.citationUrls)).trim();
+  return absolutizeSiteLinks(
+    normalizeMarkdown(linkifyCitations(text, state.citationUrls)),
+  ).trim();
+}
+
+// A citation link is a path on this site (`/transcripts/...`), which works in the
+// page but means nothing once the Markdown is pasted elsewhere. Only the copied
+// text gets the origin; the rendered answer keeps relative links so they navigate
+// inside the app.
+function absolutizeSiteLinks(markdown) {
+  const origin = publicBaseUrl();
+  return markdown.replace(
+    /\]\((\/(?!\/)[^)\s]*)\)/g,
+    (_match, path) => `](${origin}${path})`,
+  );
+}
+
+// The site's public origin, from the server's PUBLIC_BASE_URL (the one place the
+// domain is set; the page carries it in a meta tag). Falls back to the page's own
+// origin if the tag is missing or was never filled in.
+function publicBaseUrl() {
+  const configured = document
+    .querySelector('meta[name="public-base-url"]')
+    ?.getAttribute("content");
+  if (configured && !configured.includes("__")) return configured.replace(/\/+$/, "");
+  return window.location.origin;
 }
 
 function publishAnswerCopy(state) {

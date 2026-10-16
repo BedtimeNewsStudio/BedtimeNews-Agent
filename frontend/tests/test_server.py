@@ -914,3 +914,15 @@ def test_pages_cannot_be_framed(client):
     headers = client.get("/healthz").headers
     assert "frame-ancestors 'none'" in headers["content-security-policy"]
     assert headers["x-frame-options"] == "DENY"
+
+
+def test_page_carries_the_public_base_url_for_the_client(client, monkeypatch):
+    # One source for the domain: the page tells the script which origin to use
+    # for the links in a copied answer, and a changed PUBLIC_BASE_URL follows.
+    response = client.get("/")
+    assert 'name="public-base-url" content="https://bedtime.blog"' in response.text
+    assert "__PUBLIC_BASE_URL__" not in response.text
+
+    monkeypatch.setattr(server, "PUBLIC_BASE_URL", "https://example.org")
+    response = client.get("/")
+    assert 'name="public-base-url" content="https://example.org"' in response.text

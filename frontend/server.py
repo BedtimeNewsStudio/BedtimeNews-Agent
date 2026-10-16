@@ -627,6 +627,7 @@ def _render_shell(
     replacements = {
         "__PAGE_TITLE__": escape(title),
         "__PAGE_DESCRIPTION__": escape(description, quote=True),
+        "__PUBLIC_BASE_URL__": escape(PUBLIC_BASE_URL, quote=True),
         "<!--SSR_HEAD-->": _seo_head(
             title=title,
             description=description,

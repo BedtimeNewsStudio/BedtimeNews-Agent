@@ -158,7 +158,7 @@ AGENT_BACKEND_HOST=localhost AGENT_BACKEND_PORT=8000 \
 | `APP_PORT` / `FRONTEND_PORT` | `8080`                 | Puerto del host donde se publica el frontend: `APP_PORT` por instancia (blue-green), o `FRONTEND_PORT` de `.env` si no se define                               |
 | `APP_VERSION`                | (vacío)                | Versión en la cabecera y en `/healthz`; compose la toma de `APP_IMAGE_TAG`, o de `IMAGE_TAG` si no se define (`latest`/vacío recurre a la versión del paquete) |
 | `APP_INSTANCE`               | `local`                | Etiqueta de instancia que informa `/healthz` (el nombre del proyecto compose en despliegues blue-green)                                                        |
-| `PUBLIC_BASE_URL`            | `https://bedtime.blog` | Origen de las URL canónicas, del sitemap y de robots                                                                                                           |
+| `PUBLIC_BASE_URL`            | `https://bedtime.blog` | Origen de las URL canónicas, del sitemap y de robots, y de los enlaces del sitio en una respuesta copiada (la página lo lee de una etiqueta meta `public-base-url`)                                                                                                          |
 
 ### Endpoints de salud
 

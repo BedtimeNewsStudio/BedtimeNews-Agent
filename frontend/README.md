@@ -128,7 +128,7 @@ AGENT_BACKEND_HOST=localhost AGENT_BACKEND_PORT=8000 \
 | `APP_PORT` / `FRONTEND_PORT` | `8080`                 | Frontend 发布到的宿主机端口：蓝绿部署时每个实例用 `APP_PORT`，未设置时回退为 `.env` 中的 `FRONTEND_PORT`            |
 | `APP_VERSION`                | （空）                 | 页头与 `/healthz` 显示的版本；compose 取自 `APP_IMAGE_TAG`，未设置时回退为 `IMAGE_TAG`（`latest`/空时回退为包版本） |
 | `APP_INSTANCE`               | `local`                | `/healthz` 报告的实例标签（蓝绿部署时为 compose 项目名）                                                            |
-| `PUBLIC_BASE_URL`            | `https://bedtime.blog` | canonical、sitemap 与 robots 中 URL 的源站                                                                          |
+| `PUBLIC_BASE_URL`            | `https://bedtime.blog` | canonical、sitemap 与 robots 中 URL 的源站，也是复制回答时站内链接的前缀（页面从 `public-base-url` meta 标签读取）                                                                        |
 
 ### 健康检查端点
 

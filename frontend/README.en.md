@@ -142,7 +142,7 @@ AGENT_BACKEND_HOST=localhost AGENT_BACKEND_PORT=8000 \
 | `APP_PORT` / `FRONTEND_PORT` | `8080`                 | Host port the frontend is published on: `APP_PORT` per instance (blue-green), falling back to `FRONTEND_PORT` in `.env`                               |
 | `APP_VERSION`                | (empty)                | Masthead and `/healthz` version; compose sets it from `APP_IMAGE_TAG`, falling back to `IMAGE_TAG` (`latest`/empty falls back to the package version) |
 | `APP_INSTANCE`               | `local`                | Instance label reported by `/healthz` (the compose project name in blue-green deployments)                                                            |
-| `PUBLIC_BASE_URL`            | `https://bedtime.blog` | Origin for canonical, sitemap and robots URLs                                                                                                         |
+| `PUBLIC_BASE_URL`            | `https://bedtime.blog` | Origin for canonical, sitemap and robots URLs, and for the site links in a copied answer (read by the page from a `public-base-url` meta tag) |
 
 ### Health endpoints
 
