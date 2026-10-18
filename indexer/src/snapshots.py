@@ -14,7 +14,7 @@ Usage (inside the indexer container):
 their 15 s poll and fall back to the previous readable one. ``unretire``
 undoes it within the 24 h retention. Pinned snapshots are never collected.
 ``build`` takes the same run lock and advisory lock as the scheduled run.
-``drop-previous-lineage`` removes older chunking in the same embedding
+``drop-previous-lineage`` removes older indexing lineages in the same embedding
 space once a snapshot of the current lineage is published. It does not
 wait out the 7-day retention, and it does not touch the current lineage.
 """
@@ -144,7 +144,7 @@ def main(argv: list[str] | None = None) -> int:
     build.add_argument("--full", action="store_true", help="Force a full build")
     drop = sub.add_parser(
         "drop-previous-lineage",
-        help="Drop the previous chunking in this embedding space",
+        help="Drop previous indexing lineages in this embedding space",
     )
     drop.add_argument(
         "--dry-run",

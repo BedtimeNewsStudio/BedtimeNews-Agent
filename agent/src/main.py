@@ -7,12 +7,13 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import PurePosixPath
 
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import FastAPI, HTTPException, Query, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from .chat import ChatTimeout, nonstream_chat_with_limit, stream_chat
 from .models import ChatRequest, ChatResponse
+from .search import SearchResponse, search
 from .settings import settings
 from .snapshots import SnapshotUnavailable, snapshot_manager
 from .vector_db import (
@@ -46,6 +47,22 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+@app.get("/search", response_model=SearchResponse)
+async def keyword_search(
+    q: str = Query(min_length=1, max_length=512),
+    limit: int = Query(default=20, ge=1, le=50),
+    cursor: str | None = Query(default=None, max_length=16384),
+) -> SearchResponse:
+    """Segment a natural-language query and rank episodes matching any content word."""
+    try:
+        return await asyncio.to_thread(search, q, limit, cursor)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Keyword search unavailable")
+        raise HTTPException(503, "Search service unavailable") from exc
 
 
 @app.get("/health")

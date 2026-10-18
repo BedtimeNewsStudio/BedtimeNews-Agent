@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1320" height="1060" viewBox="0 0 1320 1060" role="img" aria-labelledby="title desc">
   <title id="title">Indexer pipeline</title>
-  <desc id="desc">One indexer run builds and publishes an immutable RAG snapshot. Setup: take the whole-run file lock (if another run holds it, record skipped_busy and exit); bootstrap rag_meta, rag_state and the read-only rag_agent role, adopting a pre-snapshot rag schema as snapshot legacy; sync the transcripts repository and pin the commit; plan by choosing the incremental base (the newest published snapshot of the current lineage) and diffing against its index_state, stopping with no_change when nothing changed. Then garbage-collect and check free disk space. Phase A, outside any transaction: chunk the 正文 of added and changed transcripts (all of them in a full build), reuse vectors by chunk-text hash from the newest snapshot in the same vector space, embed only the misses, and render reader projections. Phase B, one transaction holding the advisory lock: create schema rag_s&lt;id&gt;, copy the base and delete changed and deleted transcripts (incremental path) or start empty (full path), insert chunks, index_state, titles and reader projections, ANALYZE, build the HNSW index, self-check, recheck that the base is still published and newest, register the snapshot as published and grant rag_agent read access, then commit. Any failure rolls everything back and published snapshots are untouched. Finally garbage-collect again and update indexer_status.</desc>
+  <desc id="desc">One indexer run builds and publishes an immutable RAG snapshot. Setup: take the whole-run file lock (if another run holds it, record skipped_busy and exit); bootstrap rag_meta, rag_state and the read-only rag_agent role, adopting a pre-snapshot rag schema as snapshot legacy; sync the transcripts repository and pin the commit; plan by choosing the incremental base (the newest published snapshot of the current lineage) and diffing against its index_state, stopping with no_change when nothing changed. Then garbage-collect and check free disk space. Phase A, outside any transaction: chunk the 正文 of added and changed transcripts (all of them in a full build), reuse vectors by chunk-text hash from the newest snapshot in the same vector space, embed only the misses, and prepare reader and complete-body search projections. Phase B, one transaction holding the advisory lock: create schema rag_s&lt;id&gt;, copy the base and delete changed and deleted transcripts (incremental path) or start empty (full path), insert chunks, index_state, titles, reader/search projections and regenerated search statistics, ANALYZE, build HNSW and GIN indexes, self-check, recheck that the base is still published and newest, register the snapshot as published and grant rag_agent read access, then commit. Any failure rolls everything back and published snapshots are untouched. Finally garbage-collect again and update indexer_status.</desc>
   <defs>
     <linearGradient id="canvas" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#ffffff"/>
@@ -109,8 +109,8 @@
 
   <rect class="node" x="972" y="418" width="270" height="112" rx="16"/>
   <text class="num" x="1107" y="444">09</text>
-  <text class="label" x="1107" y="476">Render reader</text>
-  <text class="sub" x="1107" y="502">Markdown → HTML projections</text>
+  <text class="label" x="1107" y="476">Render projections</text>
+  <text class="sub" x="1107" y="502">reader HTML + search text</text>
 
   <path class="blue-line" d="M346 474H376"/>
   <path class="blue-line" d="M644 474H674"/>
@@ -125,7 +125,7 @@
   <rect class="node database" x="78" y="644" width="220" height="104" rx="16"/>
   <text class="num" x="188" y="670">10</text>
   <text class="label" x="188" y="700">Create schema</text>
-  <text class="sub" x="188" y="726">rag_s&lt;id&gt;, 4 tables</text>
+  <text class="sub" x="188" y="726">rag_s&lt;id&gt;, 6 tables</text>
 
   <rect class="node database" x="328" y="644" width="260" height="104" rx="16"/>
   <text class="num" x="458" y="670">11</text>
@@ -137,12 +137,12 @@
   <text class="num" x="768" y="670">12</text>
   <text class="label" x="768" y="700">Insert</text>
   <text class="sub" x="768" y="722">chunks + vectors · index_state</text>
-  <text class="sub" x="768" y="740">titles · reader projections</text>
+  <text class="sub" x="768" y="740">titles · reader · search · stats</text>
 
   <rect class="node database" x="948" y="644" width="294" height="104" rx="16"/>
   <text class="num" x="1095" y="670">13</text>
-  <text class="label" x="1095" y="700">ANALYZE + HNSW</text>
-  <text class="sub" x="1095" y="726">bulk index build, then stats</text>
+  <text class="label" x="1095" y="700">HNSW + GIN</text>
+  <text class="sub" x="1095" y="726">ANALYZE, then build indexes</text>
 
   <path class="teal-line" d="M298 696H328"/>
   <path class="teal-line" d="M588 696H618"/>

@@ -32,13 +32,13 @@
 3. **Git 同步**并固定 commit。
 4. **规划**：增量基础是当前谱系（相同流水线指纹与向量空间）中最新发布的快照。把文稿与其 `index_state` 比对，得到新增、正文变化、仅源文件变化（标题/日期/附录）和删除的文稿。正文变化走 embedding；仅源文件变化只重写阅读器 HTML 与下载用 Markdown。无变化 → `no_change`。没有基础（首次构建、版本号变化、新向量空间）或 `build --full` → 全量构建。
 5. **先 GC，再做磁盘预检**：Postgres 数据所在文件系统的剩余空间必须 ≥ max(2 GB, 3 × 基础快照大小)，否则不构建（2 GB 下限可用环境变量 `BUILD_MIN_FREE_BYTES` 调整，单位为字节）。
-6. **阶段 A**（事务外）：对需要（重新）索引的文稿分块；按分块文本哈希复用向量，只为未命中的分块调用 embedding API；渲染阅读器投影。新向量只保存在内存中。
-7. **阶段 B**（单个事务，持有数据库 advisory lock）：创建 `rag_s<id>` → 复制基础快照的四张表（增量）→ 删除变化和已删除文稿的行 → 插入分块（复用的向量在服务端关联写入）→ 写入 `index_state`、标题和阅读器投影 → `ANALYZE` → 建 HNSW 索引 → 自检 → 复核基础快照仍为已发布且仍是其谱系中最新 → 登记为 `published` → 授予 `rag_agent` 读权限 → `COMMIT`。
+6. **阶段 A**（事务外）：对需要（重新）索引的文稿分块；按分块文本哈希复用向量，只为未命中的分块调用 embedding API；渲染阅读器与完整正文搜索投影。新向量只保存在内存中。
+7. **阶段 B**（单个事务，持有数据库 advisory lock）：创建 `rag_s<id>` → 复制基础快照的五张数据表（增量）→ 删除变化和已删除文稿的行 → 插入分块（复用的向量在服务端关联写入）→ 写入 `index_state`、标题、阅读器/搜索投影并重新生成搜索统计 → `ANALYZE` → 建 HNSW 与 GIN 索引 → 自检 → 复核基础快照仍为已发布且仍是其谱系中最新 → 登记为 `published` → 授予 `rag_agent` 读权限 → `COMMIT`。
 8. **再次 GC**（此处失败只记录日志，不改变本次运行的结果），然后更新 `rag_meta.indexer_status`。
 
 任何失败、进程被杀或连接断开都会让阶段 B 的整个事务回滚：不会留下构建一半的 schema 或注册行，已发布的快照不受影响。收到 `SIGTERM` 时 Indexer 取消正在执行的语句并退出（compose 留出 30 秒）。
 
-全量语料实测（1,902 篇文稿、13,434 个分块、2560 维；本地 4 核机器）：改动一篇文稿的增量构建约 19 秒（阶段 B 约 14 秒，主要是建 HNSW 索引）；复用全部向量的全量构建约 36 秒；每个快照约 240 MB，一次构建写入约 200 MB WAL。
+format 3 之前、不含搜索数据与 GIN 开销的历史全量语料实测（1,902 篇文稿、13,434 个分块、2560 维；本地 4 核机器）：改动一篇文稿的增量构建约 19 秒（阶段 B 约 14 秒，主要是建 HNSW 索引）；复用全部向量的全量构建约 36 秒；每个快照约 240 MB，一次构建写入约 200 MB WAL。
 
 ## 配置
 
@@ -56,7 +56,9 @@ indexer_cron_schedule: "0 * * * *"      # 每小时（默认）
 
 ### 本地小样本模式
 
-`index_config.sample.yml` 固定选择八篇文稿，覆盖普通期号、小数期号、`misc`、多个栏目，以及正文 `##` 标题里的空格（参考信息17，锚点把每段空白收成一个 `-`，标题原文仍保留空格）。仅可在 `INDEXER_SCOPE=sample`、`INDEX_CONFIG_FILE=/app/index_config.sample.yml`、隔离的数据目录以及以 `_local` 结尾的 `POSTGRES_DB` 下运行；`POSTGRES_DB` 不以 `_local` 结尾时，每次构建都会被拒绝。`docker-compose.sample.yml` 提供服务覆盖配置（样本的 web 监听 `SAMPLE_FRONTEND_PORT`，默认 18080）。
+`index_config.sample.yml` 固定选择十五篇文稿，覆盖普通期号、小数期号、`misc`、多个栏目，以及正文 `##` 标题里的空格（参考信息17，锚点把每段空白收成一个 `-`，标题原文仍保留空格）。仅可在 `INDEXER_SCOPE=sample`、`INDEX_CONFIG_FILE=/app/index_config.sample.yml`、隔离的数据目录以及以 `_local` 结尾的 `POSTGRES_DB` 下运行；`POSTGRES_DB` 不以 `_local` 结尾时，每次构建都会被拒绝。`docker-compose.sample.yml` 提供服务覆盖配置（样本的 web 监听 `SAMPLE_FRONTEND_PORT`，默认 18080）。
+
+新增话题样本覆盖贵州与地方债、恒大、生育率、人工智能和高铁建设，用于自然语言搜索验证。
 
 ### 文档过滤规则
 
@@ -101,15 +103,15 @@ validation:
 
 在 indexer 容器内运行：
 
-| 命令                                              | 作用                                                                     |
-| ------------------------------------------------- | ------------------------------------------------------------------------ |
-| `python -m src.snapshots list`                    | 列出快照：状态、是否固定、谱系（当前/其他）、发布时间、大小、向量空间    |
-| `python -m src.snapshots status`                  | 显示 `rag_meta.indexer_status`（上次运行、结果、错误、连续失败次数）     |
-| `python -m src.snapshots retire <id>`             | 退役快照（数据回滚）；Agent 在 15 秒内回退到上一个可读快照               |
-| `python -m src.snapshots unretire <id>`           | 撤销退役（退役的快照保留 24 小时）                                       |
-| `python -m src.snapshots pin <id>` / `unpin <id>` | 固定或取消固定；固定的快照永不被垃圾回收                                 |
-| `python -m src.snapshots build [--full]`          | 立即构建，与定时运行使用同一运行锁和 advisory lock                       |
-| `python -m src.snapshots drop-previous-lineage [--dry-run]` | 当前谱系已发布后，立刻删除同一向量空间里的旧分块快照。不碰当前谱系，也不等 7 天。先 `--dry-run` |
+| 命令                                                        | 作用                                                                                                |
+| ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `python -m src.snapshots list`                              | 列出快照：状态、是否固定、谱系（当前/其他）、发布时间、大小、向量空间                               |
+| `python -m src.snapshots status`                            | 显示 `rag_meta.indexer_status`（上次运行、结果、错误、连续失败次数）                                |
+| `python -m src.snapshots retire <id>`                       | 退役快照（数据回滚）；Agent 在 15 秒内回退到上一个可读快照                                          |
+| `python -m src.snapshots unretire <id>`                     | 撤销退役（退役的快照保留 24 小时）                                                                  |
+| `python -m src.snapshots pin <id>` / `unpin <id>`           | 固定或取消固定；固定的快照永不被垃圾回收                                                            |
+| `python -m src.snapshots build [--full]`                    | 立即构建，与定时运行使用同一运行锁和 advisory lock                                                  |
+| `python -m src.snapshots drop-previous-lineage [--dry-run]` | 当前谱系已发布后，立刻删除同一向量空间里的旧索引谱系快照。不碰当前谱系，也不等 7 天。先 `--dry-run` |
 
 ```bash
 docker compose exec indexer python -m src.snapshots list
@@ -194,7 +196,7 @@ rag_s<id>   只读快照：document_chunks / documents / transcripts / index_sta
 - `doc_id`：文稿 URI，**含 `.md`**，例如 `ShuiQianXiaoXi/0501-0600/0588.md`——与上游 `URI映射.md` 的键逐字节一致
 - `chunk_index`：文稿内从 0 开始的序号
 - `heading`：小节标题（如有）；导语为空
-- `heading_anchor`：该节锚点，与阅读器话题 `h2` 的 `id` 相同。空字符串表示没有 URL 片段。此列只在 format 2 上存在，format 1 没有它
+- `heading_anchor`：该节锚点，与阅读器话题 `h2` 的 `id` 相同。空字符串表示没有 URL 片段。此列在 format 2、3、4 上存在，format 1 没有它
 - `text`：chunk 内容
 - `word_count`：词数
 - `embedding`：`halfvec(N)`，`N` 为该快照向量空间的维度。列**类型**固定为 `halfvec`：可容纳 4000 维以内的任意模型，存储减半、召回损失可忽略。HNSW 索引（`halfvec_cosine_ops`，pgvector 默认参数 `m=16`、`ef_construction=64`）支撑 Agent 的近邻检索
@@ -217,6 +219,8 @@ rag_s<id>   只读快照：document_chunks / documents / transcripts / index_sta
 - `body_html`：Agent 的 `/transcripts` API 返回的渲染页面。正文话题 `h2` 的 `id` 等于该话题的锚点。投影版本变化会重新渲染，不会重新 embedding
 - `source_hash`、`projection_version`：重新渲染的触发条件（源文件修改或渲染器变化）
 
+**`search_documents` / `search_statistics`**（format 4）：保存完整正文纯文本、NFC/ASCII 规范化文本、jieba 搜索分词、`token_data` 中的完整出现位置及 `token_count`。词级 lexeme 使用原生 GIN `tsvector` 索引，统计表保存有有效词的文稿数和平均词数。查询使用相同固定词典、停用词及规范化规则。短段落独立于 embedding 过滤；附录变化复用，正文变化重建。`SEARCH_VERSION = 2` 纳入指纹，搜索错误或覆盖缺失会回滚发布，未变化的向量继续复用。详见[后端设计](../docs/designs/20261018_keyword-search-backend.md)。
+
 **`index_state`**：构建来源记录，作为下一次增量构建的基线（Agent 不读取）
 
 - `file_path`：文稿 URI
@@ -237,10 +241,10 @@ rag_s<id>   只读快照：document_chunks / documents / transcripts / index_sta
 
 ### 两个兼容性维度
 
-| 维度                                | 组成                                                                                                                     | 作用                                                              |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
-| **流水线指纹**                      | (`format_version`、`normalization_version` = `BODY_NORMALIZATION_VERSION`、`chunker_version` = `CHUNKER_VERSION`) 的哈希 | 只有指纹相同的快照之间才能增量构建，否则全量构建                  |
-| **向量空间** `embedding_space`      | `<模型>@<维度>`，例如 `Qwen/Qwen3-Embedding-4B@2560`；可用 `embedding.space_id` 覆盖                                     | 只在同一向量空间内复用向量，Agent 也只读取同一向量空间的快照      |
+| 维度                           | 组成                                                                                                                                       | 作用                                                         |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------ |
+| **流水线指纹**                 | (`format_version`、`normalization_version` = `BODY_NORMALIZATION_VERSION`、`chunker_version` = `CHUNKER_VERSION`、`SEARCH_VERSION`) 的哈希 | 只有指纹相同的快照之间才能增量构建，否则全量构建             |
+| **向量空间** `embedding_space` | `<模型>@<维度>`，例如 `Qwen/Qwen3-Embedding-4B@2560`；可用 `embedding.space_id` 覆盖                                                       | 只在同一向量空间内复用向量，Agent 也只读取同一向量空间的快照 |
 
 - 分块参数或逻辑变化时必须提升 `CHUNKER_VERSION`（`src/chunker.py`），规范化变化时必须提升 `BODY_NORMALIZATION_VERSION`（`src/document_loader.py`）。漏提会让新旧分块混在同一个快照里，代码评审需检查。
 - Agent 读取的任何表或列的结构或含义变化时提升 `FORMAT_VERSION`（`src/snapshot_schema.py`），并把新格式加入 Agent 的 `SUPPORTED_FORMATS`。
@@ -254,15 +258,15 @@ Agent 以 `rag_agent` 连接，该角色只有 `rag_meta` 的 `USAGE` 及其两�
 
 每次构建前后都运行 GC，每次删除在单独的事务中进行并持有 advisory lock（`lock_timeout` 5 秒；仍在被读取的快照留到下次运行再删）：
 
-| 规则                                                                                          | 理由                                        |
-| --------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| 当前谱系保留最新 2 个已发布快照                                                               | 当前快照加一个可即时回滚的目标              |
-| 其他谱系（含 `legacy`）只保留各自最新 1 个，在被当前谱系取代后保留 7 天                       | 上一个代码版本仍可回滚                      |
-| `pinned` 快照永不删除                                                                         | 显式长期固定                                |
-| `retired` 快照保留 24 小时                                                                    | 误退役可以撤销                              |
-| 被取代或退役后 10 分钟内的快照不删除                                                          | 保护进行中的请求（Agent 在 15 秒内切换）    |
+| 规则                                                                    | 理由                                     |
+| ----------------------------------------------------------------------- | ---------------------------------------- |
+| 当前谱系保留最新 2 个已发布快照                                         | 当前快照加一个可即时回滚的目标           |
+| 其他谱系（含 `legacy`）只保留各自最新 1 个，在被当前谱系取代后保留 7 天 | 上一个代码版本仍可回滚                   |
+| `pinned` 快照永不删除                                                   | 显式长期固定                             |
+| `retired` 快照保留 24 小时                                              | 误退役可以撤销                           |
+| 被取代或退役后 10 分钟内的快照不删除                                    | 保护进行中的请求（Agent 在 15 秒内切换） |
 
-上面的 7 天是自动回收。format 2 的全量构建会按 chunk 文本复用旧快照里的向量，所以要等这次构建发布、并且 Agent 的 `/health` 已经指向它，再跑 `drop-previous-lineage`。先删会丢掉还没复制过去的向量。该命令立刻删掉同一向量空间里的旧分块（不按正文 `##` 切、没有 `heading_anchor` 的快照，含 `legacy`）。它不删除当前谱系里留作回滚的上一份快照。没有已发布的当前谱系，或旧快照被 `pin` 住时，命令拒绝执行、什么都不删。先 `--dry-run`。
+上面的 7 天是自动回收。格式或索引规则升级后，先等当前谱系快照发布且被 Agent 选中，再执行 `drop-previous-lineage`，让构建先复用旧快照向量。该命令删除同一向量空间中所有其它流水线指纹的快照，包括已有锚点但没有搜索的 format 2 和 `legacy`。它保留当前谱系；若当前谱系尚未发布，或目标被 pin，则拒绝全部删除。先执行 `--dry-run`。
 
 ## 从旧版 schema 升级
 
@@ -380,7 +384,7 @@ docker compose exec indexer python -m src.debugger stats
 
 - **仅限本地**：postgres 数据目录在 `.gitignore` 中，不受版本控制
 - **可迁移**：备份可移植，可在其他机器上恢复
-- **磁盘空间**：稳态为两个快照（约 500 MB）；构建期间临时多需约一个快照的空间加上 WAL
+- **磁盘空间**：稳态为两个快照（搜索加入前历史值约 500 MB，现需加上搜索表与 GIN 索引）；构建期间临时多需约一个快照的空间加上 WAL
 
 ## 项目结构
 
@@ -400,6 +404,9 @@ indexer/src/
 ├── document_loader.py   # Markdown 处理（BODY_NORMALIZATION_VERSION）
 ├── change_detector.py   # 与快照 index_state 的源文件/正文哈希比对
 ├── chunker.py           # 语义分块（CHUNKER_VERSION）
+├── search_text.py      # 与 Agent 共用的固定分词分析
+├── search_projection.py # 完整正文分词投影与出现位置
+├── anchors.py          # 共用正文话题锚点
 ├── embeddings.py        # Embedding 生成（OpenAI 兼容客户端）
 ├── debugger.py          # 只读调试命令（test、stats、history、recent、inspect、logs）
 ├── transcript_export.py # 阅读器投影（Markdown -> HTML）

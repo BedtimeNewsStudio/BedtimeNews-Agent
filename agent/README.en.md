@@ -19,9 +19,10 @@ See the [main README](../README.en.md) for setup instructions.
 - `graph.py`: LangGraph workflow with intelligent routing
 - `retriever.py`: Semantic search (embeddings + pgvector) against one snapshot;
   result cache keys include the snapshot ID, so a switch never serves stale results
+- `search.py` / `search_db.py`: Complete-body keyword search, GIN candidates, word BM25 scoring, snippets, and snapshot-bound cursors
 - `cache.py`: LRU cache for query results
 - `chat.py`: FastAPI endpoint handlers
-- `main.py`: FastAPI server (`/chat`, `/transcripts`, `/health`)
+- `main.py`: FastAPI server (`/chat`, `/search`, `/transcripts`, `/health`)
 - `snapshots.py`: Which RAG snapshot to read: selection rule, 15-second
   registry poll, readiness
 - `vector_db.py`: Read-only PostgreSQL + pgvector queries; every query takes the
@@ -34,16 +35,16 @@ schemas) registered in `rag_meta.snapshots`; see the
 [indexer README](../indexer/README.en.md#database-schema). The agent:
 
 - **selects** the published snapshot whose `format_version` it supports
-  (`SUPPORTED_FORMATS` is `{1, 2}`) and whose vector space
+  (`SUPPORTED_FORMATS` is `{1, 2, 3, 4}`) and whose vector space
   (`<embedding.model>@<EMBEDDING_DIM>`, or `embedding.space_id`) equals its
-  own — highest format first, then the most recently published. Only format 2
-  has section anchors. A process that supports only `{1}` keeps reading format 1.
+  own — highest format first, then the most recently published. Formats 2–4
+  have section anchors; format 4 provides segmented-word search. A process that supports only `{1}` keeps reading format 1.
   A selected format 1 snapshot has no `heading_anchor`, and its citations have
   no hash. `RAG_SNAPSHOT` pins one snapshot ID instead. Before the indexer has created `rag_meta`, the
   original `rag` schema is read as the implicit snapshot `legacy`;
 - keeps the current snapshot **in memory** and re-applies the rule every 15
   seconds in a background thread, so a newly published or rolled-back snapshot
-  takes effect without a restart. Request handling never queries `rag_meta`;
+  takes effect without a restart. Chat and reader requests use the in-memory selection; search pagination validates its cursor snapshot against `rag_meta`;
 - **pins each request** to the snapshot current when it starts: every
   retrieval of one `/chat` answer, and each reader response, reads one
   snapshot even if a new one is published meanwhile;
@@ -160,6 +161,98 @@ layers (240 s limit < 270 s uvicorn graceful shutdown < 300 s compose
 agent never cuts an answer short; see
 [the blue-green design](../docs/designs/20261008_blue-green-deployment.md).
 
+### GET /search
+
+Default word search over complete transcript bodies, including short passages
+filtered out of embedding chunks. Jieba segments both unspaced questions and
+space-separated input; stopwords and punctuation-only tokens are ignored. A
+transcript can match any analyzed word. Ranking combines weighted word BM25,
+query-word coverage, and proximity; the whole question need not appear verbatim.
+ASCII case is ignored. No model call or separate exact/relaxed mode is used.
+
+**Backend only:** the web service does not proxy `/search` or `/api/search` and
+has no search interface. The normal Agent port is private; the sample overlay
+binds `127.0.0.1:18001` (`SAMPLE_AGENT_PORT` overrides the port).
+
+```sh
+# Default deployment: call the internal Agent from its container.
+docker compose exec agent curl -G 'http://localhost:8000/search' \
+  --data-urlencode 'q=贵州 债务' --data-urlencode 'limit=20'
+
+# Sample overlay only: direct localhost API access.
+curl -G 'http://127.0.0.1:18001/search' \
+  --data-urlencode 'q=贵州 债务' --data-urlencode 'limit=20'
+```
+
+| Parameter | Required | Contract                                                                                                                           |
+| --------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `q`       | Yes      | 1–512 Unicode characters; analyzed natural-language text; at most 64 distinct searchable words, each at most 64 characters; no NUL |
+| `limit`   | No       | 1–50 results per page; default 20                                                                                                  |
+| `cursor`  | No       | Returned `next_cursor`, at most 16,384 characters; retain the same analyzed word order and page size                               |
+
+The response includes the original `query`, normalized `terms`, `snapshot_id`,
+exact `total`, ranked `results`, and nullable `next_cursor`. Each result contains
+`doc_id`, standardized `title`, actual `source_title`, channel, publication date,
+full-precision relevance score, ordered `matched_terms`, and up to three snippets. A result may
+match only some of the response's analyzed `terms`. Snippets carry an
+existing reader topic anchor (empty for opening prose) and literal text/highlight
+parts rather than HTML. Response shape example, with illustrative values:
+
+```json
+{
+  "query": "贵州 债务",
+  "terms": ["贵州", "债务"],
+  "snapshot_id": "s20261018t095951z_3f23dda",
+  "total": 1,
+  "results": [
+    {
+      "doc_id": "ShuiQianXiaoXi/0501-0600/0588.md",
+      "title": "睡前消息588",
+      "source_title": "【睡前消息588】城投债四大网红",
+      "channel": "ShuiQianXiaoXi",
+      "publication_date": "2023-05-12",
+      "score": 3.82,
+      "matched_terms": ["贵州", "债务"],
+      "snippets": [
+        {
+          "heading": "城投债",
+          "heading_anchor": "城投债",
+          "parts": [
+            {"text": "贵州", "highlight": true},
+            {"text": "的", "highlight": false},
+            {"text": "债务", "highlight": true}
+          ]
+        }
+      ]
+    }
+  ],
+  "next_cursor": null
+}
+```
+
+Use `next_cursor` as `cursor` to continue on the original published snapshot even
+if a newer snapshot is selected. Cursors do not extend snapshot retention and
+cannot override `RAG_SNAPSHOT`. A null cursor means there is no next page.
+
+| HTTP status | Meaning                                                                                                      |
+| ----------- | ------------------------------------------------------------------------------------------------------------ |
+| `200`       | Results, or an empty `results` list with `total = 0` when no indexed word matches                            |
+| `410`       | Cursor snapshot missing, retired, dropped, or incompatible; restart the search                               |
+| `422`       | Invalid query/limits/cursor, no searchable words after analysis, or changed analyzed word order or page size |
+| `503`       | Search index not ready (including formats 1/2/3), or database/service unavailable                            |
+
+The [completed backend design](../docs/designs/20261018_keyword-search-backend.md)
+describes the GIN word index, exact verification, scoring, and snapshot
+lifecycle. From the repository root, the first command runs read-only localhost
+sample checks; `--lifecycle` additionally publishes a sample snapshot and verifies
+retirement, rollback, and restoration:
+
+```sh
+uv run --no-sync python scripts/test_keyword_search_e2e.py
+uv run --no-sync python scripts/test_keyword_search_e2e.py --lifecycle
+```
+
+
 ### GET /transcripts
 
 Reader navigation index from the current snapshot's `transcripts` table:
@@ -196,7 +289,7 @@ old): it does not query the database or call a model.
     "source_commit": "a1b2c3d..."
   },
   "embedding_space": "Qwen/Qwen3-Embedding-4B@2560",
-  "supported_formats": [1],
+  "supported_formats": [1, 2, 3, 4],
   "pinned_by_config": null,
   "checked_at": "2026-10-07T10:15:38Z",
   "indexer_status": {
@@ -213,7 +306,7 @@ old): it does not query the database or call a model.
 it for alerting, e.g. 3 consecutive failures or no run for more than 3 hours.
 The compose file uses `/health` as the agent's container healthcheck.
 
-The full body stays internal (the agent is not published). `web` exposes a
+In the default deployment the full body stays internal. The sample overlay also exposes the Agent on loopback for development. `web` exposes a
 trimmed form publicly as `GET /readyz` — the same status code, but only
 `ready`, `reason` and the snapshot's `id`, `format_version` and
 `embedding_space`, never `indexer_status` (its `last_error` can contain
@@ -336,6 +429,9 @@ agent/src/
 ├── agent.py           # Agentic RAG API
 ├── graph.py           # LangGraph workflow
 ├── retriever.py       # Semantic search with per-snapshot caching
+├── search.py          # Keyword search, snippets, cursors
+├── search_text.py     # Shared pinned Chinese word analysis
+├── search_db.py       # GIN candidates and relevance SQL
 ├── cache.py           # LRU cache implementation
 ├── snapshots.py       # Snapshot selection, polling, readiness
 ├── vector_db.py       # Read-only, snapshot-qualified database queries
@@ -349,7 +445,8 @@ agent/src/
 
 ### Network Access
 
-The agent service runs on **internal Docker network only** (not exposed to host):
+The default deployment keeps the Agent on internal Docker networks. The sample
+overlay additionally binds its API to `127.0.0.1:18001` (`SAMPLE_AGENT_PORT`):
 
 ```bash
 # Access from host (via docker exec)
@@ -363,10 +460,10 @@ curl http://agent:8000/chat \
   -d '{"question": "test"}'
 ```
 
-The web frontend is the only service published to the host — plain HTTP on port
+In the default deployment, the web frontend is the only service published to the host — plain HTTP on port
 8080, no TLS (public exposure and TLS termination are handled outside this
 repo). It proxies `/chat` to the agent over the internal Docker network; the
-agent itself is never exposed to the host.
+Agent port is not published except by the localhost sample overlay.
 
 The agent is on two networks: its application instance's private network,
 shared only with that instance's `web` (where `agent` resolves to this agent

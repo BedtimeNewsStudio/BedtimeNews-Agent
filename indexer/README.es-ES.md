@@ -32,13 +32,13 @@ Una ejecución:
 3. **Sincronización git** y fijación del commit.
 4. **Plan**: la base incremental es el último snapshot publicado del linaje actual (misma huella de pipeline y mismo espacio vectorial). Se comparan las transcripciones con su `index_state`: añadidas, con cuerpo modificado, solo con cambios de origen (título/fecha/apéndice) y eliminadas. Los cambios de cuerpo pasan por embeddings; los cambios solo de origen reescriben el HTML del lector y el Markdown descargable. Sin cambios → `no_change`. Sin base (primera construcción, un cambio de versión, un nuevo espacio vectorial) o `build --full` → construcción completa.
 5. **GC y después comprobación de disco**: no se construye salvo que el sistema de archivos de datos de Postgres tenga libre al menos max(2 GB, 3 × el tamaño del snapshot base) (el mínimo de 2 GB es la variable de entorno `BUILD_MIN_FREE_BYTES`, en bytes).
-6. **Fase A** (sin transacción): fragmenta las transcripciones a (re)indexar; reutiliza vectores por hash del texto del fragmento y llama a la API de embeddings solo para los fallos; renderiza las proyecciones de lectura. Los vectores nuevos solo viven en memoria.
-7. **Fase B** (una transacción con el bloqueo consultivo de la base de datos): crea `rag_s<id>` → copia las cuatro tablas del base (incremental) → borra las transcripciones modificadas y eliminadas → inserta los fragmentos (los vectores reutilizados se unen en el servidor) → escribe `index_state`, títulos y proyecciones de lectura → `ANALYZE` → construye el índice HNSW → autocomprobación → vuelve a comprobar que el base sigue publicado y sigue siendo el más reciente de su linaje → lo registra como `published` → concede lectura a `rag_agent` → `COMMIT`.
+6. **Fase A** (sin transacción): fragmenta las transcripciones a (re)indexar; reutiliza vectores por hash del texto del fragmento y llama a la API de embeddings solo para los fallos; renderiza las proyecciones de lectura y búsqueda del cuerpo completo. Los vectores nuevos solo viven en memoria.
+7. **Fase B** (una transacción con el bloqueo consultivo de la base de datos): crea `rag_s<id>` → copia las cinco tablas de datos del base (incremental) → borra las transcripciones modificadas y eliminadas → inserta los fragmentos (los vectores reutilizados se unen en el servidor) → escribe `index_state`, títulos, proyecciones de lectura/búsqueda y estadísticas recalculadas → `ANALYZE` → construye índices HNSW y GIN → autocomprobación → vuelve a comprobar que el base sigue publicado y sigue siendo el más reciente de su linaje → lo registra como `published` → concede lectura a `rag_agent` → `COMMIT`.
 8. **GC de nuevo** (un fallo aquí solo se registra en el log: el resultado de la ejecución se mantiene) y actualización de `rag_meta.indexer_status`.
 
 Cualquier fallo, un proceso terminado o una conexión caída revierte toda la transacción de la fase B: nunca queda un esquema a medio construir ni una fila de registro, y los snapshots publicados no se ven afectados. Con `SIGTERM` el indexador cancela la sentencia en curso y termina (compose concede 30 s).
 
-Medido con el corpus completo (1.902 transcripciones, 13.434 fragmentos, 2560 dimensiones; máquina local de 4 núcleos): una construcción incremental con una transcripción modificada tarda ~19 s (fase B ~14 s, sobre todo el índice HNSW); una construcción completa reutilizando todos los vectores ~36 s; un snapshot ocupa ~240 MB y una construcción escribe ~200 MB de WAL.
+Medición histórica anterior al formato 3, sin datos de búsqueda ni coste GIN (1.902 transcripciones, 13.434 fragmentos, 2560 dimensiones; máquina local de 4 núcleos): una construcción incremental con una transcripción modificada tarda ~19 s (fase B ~14 s, sobre todo el índice HNSW); una construcción completa reutilizando todos los vectores ~36 s; un snapshot ocupa ~240 MB y una construcción escribe ~200 MB de WAL.
 
 ## Configuración
 
@@ -56,7 +56,9 @@ La siguiente ejecución siempre se calcula desde el momento actual: una ejecuci�
 
 ### Modo de muestra local
 
-`index_config.sample.yml` selecciona ocho transcripciones deterministas que cubren URIs ordinarias, fraccionarias, `misc` y de varios programas, además de un `##` del cuerpo con un espacio interno (参考信息17: cada serie de espacios en el ancla pasa a un `-`, y el título guardado conserva el espacio). Solo se admite con `INDEXER_SCOPE=sample`, `INDEX_CONFIG_FILE=/app/index_config.sample.yml`, almacenamiento aislado y un `POSTGRES_DB` terminado en `_local`; el indexador se niega a construir en cualquier otra base de datos. `docker-compose.sample.yml` aporta las sobreescrituras de servicios (el web de muestra escucha en `SAMPLE_FRONTEND_PORT`, por defecto 18080).
+`index_config.sample.yml` selecciona quince transcripciones deterministas que cubren URIs ordinarias, fraccionarias, `misc` y de varios programas, además de un `##` del cuerpo con un espacio interno (参考信息17: cada serie de espacios en el ancla pasa a un `-`, y el título guardado conserva el espacio). Solo se admite con `INDEXER_SCOPE=sample`, `INDEX_CONFIG_FILE=/app/index_config.sample.yml`, almacenamiento aislado y un `POSTGRES_DB` terminado en `_local`; el indexador se niega a construir en cualquier otra base de datos. `docker-compose.sample.yml` aporta las sobreescrituras de servicios (el web de muestra escucha en `SAMPLE_FRONTEND_PORT`, por defecto 18080).
+
+Las muestras temáticas añadidas cubren deuda local/Guizhou, Evergrande, natalidad, IA y ferrocarril para evaluar preguntas naturales.
 
 ### Filtros de Documentos
 
@@ -102,15 +104,15 @@ validation:
 
 Dentro del contenedor del indexador:
 
-| Comando                                                     | Efecto                                                                                                                                                                          |
-| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `python -m src.snapshots list`                              | Lista los snapshots: estado, fijado, linaje (actual/otro), fecha de publicación, tamaño, espacio vectorial                                                                      |
-| `python -m src.snapshots status`                            | Muestra `rag_meta.indexer_status` (última ejecución, resultado, error, fallos consecutivos)                                                                                     |
-| `python -m src.snapshots retire <id>`                       | Retira un snapshot (reversión de datos); los agentes vuelven al snapshot legible anterior en 15 s                                                                               |
-| `python -m src.snapshots unretire <id>`                     | Deshace una retirada (los snapshots retirados se conservan 24 horas)                                                                                                            |
-| `python -m src.snapshots pin <id>` / `unpin <id>`           | Fija o desfija; los snapshots fijados nunca se recolectan                                                                                                                       |
-| `python -m src.snapshots build [--full]`                    | Construye ahora, protegido por el mismo bloqueo de ejecución y bloqueo consultivo que la ejecución programada                                                                   |
-| `python -m src.snapshots drop-previous-lineage [--dry-run]` | Con el linaje actual publicado, borra de inmediato la fragmentación anterior en este espacio vectorial. No toca el linaje actual ni espera 7 días. Ejecutar primero `--dry-run` |
+| Comando                                                     | Efecto                                                                                                                                                                                     |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `python -m src.snapshots list`                              | Lista los snapshots: estado, fijado, linaje (actual/otro), fecha de publicación, tamaño, espacio vectorial                                                                                 |
+| `python -m src.snapshots status`                            | Muestra `rag_meta.indexer_status` (última ejecución, resultado, error, fallos consecutivos)                                                                                                |
+| `python -m src.snapshots retire <id>`                       | Retira un snapshot (reversión de datos); los agentes vuelven al snapshot legible anterior en 15 s                                                                                          |
+| `python -m src.snapshots unretire <id>`                     | Deshace una retirada (los snapshots retirados se conservan 24 horas)                                                                                                                       |
+| `python -m src.snapshots pin <id>` / `unpin <id>`           | Fija o desfija; los snapshots fijados nunca se recolectan                                                                                                                                  |
+| `python -m src.snapshots build [--full]`                    | Construye ahora, protegido por el mismo bloqueo de ejecución y bloqueo consultivo que la ejecución programada                                                                              |
+| `python -m src.snapshots drop-previous-lineage [--dry-run]` | Con el linaje actual publicado, borra de inmediato los linajes de indexación anteriores en este espacio vectorial. No toca el linaje actual ni espera 7 días. Ejecutar primero `--dry-run` |
 
 ```bash
 docker compose exec indexer python -m src.snapshots list
@@ -195,7 +197,7 @@ rag_s<id>   snapshots de solo lectura: document_chunks / documents / transcripts
 - `doc_id`: el URI de la transcripción, **incluido `.md`**, p. ej. `ShuiQianXiaoXi/0501-0600/0588.md`: byte a byte la clave del `URI映射.md` de origen
 - `chunk_index`: índice basado en 0 dentro del documento
 - `heading`: título de la sección, si lo hay; vacío en el preámbulo
-- `heading_anchor`: el ancla de esa sección, la misma cadena que el `id` del `h2` de tema en el lector. La cadena vacía significa que no hay fragmento de URL. Esta columna existe en el formato 2 y no en el formato 1
+- `heading_anchor`: el ancla de esa sección, la misma cadena que el `id` del `h2` de tema en el lector. La cadena vacía significa que no hay fragmento de URL. Esta columna existe en los formatos 2, 3 y 4, no en el formato 1
 - `text`: contenido del fragmento
 - `word_count`: número de palabras
 - `embedding`: `halfvec(N)`, siendo `N` la dimensión del espacio vectorial del snapshot. El **tipo** de columna es fijo a propósito: `halfvec` admite cualquier modelo de hasta 4000 dimensiones con la mitad de almacenamiento y una pérdida de recall despreciable. Un índice HNSW (`halfvec_cosine_ops`, valores por defecto de pgvector `m=16`, `ef_construction=64`) atiende la búsqueda de vecinos del agente
@@ -218,6 +220,8 @@ Los títulos provienen del `URI映射.md` de origen. Una regla general (`{canal}
 - `body_html`: la página renderizada que sirve la API `/transcripts` del agente. Un `h2` de tema del cuerpo lleva un `id` igual a su ancla. Un cambio de versión de proyección vuelve a renderizar y no vuelve a generar embeddings
 - `source_hash`, `projection_version`: disparadores de re-renderizado (ediciones del origen o un cambio del renderizador)
 
+**`search_documents` / `search_statistics`** (formato 4): texto completo visible y normalizado NFC/ASCII, palabras segmentadas por jieba, posiciones completas en `token_data` y `token_count`. Los lexemas de palabras se indexan en `tsvector` con GIN nativo; las estadísticas guardan documentos con tokens y longitud media en tokens. Consultas usan el mismo diccionario fijado, palabras vacías y normalización. Los pasajes cortos no dependen del filtro de embeddings. Los cambios solo del apéndice reutilizan datos; el cuerpo los regenera. `SEARCH_VERSION = 2` forma parte de la huella; los errores o cobertura incompleta abortan publicación reutilizando vectores sin cambios. Consulta el [diseño backend](../docs/designs/20261018_keyword-search-backend.md).
+
 **`index_state`**: procedencia de la construcción, base de la siguiente construcción incremental (el agente no la lee)
 
 - `file_path`: URI de la transcripción
@@ -238,10 +242,10 @@ Los títulos provienen del `URI映射.md` de origen. Una regla general (`{canal}
 
 ### Dos dimensiones de compatibilidad
 
-| Dimensión                               | Composición                                                                                                               | Función                                                                                |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| **Huella del pipeline**                 | Hash de (`format_version`, `normalization_version` = `BODY_NORMALIZATION_VERSION`, `chunker_version` = `CHUNKER_VERSION`) | Solo hay construcción incremental entre snapshots con la misma huella; si no, completa |
-| **Espacio vectorial** `embedding_space` | `<modelo>@<dimensión>`, p. ej. `Qwen/Qwen3-Embedding-4B@2560`; sustituible con `embedding.space_id`                       | Los vectores se reutilizan, y un agente lee snapshots, solo dentro de un mismo espacio |
+| Dimensión                               | Composición                                                                                                                                 | Función                                                                                |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| **Huella del pipeline**                 | Hash de (`format_version`, `normalization_version` = `BODY_NORMALIZATION_VERSION`, `chunker_version` = `CHUNKER_VERSION`, `SEARCH_VERSION`) | Solo hay construcción incremental entre snapshots con la misma huella; si no, completa |
+| **Espacio vectorial** `embedding_space` | `<modelo>@<dimensión>`, p. ej. `Qwen/Qwen3-Embedding-4B@2560`; sustituible con `embedding.space_id`                                         | Los vectores se reutilizan, y un agente lee snapshots, solo dentro de un mismo espacio |
 
 - Incrementa `CHUNKER_VERSION` (`src/chunker.py`) siempre que cambien los parámetros o la lógica de fragmentación, y `BODY_NORMALIZATION_VERSION` (`src/document_loader.py`) siempre que cambie la normalización. Olvidarlo mezcla fragmentación antigua y nueva en un mismo snapshot; la revisión de código debe comprobarlo.
 - Incrementa `FORMAT_VERSION` (`src/snapshot_schema.py`) cuando cambie la estructura o el significado de una tabla o columna que lea el agente, y añade el nuevo formato a `SUPPORTED_FORMATS` del agente.
@@ -263,7 +267,7 @@ La GC se ejecuta antes y después de cada construcción; cada borrado va en su p
 | Los snapshots `retired` se conservan 24 horas                                                                              | Una retirada por error puede deshacerse                    |
 | Nada se borra en los 10 minutos siguientes a ser sustituido o retirado                                                     | Protege las peticiones en curso (el agente cambia en 15 s) |
 
-Los 7 días de arriba son la recolección automática. La construcción completa del formato 2 reutiliza los vectores del snapshot anterior por el texto del fragmento, así que hay que esperar a que esté publicado y a que `/health` del agente lo nombre antes de `drop-previous-lineage`. Borrarlo antes descarta vectores que aún no se han copiado. El comando borra entonces la fragmentación anterior en el mismo espacio vectorial: snapshots que no cortaban el cuerpo en `##` hermanos y no tienen `heading_anchor`, incluido `legacy`. No borra el snapshot anterior que el linaje actual conserva. Si no hay un snapshot publicado del linaje actual, o un snapshot anterior está fijado, el comando se niega y no borra nada. Ejecutar primero `--dry-run`.
+Los 7 días anteriores corresponden a la recolección automática. Tras cambiar formato o reglas de indexación, espera a que se publique y seleccione un snapshot del linaje actual antes de `drop-previous-lineage`, para reutilizar primero los vectores antiguos. El comando elimina cualquier otra huella de pipeline en el mismo espacio vectorial, incluidos snapshots de formato 2 con anclas pero sin búsqueda y `legacy`. Conserva el linaje actual y rechaza toda eliminación si no hay un snapshot actual publicado o un destino está fijado. Ejecuta primero `--dry-run`.
 
 ## Actualización desde el esquema anterior a los snapshots
 
@@ -384,7 +388,7 @@ docker compose exec indexer python -m src.debugger stats
 
 - **Solo local**: el directorio de datos de postgres está en `.gitignore` y no se versiona
 - **Migración**: las copias son portables y pueden restaurarse en otras máquinas
-- **Espacio en disco**: en estado estable hay dos snapshots (~500 MB); una construcción necesita temporalmente un snapshot más y el WAL
+- **Espacio en disco**: en estado estable hay dos snapshots (históricamente ~500 MB antes de búsqueda; añadir tablas de búsqueda e índices GIN); una construcción necesita temporalmente un snapshot más y el WAL
 
 ## Estructura del Proyecto
 
@@ -404,6 +408,9 @@ indexer/src/
 ├── document_loader.py   # Procesamiento de Markdown (BODY_NORMALIZATION_VERSION)
 ├── change_detector.py   # Comparación de hashes de origen/cuerpo con el index_state de un snapshot
 ├── chunker.py           # Fragmentación semántica (CHUNKER_VERSION)
+├── search_text.py      # Análisis fijado compartido con agente
+├── search_projection.py # Proyección completa y posiciones
+├── anchors.py          # Anclas de temas compartidas
 ├── embeddings.py        # Generación de embeddings (cliente compatible con OpenAI)
 ├── debugger.py          # Comandos de depuración de solo lectura (test, stats, history, recent, inspect, logs)
 ├── transcript_export.py # Proyección de lectura (Markdown -> HTML)

@@ -26,11 +26,9 @@ from .settings import settings
 
 logger = logging.getLogger(__name__)
 
-# Snapshot formats this agent can read. Format 1 is the original `rag` layout
-# and has no heading_anchor. Format 2 does. Keep format 1 until a format 2
-# snapshot is what selection would rather read; dropping it first leaves the
-# agent with nothing.
-SUPPORTED_FORMATS: frozenset[int] = frozenset({1, 2})
+# Format 1 has no heading_anchor; format 2 adds anchors; format 3 adds keyword
+# search. Format 4 adds word analysis. Older snapshots still serve chat/readers.
+SUPPORTED_FORMATS: frozenset[int] = frozenset({1, 2, 3, 4})
 POLL_INTERVAL_S = 15.0
 LEGACY_SNAPSHOT_ID = "legacy"
 LEGACY_SCHEMA = "rag"

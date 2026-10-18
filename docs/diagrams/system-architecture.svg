@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1296" height="650" viewBox="0 0 1296 650" role="img" aria-labelledby="title desc">
   <title id="title">BedtimeNews system architecture</title>
-  <desc id="desc">The request plane runs from the browser over plain HTTP (port 8080) through the web frontend to the agent, which reads PostgreSQL read-only as the rag_agent role, one snapshot per request. The content plane runs from the transcript archive through the indexer, the only writer, which builds each update as an immutable snapshot schema rag_s&lt;id&gt; (chunks, vectors, transcripts) and publishes it atomically in the rag_meta registry; rag_state holds the indexer's audit log.</desc>
+  <desc id="desc">The request plane runs from the browser over plain HTTP (port 8080) through the web frontend to the agent, which reads PostgreSQL read-only as the rag_agent role, one snapshot per request. The content plane runs from the transcript archive through the indexer, the only writer, which builds each update as an immutable snapshot schema rag_s&lt;id&gt; (chunks, vectors, reader projections, search bodies and search statistics) and publishes it atomically in the rag_meta registry; rag_state holds the indexer's audit log. The Agent also provides a backend-only GET /search API backed by native GIN; the frontend does not proxy it.</desc>
   <defs>
     <linearGradient id="canvas" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#ffffff"/>
@@ -67,16 +67,19 @@
 
   <rect class="node" x="690" y="165" width="210" height="130" rx="17"/>
   <text class="label" x="795" y="222">Agent</text>
-  <text class="sub" x="795" y="256">LangGraph · :8000</text>
+  <text class="sub" x="795" y="256">LangGraph + search API</text>
   <text class="mono" x="795" y="282">one snapshot per request</text>
+
+  <text class="mono" x="795" y="318">GET /search: backend only</text>
 
   <rect class="node database" x="990" y="165" width="240" height="410" rx="20"/>
   <text class="mono" x="1110" y="201">VERSIONED SNAPSHOTS</text>
   <text class="label" x="1110" y="241">PostgreSQL</text>
-  <text class="sub" x="1110" y="275">+ pgvector</text>
+  <text class="sub" x="1110" y="275">pgvector + native GIN</text>
   <line x1="1022" y1="300" x2="1198" y2="300" stroke="#35c7b1" stroke-opacity=".35"/>
   <text class="sub" x="1110" y="334">rag_s&lt;id&gt; · read-only</text>
-  <text class="mono" x="1110" y="360">chunks · vectors · transcripts</text>
+  <text class="mono" x="1110" y="360">chunks · vectors · reader</text>
+  <text class="mono" x="1110" y="378">search bodies · statistics</text>
   <line x1="1022" y1="384" x2="1198" y2="384" stroke="#35c7b1" stroke-opacity=".2"/>
   <text class="sub" x="1110" y="416">rag_meta</text>
   <text class="mono" x="1110" y="442">snapshot registry</text>

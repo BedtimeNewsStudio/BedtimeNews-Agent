@@ -1,11 +1,12 @@
 """Snapshot identity, compatibility fingerprints and per-format table DDL.
 
 A snapshot is one immutable schema ``rag_s<id>`` holding the served tables
-(``document_chunks``, ``documents``, ``transcripts``) plus the build provenance
-``index_state``. Two dimensions decide compatibility (see
+(``document_chunks``, ``documents``, ``transcripts``, ``search_documents`` and
+``search_statistics``) plus the build provenance ``index_state``. Two dimensions
+decide compatibility (see
 docs/designs/20261007_rag-snapshot-architecture.md, 5.2):
 
-* ``pipeline_fingerprint`` — format, normalization and chunker versions. Only
+* ``pipeline_fingerprint`` — format, normalization, chunker and search versions. Only
   snapshots with the same fingerprint can serve as an incremental base.
 * ``embedding_space`` — ``<model>@<dimension>`` (or ``embedding.space_id``).
   Vectors are only reused, and snapshots only read, within one space.
@@ -16,7 +17,7 @@ from datetime import UTC, datetime
 
 from psycopg2 import sql
 
-from . import chunker, document_loader
+from . import chunker, document_loader, search_projection
 from .settings import settings
 
 # Bump whenever the structure or meaning of a table or column the agent reads
@@ -24,7 +25,9 @@ from .settings import settings
 # index_state, does not need a bump. Format 1 is the layout of the original
 # `rag` schema, which is why adopted legacy data is format 1 too.
 # Format 2 adds document_chunks.heading_anchor, which the agent reads.
-FORMAT_VERSION = 2
+# Format 3 adds complete-body keyword search and snapshot search statistics.
+# Format 4 indexes segmented words, complete token offsets and token counts.
+FORMAT_VERSION = 4
 
 SCHEMA_PREFIX = "rag_"
 LEGACY_SNAPSHOT_ID = "legacy"
@@ -40,6 +43,17 @@ MAX_PARALLEL_MAINTENANCE_WORKERS = 2
 # Columns copied from a base snapshot, listed explicitly so a column-order
 # difference cannot misalign a copy, and so the SERIAL `id` is regenerated.
 COPY_COLUMNS: dict[str, tuple[str, ...]] = {
+    "search_documents": (
+        "doc_id",
+        "body_text",
+        "normalized_text",
+        "token_count",
+        "token_data",
+        "search_terms",
+        "body_hash",
+        "search_version",
+        "sections",
+    ),
     "document_chunks": (
         "chunk_id",
         "doc_id",
@@ -73,7 +87,8 @@ COPY_COLUMNS: dict[str, tuple[str, ...]] = {
         "source_observed_at",
     ),
 }
-SNAPSHOT_TABLES = tuple(COPY_COLUMNS)
+# Statistics are derived from the finished bodies, never copied from the base.
+SNAPSHOT_TABLES = (*COPY_COLUMNS, "search_statistics")
 
 
 def pipeline_fingerprint(
@@ -81,13 +96,16 @@ def pipeline_fingerprint(
     normalization_version: int | None = None,
     chunker_version: int | None = None,
 ) -> str:
-    """Short stable hash of everything that decides the chunk texts."""
+    """Stable hash of the served format and both indexing pipelines."""
     format_version = FORMAT_VERSION if format_version is None else format_version
     if normalization_version is None:
         normalization_version = document_loader.BODY_NORMALIZATION_VERSION
     if chunker_version is None:
         chunker_version = chunker.CHUNKER_VERSION
-    key = f"format={format_version};normalization={normalization_version};chunker={chunker_version}"
+    key = (
+        f"format={format_version};normalization={normalization_version};"
+        f"chunker={chunker_version};search={search_projection.SEARCH_VERSION}"
+    )
     return hashlib.sha256(key.encode()).hexdigest()[:16]
 
 
@@ -112,7 +130,7 @@ def schema_for(snapshot_id: str) -> str:
 
 
 def create_tables_sql(schema: str, dim: int) -> sql.Composed:
-    """Format-2 DDL for one snapshot schema, without the HNSW index."""
+    """Format-4 DDL for one snapshot schema, without search or HNSW indexes."""
     s = sql.Identifier(schema)
     return sql.SQL(
         """
@@ -131,6 +149,24 @@ def create_tables_sql(schema: str, dim: int) -> sql.Composed:
             CONSTRAINT valid_word_count CHECK (word_count >= 0)
         );
         CREATE INDEX idx_doc_id ON {s}.document_chunks(doc_id);
+
+        CREATE TABLE {s}.search_documents (
+            doc_id TEXT PRIMARY KEY,
+            body_text TEXT NOT NULL,
+            normalized_text TEXT NOT NULL,
+            token_count INTEGER NOT NULL CHECK (token_count >= 0),
+            token_data JSONB NOT NULL,
+            search_terms TSVECTOR NOT NULL,
+            body_hash VARCHAR(64) NOT NULL,
+            search_version INTEGER NOT NULL,
+            sections JSONB NOT NULL
+        );
+        CREATE TABLE {s}.search_statistics (
+            id BOOLEAN PRIMARY KEY DEFAULT true CHECK (id),
+            document_count INTEGER NOT NULL CHECK (document_count >= 0),
+            average_token_count DOUBLE PRECISION NOT NULL CHECK (average_token_count >= 0),
+            search_version INTEGER NOT NULL
+        );
 
         CREATE TABLE {s}.documents (
             doc_id VARCHAR(255) PRIMARY KEY,
@@ -174,6 +210,13 @@ def create_hnsw_sql(schema: str) -> sql.Composed:
         m=sql.Literal(HNSW_M),
         ef=sql.Literal(HNSW_EF_CONSTRUCTION),
     )
+
+
+def create_search_index_sql(schema: str) -> sql.Composed:
+    return sql.SQL(
+        "CREATE INDEX idx_search_documents_terms ON {s}.search_documents "
+        "USING gin (search_terms)"
+    ).format(s=sql.Identifier(schema))
 
 
 def index_params() -> dict:

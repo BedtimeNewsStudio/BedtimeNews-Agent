@@ -122,6 +122,7 @@ def test_sample_readme_count_matches_the_sample_config():
     words = {
         7: ("七篇", "seven", "siete"),
         8: ("八篇", "eight", "ocho"),
+        15: ("十五篇", "fifteen", "quince"),
     }
     zh, en, es = words[count]
     assert f"固定选择{zh}" in (root / "README.md").read_text(encoding="utf-8")

@@ -25,6 +25,9 @@ services:
     container_name: bedtimenews-sample-agent
     environment:
       POSTGRES_DB: postgres_local
+    # API-only development: the frontend does not yet expose keyword search.
+    ports:
+      - "127.0.0.1:${SAMPLE_AGENT_PORT:-18001}:8000"
 
   web:
     container_name: bedtimenews-sample-web

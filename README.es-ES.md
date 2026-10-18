@@ -38,6 +38,8 @@ PostgreSQL + pgvector.
 
 **Características Principales:**
 
+- Búsqueda backend del cuerpo completo con relevancia y fragmentos
+  (solo API del agente, sin exposición al frontend)
 - Enrutamiento automático de consultas (recuperación de archivo vs manejo directo restringido)
 - Optimización de consultas y búsqueda semántica
 - Calificación basada en LLM de documentos
@@ -76,6 +78,27 @@ del cuerpo. Sin ancla de tema, el enlace abre el inicio de la transcripción.
 
 La pila sirve HTTP puro en el puerto 8080 — sin TLS. La exposición pública y la
 terminación TLS se gestionan fuera de este repositorio.
+
+## APIs del backend
+
+El agente ofrece estos endpoints HTTP. En el despliegue normal su puerto es
+privado: usa `docker compose exec agent curl http://localhost:8000/health` o la
+red privada de la aplicación. El overlay de muestras lo vincula además a
+`127.0.0.1:18001` (`SAMPLE_AGENT_PORT`).
+
+| Método | Ruta del agente         | Propósito                                                                        |
+| ------ | ----------------------- | -------------------------------------------------------------------------------- |
+| `POST` | `/chat`                 | Respuestas RAG, opcionalmente en streaming                                       |
+| `GET`  | `/search`               | Búsqueda segmentada del cuerpo, relevancia, fragmentos y paginación por snapshot |
+| `GET`  | `/transcripts`          | Índice de metadatos de transcripciones                                           |
+| `GET`  | `/transcripts/{doc_id}` | Una proyección de lectura por URI                                                |
+| `GET`  | `/health`               | Disponibilidad y snapshot seleccionado                                           |
+
+**La búsqueda es solo backend.** Web no hace proxy de `/search` ni `/api/search`
+y no tiene interfaz de búsqueda. Las rutas existentes de chat y transcripciones
+están en la [referencia del frontend](frontend/README.es-ES.md#endpoints). Consulta
+parámetros, respuestas y errores en la [API del agente](agent/README.es-ES.md#referencia-de-api)
+y el [diseño backend completado](docs/designs/20261018_keyword-search-backend.md).
 
 ## Inicio Rápido
 
@@ -304,6 +327,7 @@ BedtimeNews-Agent/
 │   ├── README.md
 │   ├── README.en.md
 │   └── README.es-ES.md
+├── scripts/            # Verificación API de búsqueda sobre muestras localhost
 ├── docs/
 │   ├── designs/        # Documentos de diseño
 │   └── diagrams/       # Diagramas SVG de arquitectura y flujo de trabajo

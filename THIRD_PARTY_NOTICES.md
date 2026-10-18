@@ -50,3 +50,12 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## jieba
+
+- **Component:** jieba 0.42.1 — Chinese word segmentation for transcript indexing
+  and natural-language search queries
+- **Usage:** installed as a pinned Python dependency in the Agent and indexer;
+  its packaged dictionary runs locally, without a separate service
+- **Homepage / Source:** <https://github.com/fxsjy/jieba>
+- **License:** MIT (as declared in the installed package metadata)

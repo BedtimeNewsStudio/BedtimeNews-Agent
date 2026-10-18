@@ -18,9 +18,10 @@
 - `graph.py`：带智能路由的 LangGraph 工作流
 - `retriever.py`：针对单个快照的语义搜索（embedding + pgvector）；结果缓存的键包含快照 ID，
   切换快照后不会返回旧结果
+- `search.py` / `search_db.py`：完整正文关键词搜索、GIN 候选、评分、摘要与快照游标
 - `cache.py`：查询结果的 LRU 缓存
 - `chat.py`：FastAPI 端点处理器
-- `main.py`：FastAPI 服务器（`/chat`、`/transcripts`、`/health`）
+- `main.py`：FastAPI 服务器（`/chat`、`/search`、`/transcripts`、`/health`）
 - `snapshots.py`：选择读取哪个 RAG 快照：选择规则、每 15 秒轮询注册表、就绪状态
 - `vector_db.py`：只读的 PostgreSQL + pgvector 查询；每条查询都显式带上快照 schema（不使用 `search_path`）
 
@@ -29,14 +30,14 @@
 Indexer 把知识库发布为不可变的快照（`rag_s<id>` schema），登记在
 `rag_meta.snapshots` 中；参见 [Indexer README](../indexer/README.md#数据库结构)。Agent：
 
-- **选择**已发布快照中 `format_version` 受支持（`SUPPORTED_FORMATS` 为 `{1, 2}`）、
+- **选择**已发布快照中 `format_version` 受支持（`SUPPORTED_FORMATS` 为 `{1, 2, 3, 4}`）、
   且向量空间（`<embedding.model>@<EMBEDDING_DIM>`，或 `embedding.space_id`）与自身一致的快照——
-  先取最高格式，再取最新发布的。只有 format 2 带有章节锚点。只支持 `{1}` 的进程继续读 format 1。
+  先取最高格式，再取最新发布的。format 2–4 带有章节锚点，format 4 提供分词搜索。只支持 `{1}` 的进程继续读 format 1。
   选中的快照若仍是 format 1，它没有 `heading_anchor`，引用也不带 hash。
   设置 `RAG_SNAPSHOT` 时直接固定使用该快照 ID。
   在 Indexer 创建 `rag_meta` 之前，原有的 `rag` schema 被当作隐式快照 `legacy` 读取；
 - 把当前快照保存在**进程内存**中，后台线程每 15 秒重新应用选择规则，因此新发布或回滚的快照
-  无需重启即可生效。处理请求时从不查询 `rag_meta`；
+  无需重启即可生效。聊天和阅读器使用内存选择；搜索翻页会查询 `rag_meta` 验证游标快照；
 - **每个请求固定在开始时的快照上**：一次 `/chat` 回答中的每次检索、每个阅读器响应都只读一个快照，
   即使期间发布了新快照；
 - 数据库或可读快照不可用时不会退出：此时处于未就绪状态（`/health` 返回 `503`），`/chat` 和
@@ -141,6 +142,91 @@ data: [DONE]
 `stop_grace_period` < 5 分钟代理排空），因此停止或替换 Agent 不会截断回答；参见
 [蓝绿部署设计](../docs/designs/20261008_blue-green-deployment.md)。
 
+### GET /search
+
+完整正文的默认分词搜索，包含被 embedding 分块过滤的短段落。jieba 自动处理整句或
+空格分隔的输入，移除停用词及纯标点；命中任一有效词即可召回。按加权词级 BM25、查询词
+覆盖率和接近程度排序，不要求原句连续出现。ASCII 不区分大小写，不调用模型，也没有独立的
+精确/宽松模式。例如“贵州的债务问题现状及其成因”会分析成“贵州、债务、问题、现状、成因”。
+
+**仅后端：** web 服务不代理 `/search` 或 `/api/search`，也没有搜索界面。默认 Agent
+端口仅在内部网络可达；sample overlay 绑定 `127.0.0.1:18001`，可用 `SAMPLE_AGENT_PORT`
+修改端口。
+
+```sh
+# 默认部署：在 Agent 容器内访问内部 API。
+docker compose exec agent curl -G 'http://localhost:8000/search' \
+  --data-urlencode 'q=贵州 债务' --data-urlencode 'limit=20'
+
+# 仅 sample overlay：从 localhost 直接访问 API。
+curl -G 'http://127.0.0.1:18001/search' \
+  --data-urlencode 'q=贵州 债务' --data-urlencode 'limit=20'
+```
+
+| 参数     | 必填 | 约定                                                                                            |
+| -------- | ---- | ----------------------------------------------------------------------------------------------- |
+| `q`      | 是   | 1–512 个 Unicode 字符；自然语言自动分词；分析去重后最多 64 个有效词，每词最多 64 字符；禁止 NUL |
+| `limit`  | 否   | 每页 1–50 条，默认 20                                                                           |
+| `cursor` | 否   | 使用返回的 `next_cursor`，最多 16,384 字符；保持分析后的词序及每页条数不变                      |
+
+响应包含原始 `query`、规范化后的 `terms`、`snapshot_id`、精确命中数 `total`、按相关度
+排序的 `results` 和可空的 `next_cursor`。每条结果包含 `doc_id`、标准期标题 `title`、
+实际节目标题 `source_title`、栏目、发布日期、未取整的相关度分数、实际命中词 `matched_terms` 及最多三段摘要。每条结果可以只命中 `terms` 的一部分。
+摘要包含现有阅读器话题锚点（开场白为空）和字面文本/高亮片段，不返回生成的 HTML。
+以下仅为响应结构示例：
+
+```json
+{
+  "query": "贵州 债务",
+  "terms": ["贵州", "债务"],
+  "snapshot_id": "s20261018t095951z_3f23dda",
+  "total": 1,
+  "results": [
+    {
+      "doc_id": "ShuiQianXiaoXi/0501-0600/0588.md",
+      "title": "睡前消息588",
+      "source_title": "【睡前消息588】城投债四大网红",
+      "channel": "ShuiQianXiaoXi",
+      "publication_date": "2023-05-12",
+      "score": 3.82,
+      "matched_terms": ["贵州", "债务"],
+      "snippets": [
+        {
+          "heading": "城投债",
+          "heading_anchor": "城投债",
+          "parts": [
+            {"text": "贵州", "highlight": true},
+            {"text": "的", "highlight": false},
+            {"text": "债务", "highlight": true}
+          ]
+        }
+      ]
+    }
+  ],
+  "next_cursor": null
+}
+```
+
+将 `next_cursor` 作为 `cursor` 翻页；即使期间发布新快照，仍读取最初的已发布快照。
+游标不延长快照保留时间，也不能绕过 `RAG_SNAPSHOT`。游标为空表示没有下一页。
+
+| HTTP 状态码 | 含义                                                                  |
+| ----------- | --------------------------------------------------------------------- |
+| `200`       | 返回结果；无命中时 `results` 为空且 `total = 0`                       |
+| `410`       | 游标快照不存在、已退役、已回收或不兼容；重新搜索                      |
+| `422`       | 查询、数量限制或游标无效、分析后无有效词，或分析后的词序/每页条数改变 |
+| `503`       | 搜索索引未就绪（含 format 1/2/3），或数据库/服务不可用                |
+
+[已完成的后端设计](../docs/designs/20261018_keyword-search-backend.md)说明 GIN 词级索引、
+精确校验、评分和快照生命周期。在仓库根目录执行以下命令：第一条对 localhost 样本做只读
+验证；`--lifecycle` 还会发布一份样本快照并验证退役、回滚和恢复。
+
+```sh
+uv run --no-sync python scripts/test_keyword_search_e2e.py
+uv run --no-sync python scripts/test_keyword_search_e2e.py --lifecycle
+```
+
+
 ### GET /transcripts
 
 阅读器导航索引，来自当前快照的 `transcripts` 表：
@@ -173,7 +259,7 @@ data: [DONE]
     "source_commit": "a1b2c3d..."
   },
   "embedding_space": "Qwen/Qwen3-Embedding-4B@2560",
-  "supported_formats": [1],
+  "supported_formats": [1, 2, 3, 4],
   "pinned_by_config": null,
   "checked_at": "2026-10-07T10:15:38Z",
   "indexer_status": {
@@ -189,7 +275,7 @@ data: [DONE]
 `indexer_status` 不影响就绪状态（旧快照仍可服务），可用于告警，例如连续 3 次失败或超过
 3 小时没有运行。compose 文件以 `/health` 作为 Agent 容器的健康检查。
 
-完整响应体只在内部可见（Agent 不对外发布）。`web` 以 `GET /readyz` 对外提供裁剪后的形式——状态码相同，
+默认部署中完整响应体仅在内部可见；sample overlay 还会为开发将 Agent 绑定到 loopback。`web` 以 `GET /readyz` 对外提供裁剪后的形式——状态码相同，
 但只含 `ready`、`reason` 以及快照的 `id`、`format_version`、`embedding_space`，从不包含
 `indexer_status`（其 `last_error` 可能含有内部错误文本）。
 
@@ -305,6 +391,9 @@ agent/src/
 ├── agent.py           # Agentic RAG API
 ├── graph.py           # LangGraph 工作流
 ├── retriever.py       # 按快照缓存的语义搜索
+├── search.py          # 关键词搜索、摘要与游标
+├── search_text.py     # 共用的固定版本中文分词
+├── search_db.py       # GIN 候选与相关度 SQL
 ├── cache.py           # LRU 缓存实现
 ├── snapshots.py       # 快照选择、轮询、就绪状态
 ├── vector_db.py       # 只读、带快照 schema 的数据库查询
@@ -318,7 +407,8 @@ agent/src/
 
 ### 网络访问
 
-Agent 服务**仅运行在 Docker 内部网络**（不对宿主机暴露）：
+默认部署中 Agent 仅在 Docker 内部网络可达；sample overlay 额外将 API 绑定到
+`127.0.0.1:18001`（可用 `SAMPLE_AGENT_PORT` 修改）：
 
 ```bash
 # 从宿主机访问（经由 docker exec）
@@ -332,9 +422,9 @@ curl http://agent:8000/chat \
   -d '{"question": "test"}'
 ```
 
-Web 前端是唯一发布到宿主机的服务——纯 HTTP，端口 8080，无 TLS（公网
+默认部署中 Web 前端是唯一发布到宿主机的服务——纯 HTTP，端口 8080，无 TLS（公网
 暴露与 TLS 终止由本仓库之外处理）。前端通过内部 Docker 网络将 `/chat`
-代理给 agent；agent 本身从不暴露给宿主机。
+代理给 agent；只有 localhost sample overlay 会发布 Agent 端口。
 
 Agent 同时在两个网络上：所属应用实例的私有网络（只与本实例的 `web` 共享，`agent` 在此只解析到本 Agent），
 以及数据层网络（用于连接 `postgres`）。蓝绿部署期间每个实例的 Agent 都在数据层网络上，该网络上的别名

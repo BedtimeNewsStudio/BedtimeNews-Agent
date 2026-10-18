@@ -51,8 +51,8 @@ Frontend：
 
 - 运行在 Docker 容器中，通过纯 HTTP 对外提供服务，端口 8080（无 TLS——
   公网暴露与 TLS 终止由本仓库之外处理）
-- 是唯一发布到宿主机的服务（`FRONTEND_PORT`，默认 8080）
-- 通过内部 Docker 网络将 `/chat` 与文稿 API 代理给 agent；agent 从不暴露给宿主机
+- 默认部署中是唯一发布到宿主机的服务（`FRONTEND_PORT`，默认 8080）
+- 通过内部 Docker 网络将 `/chat` 与文稿 API 代理给 agent；sample overlay 会另将 Agent 绑定到 loopback 供 API 开发
 
 ## 组件
 
@@ -85,6 +85,10 @@ Frontend：
 | GET  | `/robots.txt`                    | 允许全部抓取，并指向 sitemap                                               |
 | GET  | `/sitemap.xml`                   | 首页、各栏目列表及全部文稿                                                 |
 | GET  | `/s/{short_id}`                  | 短链接，`302` 跳转到文稿                                                   |
+
+Agent 的 `GET /search` 仅为后端 API；本服务不代理 `/search` 或 `/api/search`，
+也没有搜索界面。参数和返回值见 [Agent 搜索 API](../agent/README.md#get-search)。
+localhost 的 18001 端口由 sample overlay 直接发布，不是前端路由。
 
 ## 开发流程
 

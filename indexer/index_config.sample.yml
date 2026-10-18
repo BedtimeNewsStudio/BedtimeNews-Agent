@@ -11,6 +11,14 @@ required_uris:
   - ChanJingPoBiJi/2024-07-25.md
   - ChanJingPoBiJi/2026-06-03.md
 
+  - ShuiQianXiaoXi/0501-0600/0581.md
+  - ShuiQianXiaoXi/0301-0400/0329.md
+  - ShuiQianXiaoXi/0401-0500/0461.md
+  - ShuiQianXiaoXi/0001-0100/0012.md
+  - CanKaoXinXi/0201-0300/0266.md
+  - ShuiQianXiaoXi/0201-0300/0280.md
+  - CanKaoXinXi/0501-0600/0515.md
+
 include:
   - ShuiQianXiaoXi/0001-0100/0013.5.md
   - ShuiQianXiaoXi/0501-0600/0588.md
@@ -21,6 +29,14 @@ include:
 
   - ChanJingPoBiJi/2024-07-25.md
   - ChanJingPoBiJi/2026-06-03.md
+
+  - ShuiQianXiaoXi/0501-0600/0581.md
+  - ShuiQianXiaoXi/0301-0400/0329.md
+  - ShuiQianXiaoXi/0401-0500/0461.md
+  - ShuiQianXiaoXi/0001-0100/0012.md
+  - CanKaoXinXi/0201-0300/0266.md
+  - ShuiQianXiaoXi/0201-0300/0280.md
+  - CanKaoXinXi/0501-0600/0515.md
 
 exclude: []
 

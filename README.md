@@ -28,6 +28,7 @@
 
 **核心功能：**
 
+- 完整正文的后端关键词搜索，返回相关度排序与命中摘要（仅 Agent API，不向前端暴露）
 - 自动查询路由（档案检索 vs 受限的直接处理）
 - 查询优化与语义搜索
 - 基于LLM的文档相关性评分
@@ -53,6 +54,24 @@
 `发布日期 YYYY-MM-DD | ...` 元数据行不索引。引用的标签是标准化标题（如睡前消息123），链接打开正文里对应的 `##`；没有话题锚点时，链接打开文稿开头。
 
 整个服务栈仅提供纯 HTTP（8080 端口），不做 TLS。公网暴露与 TLS 终止由本仓库之外的工作处理。
+
+## 后端 API
+
+Agent 提供以下 HTTP 端点。默认部署的 Agent 端口为内部端口，可通过
+`docker compose exec agent curl http://localhost:8000/health` 或所属应用的私有网络访问。
+sample overlay 额外绑定 `127.0.0.1:18001`，可用 `SAMPLE_AGENT_PORT` 修改。
+
+| 方法   | Agent 路径              | 用途                                             |
+| ------ | ----------------------- | ------------------------------------------------ |
+| `POST` | `/chat`                 | RAG 回答，可选流式输出                           |
+| `GET`  | `/search`               | 正文自动分词搜索、相关度排序、摘要和固定快照翻页 |
+| `GET`  | `/transcripts`          | 文稿元数据索引                                   |
+| `GET`  | `/transcripts/{doc_id}` | 按 URI 返回单篇阅读器投影                        |
+| `GET`  | `/health`               | Agent 就绪状态及选中的快照                       |
+
+**关键词搜索仅在后端提供。** web 不代理 `/search` 或 `/api/search`，也没有搜索界面。
+现有聊天与文稿路由见[前端端点文档](frontend/README.md#端点)。参数、响应和错误码见
+[Agent API 参考](agent/README.md#api-参考)，实现依据见[已完成的搜索后端设计](docs/designs/20261018_keyword-search-backend.md)。
 
 ## 快速开始
 
@@ -294,6 +313,7 @@ BedtimeNews-Agent/
 │   ├── README.md
 │   ├── README.en.md
 │   └── README.es-ES.md
+├── scripts/            # localhost 样本关键词搜索 API 验证
 ├── docs/
 │   ├── designs/        # 设计文档
 │   └── diagrams/       # SVG 架构图与工作流图

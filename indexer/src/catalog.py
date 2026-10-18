@@ -473,18 +473,18 @@ def gc_candidates(
 
 
 class PreviousLineageBlocked(RuntimeError):
-    """Refusing to drop the previous chunking."""
+    """Refusing to drop previous indexing lineages."""
 
 
 def previous_lineage_targets(
     snapshots: list[SnapshotInfo],
     lineage: tuple[str, str],
 ) -> list[SnapshotInfo]:
-    """Snapshots of an older chunking in this embedding space.
+    """Snapshots of a previous indexing lineage in this embedding space.
 
-    The current lineage is the fingerprint of this indexer (format 2, chunker
-    2). Anything else in the same embedding space is the previous method: it
-    did not cut the body on sibling ``##`` topics and has no ``heading_anchor``.
+    The current lineage includes this indexer's format, body normalization,
+    chunker, and search versions. Any other fingerprint in the same embedding
+    space is an older indexing lineage, including snapshots without search.
     A different embedding space is a different model and is not this cleanup.
 
     Raises ``PreviousLineageBlocked`` when no current-lineage snapshot is
@@ -532,7 +532,7 @@ def drop_registered_snapshot(conn: Connection, snap: SnapshotInfo) -> None:
 
 
 def drop_previous_lineage(conn: Connection) -> list[str]:
-    """Drop older chunking in this embedding space. See ``previous_lineage_targets``."""
+    """Drop older indexing lineages in this space. See ``previous_lineage_targets``."""
     with transaction(conn) as cursor:
         targets = previous_lineage_targets(list_snapshots(cursor), current_lineage())
     dropped: list[str] = []

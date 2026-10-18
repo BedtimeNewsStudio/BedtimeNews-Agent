@@ -381,6 +381,144 @@ def test_self_check_rejects_a_transcript_without_chunks(corpus, fake_embed, quer
     assert snapshot_rows(query) == []
 
 
+def test_search_covers_short_topics_and_survives_appendix_edits(
+    corpus, fake_embed, query
+):
+    uri = "ShuiQianXiaoXi/0001-0100/0009.md"
+    source = "# 展示标题\n\n发布日期 2026-10-18\n\n## 正文\n\n短开场\n\n## 甲\n贵州\n\n## 乙\n债务\n\n## 附录\n附录独占词\n"
+    corpus.write(uri, source)
+    first = build()
+    assert first.result == "published", first.error
+    schema = snapshot_rows(query)[-1][1]
+    row = query(
+        f'SELECT body_text, body_hash, search_terms::text, sections FROM "{schema}".search_documents WHERE doc_id = %s',
+        (uri,),
+    )[0]
+    assert "贵州" in row[0]
+    assert "债务" in row[0]
+    assert "短开场" in row[0]
+    assert "附录独占词" not in row[0]
+    assert (
+        query(
+            f'SELECT count(*) FROM "{schema}".document_chunks WHERE doc_id = %s', (uri,)
+        )[0][0]
+        == 0
+    )
+    fake_embed.calls.clear()
+    corpus.write(uri, source.replace("附录独占词", "修改附录"))
+    second = build()
+    assert second.result == "published", second.error
+    schema = snapshot_rows(query)[-1][1]
+    assert (
+        query(
+            f'SELECT body_text, body_hash, search_terms::text, sections FROM "{schema}".search_documents WHERE doc_id = %s',
+            (uri,),
+        )[0]
+        == row
+    )
+    assert fake_embed.texts == 0
+    corpus.delete(uri)
+    assert build().result == "published"
+    schema = snapshot_rows(query)[-1][1]
+    assert (
+        query(
+            f'SELECT count(*) FROM "{schema}".search_documents WHERE doc_id = %s',
+            (uri,),
+        )[0][0]
+        == 0
+    )
+    assert query(f'SELECT document_count FROM "{schema}".search_statistics') == [(4,)]
+
+
+def test_search_version_change_rebuilds_projection_and_reuses_vectors(
+    corpus, fake_embed, query, monkeypatch
+):
+    from src import search_projection
+
+    assert build().result == "published"
+    fake_embed.calls.clear()
+    monkeypatch.setattr(search_projection, "SEARCH_VERSION", 3)
+    monkeypatch.setattr(builder, "SEARCH_VERSION", 3)
+    result = build()
+    assert result.result == "published", result.error
+    rows = snapshot_rows(query)
+    assert rows[-1][-1]["build"] == "full"
+    assert rows[-1][-1]["embedded_new"] == 0
+    assert query(
+        f'SELECT DISTINCT search_version FROM "{rows[-1][1]}".search_documents'
+    ) == [(3,)]
+
+
+def test_search_only_snapshot_can_contain_valid_short_bodies(corpus, fake_embed, query):
+    for i in range(1, 5):
+        corpus.delete(f"ShuiQianXiaoXi/0001-0100/{i:04d}.md")
+    corpus.write(
+        "ShuiQianXiaoXi/0001-0100/0009.md",
+        "# 短文稿\n发布日期 2026-10-18\n## 正文\n贵州债务\n## 附录\n",
+    )
+    result = build()
+    assert result.result == "published", result.error
+    stats = snapshot_rows(query)[-1][-1]
+    assert stats["chunks"] == 0
+    assert stats["search_documents"] == 1
+    assert fake_embed.texts == 0
+
+
+def test_search_only_body_containing_only_stopwords_still_publishes(
+    corpus, fake_embed, query
+):
+    for i in range(1, 5):
+        corpus.delete(f"ShuiQianXiaoXi/0001-0100/{i:04d}.md")
+    corpus.write(
+        "ShuiQianXiaoXi/0001-0100/0009.md",
+        "# 短文稿\n发布日期 2026-10-18\n## 正文\n的和及其\n## 附录\n",
+    )
+    result = build()
+    assert result.result == "published", result.error
+    stats = snapshot_rows(query)[-1][-1]
+    assert stats["chunks"] == 0
+    assert stats["search_documents"] == 0
+    assert fake_embed.texts == 0
+
+
+def test_missing_search_projection_aborts_publication(
+    corpus, fake_embed, query, monkeypatch
+):
+    check = builder.self_check
+
+    def corrupt_search(cursor, target, **kwargs):
+        cursor.execute(
+            f'DELETE FROM "{target}".search_documents WHERE doc_id = (SELECT min(doc_id) FROM "{target}".search_documents)'
+        )
+        return check(cursor, target, **kwargs)
+
+    monkeypatch.setattr(builder, "self_check", corrupt_search)
+    result = build()
+    assert result.result == "failed"
+    assert result.error is not None
+    assert "search body coverage" in result.error
+    assert snapshot_rows(query) == []
+    assert snapshot_schemas(query) == set()
+
+
+def test_oversized_search_vector_aborts_publication_with_document_name(
+    corpus, fake_embed, query, monkeypatch
+):
+    from src import search_projection
+
+    monkeypatch.setattr(
+        search_projection.SearchProjection,
+        "terms",
+        property(lambda self: [f"w{i:020d}" for i in range(60000)]),
+    )
+    result = build()
+    assert result.result == "failed"
+    assert result.error is not None
+    assert "Cannot index complete search body ShuiQianXiaoXi/" in result.error
+    assert snapshot_rows(query) == []
+    assert snapshot_schemas(query) == set()
+
+
 def test_disk_precheck_refuses_to_build(
     corpus, fake_embed, query, monkeypatch, tmp_path
 ):

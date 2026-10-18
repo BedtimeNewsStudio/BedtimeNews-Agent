@@ -22,9 +22,10 @@ configuración.
 - `retriever.py`: Búsqueda semántica (embeddings + pgvector) sobre un snapshot;
   las claves de la caché de resultados incluyen el ID del snapshot, así que un
   cambio de snapshot nunca sirve resultados obsoletos
+- `search.py` / `search_db.py`: Búsqueda del cuerpo completo, GIN, puntuación, fragmentos y cursores de snapshot
 - `cache.py`: Caché LRU para resultados de consultas
 - `chat.py`: Manejadores de endpoints FastAPI
-- `main.py`: Servidor FastAPI (`/chat`, `/transcripts`, `/health`)
+- `main.py`: Servidor FastAPI (`/chat`, `/search`, `/transcripts`, `/health`)
 - `snapshots.py`: Qué snapshot RAG leer: regla de selección, sondeo del
   registro cada 15 segundos, disponibilidad
 - `vector_db.py`: Consultas de solo lectura a PostgreSQL + pgvector; cada
@@ -37,18 +38,18 @@ El indexador publica la base de conocimiento como snapshots inmutables
 [README del indexador](../indexer/README.es-ES.md#esquema-de-base-de-datos). El agente:
 
 - **selecciona** el snapshot publicado cuyo `format_version` admite
-  (`SUPPORTED_FORMATS` es `{1, 2}`) y cuyo espacio vectorial
+  (`SUPPORTED_FORMATS` es `{1, 2, 3, 4}`) y cuyo espacio vectorial
   (`<embedding.model>@<EMBEDDING_DIM>`, o `embedding.space_id`) coincide con el
-  suyo: primero el formato más alto y después el más reciente. Solo el formato 2
-  tiene anclas de sección. Un proceso que solo admite `{1}` sigue leyendo el
+  suyo: primero el formato más alto y después el más reciente. Los formatos 2–4
+  tienen anclas de sección; el formato 4 añade búsqueda por palabras segmentadas. Un proceso que solo admite `{1}` sigue leyendo el
   formato 1. Si el snapshot elegido sigue siendo formato 1, no tiene
   `heading_anchor` y sus citas no llevan hash. `RAG_SNAPSHOT` fija un ID de
   snapshot. Antes de que el indexador cree `rag_meta`, el esquema
   `rag` original se lee como el snapshot implícito `legacy`;
 - mantiene el snapshot actual **en memoria** y vuelve a aplicar la regla cada
   15 segundos en un hilo en segundo plano, de modo que un snapshot recién
-  publicado o revertido surte efecto sin reiniciar. El manejo de peticiones
-  nunca consulta `rag_meta`;
+  publicado o revertido surte efecto sin reiniciar. El chat y el lector usan
+  esta selección; la paginación de búsqueda consulta `rag_meta` para validar el cursor;
 - **fija cada petición** al snapshot vigente cuando empieza: todas las
   recuperaciones de una respuesta de `/chat`, y cada respuesta del lector, leen
   un único snapshot aunque se publique otro mientras tanto;
@@ -170,6 +171,96 @@ parada (límite de 240 s < 270 s de parada ordenada de uvicorn < 300 s de
 detener o sustituir el agente nunca corta una respuesta; ver
 [el diseño blue-green](../docs/designs/20261008_blue-green-deployment.md).
 
+### GET /search
+
+Búsqueda predeterminada de palabras en el cuerpo completo, incluidos pasajes
+cortos descartados por embeddings. Jieba segmenta preguntas sin espacios y texto
+separado por espacios, eliminando palabras vacías y tokens de solo puntuación.
+Basta que coincida una palabra analizada. La relevancia combina BM25 ponderado,
+cobertura y proximidad, sin exigir la pregunta literal completa. Las letras ASCII
+no distinguen mayúsculas. No hay llamadas a modelos ni modos exacto/relajado.
+
+**Solo backend:** el servicio web no hace proxy de `/search` ni `/api/search` y
+no tiene interfaz de búsqueda. El puerto normal del agente es privado; el overlay
+de muestras lo vincula a `127.0.0.1:18001` (`SAMPLE_AGENT_PORT` cambia el puerto).
+
+```sh
+# Despliegue normal: acceder a la API desde el contenedor del agente.
+docker compose exec agent curl -G 'http://localhost:8000/search' \
+  --data-urlencode 'q=贵州 债务' --data-urlencode 'limit=20'
+
+# Solo overlay de muestras: acceso directo desde localhost.
+curl -G 'http://127.0.0.1:18001/search' \
+  --data-urlencode 'q=贵州 债务' --data-urlencode 'limit=20'
+```
+
+| Parámetro | Obligatorio | Contrato                                                                                                                     |
+| --------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `q`       | Sí          | 1–512 caracteres Unicode; texto natural segmentado; máximo 64 palabras analizables distintas de hasta 64 caracteres; sin NUL |
+| `limit`   | No          | 1–50 resultados por página; 20 por defecto                                                                                   |
+| `cursor`  | No          | El `next_cursor` recibido, hasta 16.384 caracteres; conservar orden de palabras analizadas y tamaño de página                |
+
+La respuesta incluye `query` original, `terms` normalizados, `snapshot_id`,
+`total` exacto, `results` ordenados por relevancia y `next_cursor` nullable. Cada
+resultado contiene `doc_id`, `title` estandarizado, `source_title` real, programa,
+fecha, puntuación sin redondear, palabras coincidentes `matched_terms` y hasta tres fragmentos. Cada resultado puede coincidir solo con parte de `terms`. Los fragmentos incluyen
+anclas de tema existentes (vacías para el preámbulo) y partes de texto literal
+con indicadores de resaltado, sin generar HTML. Ejemplo con valores ilustrativos:
+
+```json
+{
+  "query": "贵州 债务",
+  "terms": ["贵州", "债务"],
+  "snapshot_id": "s20261018t095951z_3f23dda",
+  "total": 1,
+  "results": [
+    {
+      "doc_id": "ShuiQianXiaoXi/0501-0600/0588.md",
+      "title": "睡前消息588",
+      "source_title": "【睡前消息588】城投债四大网红",
+      "channel": "ShuiQianXiaoXi",
+      "publication_date": "2023-05-12",
+      "score": 3.82,
+      "matched_terms": ["贵州", "债务"],
+      "snippets": [
+        {
+          "heading": "城投债",
+          "heading_anchor": "城投债",
+          "parts": [
+            {"text": "贵州", "highlight": true},
+            {"text": "的", "highlight": false},
+            {"text": "债务", "highlight": true}
+          ]
+        }
+      ]
+    }
+  ],
+  "next_cursor": null
+}
+```
+
+Envía `next_cursor` como `cursor` para continuar sobre el snapshot publicado
+original aunque aparezca uno nuevo. El cursor no amplía la retención ni permite
+eludir `RAG_SNAPSHOT`. Un cursor nulo indica que no hay otra página.
+
+| Estado HTTP | Significado                                                                                                   |
+| ----------- | ------------------------------------------------------------------------------------------------------------- |
+| `200`       | Resultados, o `results` vacío con `total = 0` sin coincidencias                                               |
+| `410`       | Snapshot del cursor inexistente, retirado, eliminado o incompatible; reiniciar búsqueda                       |
+| `422`       | Consulta/límites/cursor inválidos, sin palabras analizables, o cambio de orden normalizado o tamaño de página |
+| `503`       | Índice no listo (incluidos formatos 1/2/3), o base de datos/servicio no disponible                            |
+
+El [diseño backend completado](../docs/designs/20261018_keyword-search-backend.md)
+explica GIN por palabras, segmentación, puntuación y ciclo de snapshots. Desde la raíz,
+el primer comando verifica muestras localhost sin escrituras; `--lifecycle`
+publica además un snapshot de muestra y comprueba retirada, rollback y restauración:
+
+```sh
+uv run --no-sync python scripts/test_keyword_search_e2e.py
+uv run --no-sync python scripts/test_keyword_search_e2e.py --lifecycle
+```
+
+
 ### GET /transcripts
 
 Índice de navegación del lector a partir de la tabla `transcripts` del snapshot actual:
@@ -208,7 +299,7 @@ ni llama a ningún modelo.
     "source_commit": "a1b2c3d..."
   },
   "embedding_space": "Qwen/Qwen3-Embedding-4B@2560",
-  "supported_formats": [1],
+  "supported_formats": [1, 2, 3, 4],
   "pinned_by_config": null,
   "checked_at": "2026-10-07T10:15:38Z",
   "indexer_status": {
@@ -226,7 +317,7 @@ sirviendo); úsalo para alertas, p. ej. 3 fallos consecutivos o más de 3 horas
 sin ejecución. El archivo compose usa `/health` como comprobación de salud del
 contenedor del agente.
 
-El cuerpo completo es solo interno (el agente no se publica). `web` expone
+En el despliegue normal el cuerpo completo es interno. El overlay de muestras también publica el agente en loopback para desarrollo. `web` expone
 públicamente una forma recortada como `GET /readyz`: el mismo código de estado,
 pero solo `ready`, `reason` y el `id`, `format_version` y `embedding_space` del
 snapshot, nunca `indexer_status` (su `last_error` puede contener texto de
@@ -358,6 +449,9 @@ agent/src/
 ├── agent.py           # API RAG agente
 ├── graph.py           # Flujo de trabajo LangGraph
 ├── retriever.py       # Búsqueda semántica con caché por snapshot
+├── search.py          # Búsqueda, fragmentos y cursores
+├── search_text.py     # Análisis chino compartido y fijado
+├── search_db.py       # Candidatos GIN y SQL de relevancia
 ├── cache.py           # Implementación de caché LRU
 ├── snapshots.py       # Selección de snapshot, sondeo, disponibilidad
 ├── vector_db.py       # Consultas de solo lectura cualificadas por snapshot
@@ -371,8 +465,8 @@ agent/src/
 
 ### Acceso de Red
 
-El servicio agente se ejecuta **solo en la red interna de Docker** (no
-expuesto al host):
+El despliegue normal mantiene el agente en las redes internas de Docker. El
+overlay de muestras vincula además la API a `127.0.0.1:18001` (`SAMPLE_AGENT_PORT`):
 
 ```bash
 # Acceso desde el host (vía docker exec)
@@ -386,10 +480,10 @@ curl http://agent:8000/chat \
   -d '{"question": "test"}'
 ```
 
-El frontend web es el único servicio publicado al host — HTTP puro en el
+En el despliegue normal, el frontend web es el único servicio publicado al host — HTTP puro en el
 puerto 8080, sin TLS (la exposición pública y la terminación TLS se gestionan
 fuera de este repositorio). Proxies `/chat` al agente a través de la red
-interna de Docker; el agente mismo nunca se expone al host.
+interna de Docker; solo el overlay localhost publica el puerto del agente.
 
 El agente está en dos redes: la red privada de su instancia de aplicación,
 compartida solo con el `web` de esa instancia (donde `agent` resuelve solo a

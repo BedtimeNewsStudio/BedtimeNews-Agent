@@ -1,0 +1,3256 @@
+{
+  "snapshot_id": "s20261018t112012z_3f23dda",
+  "sample_transcripts": 15,
+  "http_checks": 48,
+  "cases": [
+    {
+      "query": "贵州的债务问题现状及其成因",
+      "snapshot_id": "s20261018t112012z_3f23dda",
+      "terms": [
+        "贵州",
+        "债务",
+        "问题",
+        "现状",
+        "成因"
+      ],
+      "total": 14,
+      "expected_relevant": [
+        "ShuiQianXiaoXi/0501-0600/0581.md",
+        "ShuiQianXiaoXi/0501-0600/0588.md"
+      ],
+      "hit_at_1": true,
+      "hit_at_3": true,
+      "known_relevant_recall_at_3": 1.0,
+      "literal_sentence_matches": 0,
+      "top_results": [
+        {
+          "doc_id": "ShuiQianXiaoXi/0501-0600/0581.md",
+          "title": "睡前消息581",
+          "source_title": "【睡前消息581】信达支援贵州地方债，2023年酷似1999",
+          "channel": "ShuiQianXiaoXi",
+          "publication_date": "2023-04-25",
+          "score": 3.545952932204609,
+          "snippets": [
+            {
+              "heading": "贵州化债喊救命",
+              "heading_anchor": "贵州化债喊救命",
+              "parts": [
+                {
+                  "text": "贵州",
+                  "highlight": true
+                },
+                {
+                  "text": "化债喊救命\n\n回到资讯话题，睡前消息节目的第一号老朋友，当然是代表了",
+                  "highlight": false
+                },
+                {
+                  "text": "贵州",
+                  "highlight": true
+                },
+                {
+                  "text": "地方",
+                  "highlight": false
+                },
+                {
+                  "text": "债务问题",
+                  "highlight": true
+                },
+                {
+                  "text": "的独山县。我听说2019年的第140期 马前卒暴走，亲眼看看独山县怎么烧掉400亿！周年特辑（上）节目之后，",
+                  "highlight": false
+                },
+                {
+                  "text": "贵州",
+                  "highlight": true
+                },
+                {
+                  "text": "地级市融资平台的难度都上了一个台阶，借新还旧的利率跳了一个百分点。不过这显然没阻止",
+                  "highlight": false
+                },
+                {
+                  "text": "贵州",
+                  "highlight": true
+                },
+                {
+                  "text": "地方融资平台的",
+                  "highlight": false
+                },
+                {
+                  "text": "债务",
+                  "highlight": true
+                },
+                {
+                  "text": "继续暴涨。2018年，全国人大财经委副主任贺铿的数据还是地方",
+                  "highlight": false
+                },
+                {
+                  "text": "债务",
+                  "highlight": true
+                },
+                {
+                  "text": "总额“超过40万亿”，最近媒体已",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            },
+            {
+              "heading": "贵州化债喊救命",
+              "heading_anchor": "贵州化债喊救命",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "依靠自身能力已无法得到有效解决。\n\n下一步，调研组将根据了解到的实际情况和各市县反映的突出",
+                  "highlight": false
+                },
+                {
+                  "text": "问题",
+                  "highlight": true
+                },
+                {
+                  "text": "，积极向国研中心争取“智力支持”，为化解",
+                  "highlight": false
+                },
+                {
+                  "text": "贵州",
+                  "highlight": true
+                },
+                {
+                  "text": "地方政府",
+                  "highlight": false
+                },
+                {
+                  "text": "债务",
+                  "highlight": true
+                },
+                {
+                  "text": "提出差异化、可操作的建议。这里我要说一句，从社会整体视角来看，没有凭空产生的",
+                  "highlight": false
+                },
+                {
+                  "text": "债务",
+                  "highlight": true
+                },
+                {
+                  "text": "。一部分人欠的债，就是另一部分人的财产，至少是账面上的财产。去年年底遵义城投公司公开宣布",
+                  "highlight": false
+                },
+                {
+                  "text": "债务",
+                  "highlight": true
+                },
+                {
+                  "text": "延期，156亿",
+                  "highlight": false
+                },
+                {
+                  "text": "债务",
+                  "highlight": true
+                },
+                {
+                  "text": "强行拖20年再还，而且前十年只还利息不还本金。考虑到过去20",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            },
+            {
+              "heading": "贵州化债喊救命",
+              "heading_anchor": "贵州化债喊救命",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "赖账的选项。然后就是几十个银行跟着破产，取不出存款，去年河南的危机会以百倍千倍的规模上演。更进一步说，要是",
+                  "highlight": false
+                },
+                {
+                  "text": "贵州",
+                  "highlight": true
+                },
+                {
+                  "text": "公开赖账被默许，整个中西部的融资平台都一定会跟进学习，到时候，国家恐怕只有制造一场超级通货膨胀，才能把",
+                  "highlight": false
+                },
+                {
+                  "text": "债务",
+                  "highlight": true
+                },
+                {
+                  "text": "稀释到可以承受的水平。所以，上级政府并没有正面回应",
+                  "highlight": false
+                },
+                {
+                  "text": "贵州",
+                  "highlight": true
+                },
+                {
+                  "text": "省的喊话，而是默默派出了有经验的机构来支援。\n\n4月20日，中国信达公司的副总裁赵立民到",
+                  "highlight": false
+                },
+                {
+                  "text": "贵州",
+                  "highlight": true
+                },
+                {
+                  "text": "参加活动，与",
+                  "highlight": false
+                },
+                {
+                  "text": "贵州",
+                  "highlight": true
+                },
+                {
+                  "text": "省地方金融监管局、",
+                  "highlight": false
+                },
+                {
+                  "text": "贵州",
+                  "highlight": true
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            }
+          ],
+          "matched_terms": [
+            "贵州",
+            "债务",
+            "问题",
+            "现状"
+          ]
+        },
+        {
+          "doc_id": "ShuiQianXiaoXi/0501-0600/0588.md",
+          "title": "睡前消息588",
+          "source_title": "【睡前消息588】城投债四大网红，柳州第一",
+          "channel": "ShuiQianXiaoXi",
+          "publication_date": "2023-05-12",
+          "score": 3.0777209175893403,
+          "snippets": [
+            {
+              "heading": "电动车时代的困境",
+              "heading_anchor": "电动车时代的困境",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "遇到国务院叫停",
+                  "highlight": false
+                },
+                {
+                  "text": "债务",
+                  "highlight": true
+                },
+                {
+                  "text": "地铁，所以几千亿投资根本收不回来，现金流比那些借债早的城市还紧张。这就是柳州进入“四大网红”的原因。\n\n柳州的",
+                  "highlight": false
+                },
+                {
+                  "text": "债务",
+                  "highlight": true
+                },
+                {
+                  "text": "危机，会产生全国性影响吗？\n\n就",
+                  "highlight": false
+                },
+                {
+                  "text": "债务",
+                  "highlight": true
+                },
+                {
+                  "text": "规模来说，就算是四千亿的债，也就是恒大的四分之一，金融体系还能救得起。但",
+                  "highlight": false
+                },
+                {
+                  "text": "问题",
+                  "highlight": true
+                },
+                {
+                  "text": "是全国不止一个地级市柳州，或者说柳州也只是全国大多数地级市的缩影。2019年，第140期节目前后分析独山的地方债",
+                  "highlight": false
+                },
+                {
+                  "text": "问题",
+                  "highlight": true
+                },
+                {
+                  "text": "，当时我说整个",
+                  "highlight": false
+                },
+                {
+                  "text": "贵州",
+                  "highlight": true
+                },
+                {
+                  "text": "虽然发展经济有困难，但",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            },
+            {
+              "heading": "四大网红的柳州",
+              "heading_anchor": "四大网红的柳州",
+              "parts": [
+                {
+                  "text": "四大网红的柳州\n\n大家好，2023年5月12日星期五，欢迎收看588期睡前消息，请静静介绍话题。从",
+                  "highlight": false
+                },
+                {
+                  "text": "贵州",
+                  "highlight": true
+                },
+                {
+                  "text": "独山县开始，地方",
+                  "highlight": false
+                },
+                {
+                  "text": "债务",
+                  "highlight": true
+                },
+                {
+                  "text": "就是睡前消息节目最关注的国内话题。那些借钱不搞实体经济的城市、跟风造人工景区的城市、抱着侥幸心态拼房地产的城市，经常在我们的节目上成为负面典型。",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            },
+            {
+              "heading": "电动车时代的困境",
+              "heading_anchor": "电动车时代的困境",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "独山自从民国时代就通铁路，本地不缺水源，不用借高利贷搞文旅，也有发展正经产业的机会。连独山都搞了400亿的债，不难想象整个",
+                  "highlight": false
+                },
+                {
+                  "text": "贵州",
+                  "highlight": true
+                },
+                {
+                  "text": "的",
+                  "highlight": false
+                },
+                {
+                  "text": "债务",
+                  "highlight": true
+                },
+                {
+                  "text": "黑洞有多大。2022年，第455期节目的标题是《阆中核酸自费，“普通”中国城市没钱了》，当时我分析了阆中不靠谱的文旅地产项目，也列举了阆中发展经济的条件：\n",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            }
+          ],
+          "matched_terms": [
+            "贵州",
+            "债务",
+            "问题"
+          ]
+        },
+        {
+          "doc_id": "ShuiQianXiaoXi/0401-0500/0461.md",
+          "title": "睡前消息461",
+          "source_title": "【睡前消息461】日本明石没有生育奇迹，中国呢？",
+          "channel": "ShuiQianXiaoXi",
+          "publication_date": "2022-07-22",
+          "score": 2.7938477601706784,
+          "snippets": [
+            {
+              "heading": "中国能从明石学什么",
+              "heading_anchor": "中国能从明石学什么",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "众所周知，在",
+                  "highlight": false
+                },
+                {
+                  "text": "贵州",
+                  "highlight": true
+                },
+                {
+                  "text": "省，遵义是贵阳之外财政状况最好的地级市。而遵义道桥建设公司是遵义国资委100%持股的融资平台，总资产1700亿。现在是作为",
+                  "highlight": false
+                },
+                {
+                  "text": "贵州",
+                  "highlight": true
+                },
+                {
+                  "text": "化解",
+                  "highlight": false
+                },
+                {
+                  "text": "债务",
+                  "highlight": true
+                },
+                {
+                  "text": "的试点来谈判的，恐怕其他融资平台的",
+                  "highlight": false
+                },
+                {
+                  "text": "债务",
+                  "highlight": true
+                },
+                {
+                  "text": "还拿不到这么好的重组条件。这就是我一直说的，西部交通建设应该停一停了，尤其要停下那些干赔钱的运人高铁，倒是可以加强一下运货的载重铁路。否则资产再多，最后也只能是越滚越大的",
+                  "highlight": false
+                },
+                {
+                  "text": "债务",
+                  "highlight": true
+                },
+                {
+                  "text": "黑洞。",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            },
+            {
+              "heading": "中国能从明石学什么",
+              "heading_anchor": "中国能从明石学什么",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "违法。\n\n而宋占英已经在2017年退休，这是退休5年之后被拉回来调查。另外，7月11日，",
+                  "highlight": false
+                },
+                {
+                  "text": "贵州",
+                  "highlight": true
+                },
+                {
+                  "text": "遵义市的政府融资平台遵义道桥建设公司进行了",
+                  "highlight": false
+                },
+                {
+                  "text": "债务",
+                  "highlight": true
+                },
+                {
+                  "text": "重组，简单说就是还不起钱了，要求修改还款条件，以后慢慢还。这次重组，基本条件是10年的",
+                  "highlight": false
+                },
+                {
+                  "text": "债务",
+                  "highlight": true
+                },
+                {
+                  "text": "改到20年，",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            },
+            {
+              "heading": "福利的钱从哪里来",
+              "heading_anchor": "福利的钱从哪里来",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "6月15日，日本国债价格暴跌，收益率以熔断速度上升。所有日本人都意识到，原来",
+                  "highlight": false
+                },
+                {
+                  "text": "债务",
+                  "highlight": true
+                },
+                {
+                  "text": "经济不能无限扩张，而且很快就要触碰到边界了。这次金融事件对日本社会的影响，远远超出了安倍死于街头。所以，日本当下的最大",
+                  "highlight": false
+                },
+                {
+                  "text": "问题",
+                  "highlight": true
+                },
+                {
+                  "text": "，就是怎样利用越来越少的",
+                  "highlight": false
+                },
+                {
+                  "text": "债务",
+                  "highlight": true
+                },
+                {
+                  "text": "空间，给未来留一点希望。\n\n明石市的福利一方面是",
+                  "highlight": false
+                },
+                {
+                  "text": "债务",
+                  "highlight": true
+                },
+                {
+                  "text": "快速上涨的原因，另一方面也的确让本地生育率追到了死亡率的9成，让日本社会看到了一线希望。",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            }
+          ],
+          "matched_terms": [
+            "贵州",
+            "债务",
+            "问题"
+          ]
+        }
+      ]
+    },
+    {
+      "query": "地方政府城投债为什么偿还困难",
+      "snapshot_id": "s20261018t112012z_3f23dda",
+      "terms": [
+        "地方",
+        "政府",
+        "城投债",
+        "偿还",
+        "困难"
+      ],
+      "total": 14,
+      "expected_relevant": [
+        "ShuiQianXiaoXi/0501-0600/0581.md",
+        "ShuiQianXiaoXi/0501-0600/0588.md"
+      ],
+      "hit_at_1": true,
+      "hit_at_3": true,
+      "known_relevant_recall_at_3": 0.5,
+      "literal_sentence_matches": 0,
+      "top_results": [
+        {
+          "doc_id": "ShuiQianXiaoXi/0501-0600/0588.md",
+          "title": "睡前消息588",
+          "source_title": "【睡前消息588】城投债四大网红，柳州第一",
+          "channel": "ShuiQianXiaoXi",
+          "publication_date": "2023-05-12",
+          "score": 5.90047346523672,
+          "snippets": [
+            {
+              "heading": "地方债与政信债",
+              "heading_anchor": "地方债与政信债",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "被称为",
+                  "highlight": false
+                },
+                {
+                  "text": "地方城投债",
+                  "highlight": true
+                },
+                {
+                  "text": "务四大网红。督工你怎么评价柳州当前的状态？\n\n柳州的情况不太好，有成为",
+                  "highlight": false
+                },
+                {
+                  "text": "地方",
+                  "highlight": true
+                },
+                {
+                  "text": "债爆破导火索的危险。现在说起",
+                  "highlight": false
+                },
+                {
+                  "text": "地方",
+                  "highlight": true
+                },
+                {
+                  "text": "债务问题，很少有人抓着字面意思去分析“",
+                  "highlight": false
+                },
+                {
+                  "text": "地方",
+                  "highlight": true
+                },
+                {
+                  "text": "债”。因为",
+                  "highlight": false
+                },
+                {
+                  "text": "地方",
+                  "highlight": true
+                },
+                {
+                  "text": "债是由",
+                  "highlight": false
+                },
+                {
+                  "text": "地方政府",
+                  "highlight": true
+                },
+                {
+                  "text": "以",
+                  "highlight": false
+                },
+                {
+                  "text": "政府",
+                  "highlight": true
+                },
+                {
+                  "text": "名义直接借的，基本上都经过财政部审核，有明确的还款计划，就算还不了，中央",
+                  "highlight": false
+                },
+                {
+                  "text": "政府",
+                  "highlight": true
+                },
+                {
+                  "text": "也要负一定责任。所以",
+                  "highlight": false
+                },
+                {
+                  "text": "地方",
+                  "highlight": true
+                },
+                {
+                  "text": "债是相对安全的投资，金融机构愿意用比较低的利率去买，几乎不考虑风险溢价。过去十年，山东、上海、浙江几个",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            },
+            {
+              "heading": "地方债与政信债",
+              "heading_anchor": "地方债与政信债",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "这种现象刚出现的时候，中央媒体还要发文解释一下，现在都懒得解释了。看来全国的金融机构都知道是哪几个省交税在维持全国财政平衡。所以，一般说的",
+                  "highlight": false
+                },
+                {
+                  "text": "地方",
+                  "highlight": true
+                },
+                {
+                  "text": "债危机，都是指",
+                  "highlight": false
+                },
+                {
+                  "text": "地方",
+                  "highlight": true
+                },
+                {
+                  "text": "融资平台债，是",
+                  "highlight": false
+                },
+                {
+                  "text": "地方",
+                  "highlight": true
+                },
+                {
+                  "text": "国企以各种方式借来的钱。这部分钱，直接债务人不是",
+                  "highlight": false
+                },
+                {
+                  "text": "地方政府",
+                  "highlight": true
+                },
+                {
+                  "text": "，而是",
+                  "highlight": false
+                },
+                {
+                  "text": "政府",
+                  "highlight": true
+                },
+                {
+                  "text": "控股的企业融资平台。国企也是企业。理论上说，企业经营有风险，还不上钱，直接破产，债务消灭，",
+                  "highlight": false
+                },
+                {
+                  "text": "政府",
+                  "highlight": true
+                },
+                {
+                  "text": "不会无限负责。",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            },
+            {
+              "heading": "地方债与政信债",
+              "heading_anchor": "地方债与政信债",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "2019年独山400亿债务，每年的利息就超过了40亿，而最近几年利率是一直往上升的。如果中央",
+                  "highlight": false
+                },
+                {
+                  "text": "政府",
+                  "highlight": true
+                },
+                {
+                  "text": "强行限制",
+                  "highlight": false
+                },
+                {
+                  "text": "地方政府",
+                  "highlight": true
+                },
+                {
+                  "text": "融资成本，导致",
+                  "highlight": false
+                },
+                {
+                  "text": "政府",
+                  "highlight": true
+                },
+                {
+                  "text": "不能借新还旧，他们就会用更隐蔽的方式、更高的利率借钱，真实利率我就不太敢说了。",
+                  "highlight": false
+                },
+                {
+                  "text": "地方政府",
+                  "highlight": true
+                },
+                {
+                  "text": "用隐蔽的方式借钱，用更隐蔽的方式承诺利率，所以政信债的总数没有正式统计，只能看市场估算。一般认为，过去5年，总量从40万亿膨胀到",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            }
+          ],
+          "matched_terms": [
+            "地方",
+            "政府",
+            "城投债",
+            "困难"
+          ]
+        },
+        {
+          "doc_id": "CanKaoXinXi/0501-0600/0515.md",
+          "title": "参考信息515",
+          "source_title": "【参考信息515】财政供养人数；贵州市市通高铁",
+          "channel": "CanKaoXinXi",
+          "publication_date": "2025-10-13",
+          "score": 1.2838680045317927,
+          "snippets": [
+            {
+              "heading": "财政供养人数",
+              "heading_anchor": "财政供养人数",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "增。中西部多地已启动人口小县机构编制改革试点，都是工作时关注的核心议题。文章提出要注重编制管理动态调整，考虑本地常住人口的流入和流出，以及",
+                  "highlight": false
+                },
+                {
+                  "text": "地方",
+                  "highlight": true
+                },
+                {
+                  "text": "财政承受能力，因地制宜差异化调整。要重视编内离退休人员管理以及提高",
+                  "highlight": false
+                },
+                {
+                  "text": "政府",
+                  "highlight": true
+                },
+                {
+                  "text": "行政效率，精简机构。",
+                  "highlight": false
+                }
+              ]
+            },
+            {
+              "heading": "贵州市市通高铁",
+              "heading_anchor": "贵州市市通高铁",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "大基建对于拉动经济有一定作用，但作为债务压力最高的省份之一，外界担忧贵州高铁难度更大、成本更高，会给当地带来更沉重的债务负担。长期以来，贵州",
+                  "highlight": false
+                },
+                {
+                  "text": "地方",
+                  "highlight": true
+                },
+                {
+                  "text": "债主要来源于高铁、高速公路和大数据三个方面。截至2024年底，贵州",
+                  "highlight": false
+                },
+                {
+                  "text": "政府",
+                  "highlight": true
+                },
+                {
+                  "text": "债余额1.75万亿，比上年增长15.9%，其中一般债8679亿，专项债8858亿。现在中央每年10万亿财政转移支付，今年贵州获得转移",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            },
+            {
+              "heading": "贵州市市通高铁",
+              "heading_anchor": "贵州市市通高铁",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "支付3400多亿，人均超过8000元，双双位列全国前列。转移支付主要用于民生和公共开支。高铁建设资金来源更加多元，一部分是国家投资，一部分靠",
+                  "highlight": false
+                },
+                {
+                  "text": "地方",
+                  "highlight": true
+                },
+                {
+                  "text": "自筹。早期的干线，如贵广高铁、贵南高铁，国铁集团出资占半壁江山，其他由",
+                  "highlight": false
+                },
+                {
+                  "text": "地方",
+                  "highlight": true
+                },
+                {
+                  "text": "分担。不过近年来，随着干线高铁逐步形成，新批复的高铁，",
+                  "highlight": false
+                },
+                {
+                  "text": "地方",
+                  "highlight": true
+                },
+                {
+                  "text": "出资成为主流。像盘兴高铁就由贵州自己承担80%，国铁出资比例降到20%。",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            }
+          ],
+          "matched_terms": [
+            "地方",
+            "政府",
+            "困难"
+          ]
+        },
+        {
+          "doc_id": "CanKaoXinXi/0201-0300/0266.md",
+          "title": "参考信息266",
+          "source_title": "【参考信息266】在线内容“短命”；国产AI困境",
+          "channel": "CanKaoXinXi",
+          "publication_date": "2024-05-20",
+          "score": 1.1529538056973776,
+          "snippets": [
+            {
+              "heading": "在线内容“短命”",
+              "heading_anchor": "在线内容“短命”",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "而训练AI大模型需要数据。4月26日中关村论坛上，AI企业和研究者分享了AI数据流通共享的",
+                  "highlight": false
+                },
+                {
+                  "text": "困难",
+                  "highlight": true
+                },
+                {
+                  "text": "。剑桥大学生存风险研究中心创始执行主任说：我们都认为在不断训练大模型的时候不会缺数据，但实际上很多数据都没用上。分享数据的",
+                  "highlight": false
+                },
+                {
+                  "text": "困难",
+                  "highlight": true
+                },
+                {
+                  "text": "在于各国及各行业的数据法律法规。奇安信数据安全首席科学家刘前伟指出站在全球数据治理的角度来看，数据跨境流动更容易将数据汇聚在一起。",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            },
+            {
+              "heading": "AI军控谈判",
+              "heading_anchor": "AI军控谈判",
+              "parts": [
+                {
+                  "text": "AI军控谈判\n\n有竞争，当然也有合作上月底美国国务卿布林肯第二次访华时，中美达成共识将举行中美人工智能",
+                  "highlight": false
+                },
+                {
+                  "text": "政府",
+                  "highlight": true
+                },
+                {
+                  "text": "间对话首次会议。5月14日会议在瑞士日内瓦举行。中方表示支持加强人工智能全球治理主张发挥联合国主渠道作用愿同包括美方在内的国际社会加强",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            },
+            {
+              "heading": "院士讲AI差距",
+              "heading_anchor": "院士讲AI差距",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "》讲座。他指出，我国人工智能技术与智能计算产业过去几年虽然取得很大成绩，但依然面临诸多发展困境特别是由美国技术打压政策带来的",
+                  "highlight": false
+                },
+                {
+                  "text": "困难",
+                  "highlight": true
+                },
+                {
+                  "text": "困境一是美国在AI核心能力上长期领先中国处于跟踪模式我国在AI高端人才数量AI基础算法创新AI底座大模型能力、底",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            }
+          ],
+          "matched_terms": [
+            "政府",
+            "困难"
+          ]
+        }
+      ]
+    },
+    {
+      "query": "恒大房地产危机对经济有什么影响",
+      "snapshot_id": "s20261018t112012z_3f23dda",
+      "terms": [
+        "恒大",
+        "房地产",
+        "危机",
+        "经济",
+        "影响"
+      ],
+      "total": 14,
+      "expected_relevant": [
+        "ShuiQianXiaoXi/0301-0400/0329.md"
+      ],
+      "hit_at_1": true,
+      "hit_at_3": true,
+      "known_relevant_recall_at_3": 1.0,
+      "literal_sentence_matches": 0,
+      "top_results": [
+        {
+          "doc_id": "ShuiQianXiaoXi/0301-0400/0329.md",
+          "title": "睡前消息329",
+          "source_title": "【睡前消息329】许家印的恒大，潘石屹的soho,有啥区别？",
+          "channel": "ShuiQianXiaoXi",
+          "publication_date": "2021-09-19",
+          "score": 8.744267177418225,
+          "snippets": [
+            {
+              "heading": "恒大的高杠杆豪赌",
+              "heading_anchor": "恒大的高杠杆豪赌",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "再次暴涨。到时候货币贬值，",
+                  "highlight": false
+                },
+                {
+                  "text": "房地产",
+                  "highlight": true
+                },
+                {
+                  "text": "增值，",
+                  "highlight": false
+                },
+                {
+                  "text": "恒大",
+                  "highlight": true
+                },
+                {
+                  "text": "靠囤下的土地就可以轻松过关。过去几年，国家给",
+                  "highlight": false
+                },
+                {
+                  "text": "房地产",
+                  "highlight": true
+                },
+                {
+                  "text": "行业留了几个割肉脱困的窗口。\n\n比如同样是以地产为主业的万达集团，2017年爆发债务",
+                  "highlight": false
+                },
+                {
+                  "text": "危机",
+                  "highlight": true
+                },
+                {
+                  "text": "后，迅速转入瘦身自救，大量出售核心资产，宁愿低价赔本也要回笼资金，削减债务。现在的万达虽然",
+                  "highlight": false
+                },
+                {
+                  "text": "影响",
+                  "highlight": true
+                },
+                {
+                  "text": "力下降，但基本渡过了清盘",
+                  "highlight": false
+                },
+                {
+                  "text": "危机",
+                  "highlight": true
+                },
+                {
+                  "text": "。2018年，市面上已经有机构开始质疑",
+                  "highlight": false
+                },
+                {
+                  "text": "恒大",
+                  "highlight": true
+                },
+                {
+                  "text": "债务状况了，但是",
+                  "highlight": false
+                },
+                {
+                  "text": "恒大",
+                  "highlight": true
+                },
+                {
+                  "text": "的选择正好和万达相反，舍不得已经存的",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            },
+            {
+              "heading": null,
+              "heading_anchor": "",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "资金充裕。虽然因为黑石集团放弃收购，它的市值大幅下跌，但SOHO本身经营却不存在",
+                  "highlight": false
+                },
+                {
+                  "text": "危机",
+                  "highlight": true
+                },
+                {
+                  "text": "，仍然是个正常的企业。\n\n同行业的两家知名公司，同样经历了过去十几年的",
+                  "highlight": false
+                },
+                {
+                  "text": "房地产",
+                  "highlight": true
+                },
+                {
+                  "text": "热潮，为什么财务状态会相差那么大呢？\n\nSOHO专注的细分市场是商业地产，",
+                  "highlight": false
+                },
+                {
+                  "text": "恒大",
+                  "highlight": true
+                },
+                {
+                  "text": "以居住类产品为主，两家公司经营路线一开始就不太一样。但从财务上说，细分市场不是关键区别，关键是两家公司的领导人经营风格有差异。",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            },
+            {
+              "heading": null,
+              "heading_anchor": "",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "9月10号，黑石集团宣布放弃收购SOHO中国，SOHO股价随后暴跌三分之一。另外一条，大家应该都已经知道了，9月13日，",
+                  "highlight": false
+                },
+                {
+                  "text": "恒大",
+                  "highlight": true
+                },
+                {
+                  "text": "发布公告，承认公司陷入流动性困难。",
+                  "highlight": false
+                },
+                {
+                  "text": "恒大",
+                  "highlight": true
+                },
+                {
+                  "text": "系股票和债券价格本周都大幅下降。\n\n",
+                  "highlight": false
+                },
+                {
+                  "text": "恒大",
+                  "highlight": true
+                },
+                {
+                  "text": "和SOHO都是有代表性的",
+                  "highlight": false
+                },
+                {
+                  "text": "房地产",
+                  "highlight": true
+                },
+                {
+                  "text": "企业，同一周爆发负面新闻，是不是遇到了类似的问题呢？\n\n",
+                  "highlight": false
+                },
+                {
+                  "text": "恒大",
+                  "highlight": true
+                },
+                {
+                  "text": "和SOHO的确有很多相似之处，都是著名",
+                  "highlight": false
+                },
+                {
+                  "text": "房地产",
+                  "highlight": true
+                },
+                {
+                  "text": "企业品牌，实际控制人都喜欢参加社会活动。",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            }
+          ],
+          "matched_terms": [
+            "恒大",
+            "房地产",
+            "危机",
+            "经济",
+            "影响"
+          ]
+        },
+        {
+          "doc_id": "ShuiQianXiaoXi/0501-0600/0588.md",
+          "title": "睡前消息588",
+          "source_title": "【睡前消息588】城投债四大网红，柳州第一",
+          "channel": "ShuiQianXiaoXi",
+          "publication_date": "2023-05-12",
+          "score": 4.709304316323777,
+          "snippets": [
+            {
+              "heading": "沦落的直接原因",
+              "heading_anchor": "沦落的直接原因",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "府撑住新区的房价。所以早期敢于借钱的城市，靠",
+                  "highlight": false
+                },
+                {
+                  "text": "房地产",
+                  "highlight": true
+                },
+                {
+                  "text": "已经回收了好几轮资金，貌似比认真搞实体产业的还富裕，还繁华。\n\n所以柳州干部也经不住诱惑，在地方债和",
+                  "highlight": false
+                },
+                {
+                  "text": "房地产经济",
+                  "highlight": true
+                },
+                {
+                  "text": "的下半场，凭借之前搞实体",
+                  "highlight": false
+                },
+                {
+                  "text": "经济",
+                  "highlight": true
+                },
+                {
+                  "text": "积累的信用，狠狠借了一笔钱，想来个实体泡沫两开花。没想到风向很快转下去了，投在土地和基础设施上的钱没法变现；同时疫情",
+                  "highlight": false
+                },
+                {
+                  "text": "影响经济",
+                  "highlight": true
+                },
+                {
+                  "text": "，工业利润加速下滑，放大了产业升级的难度。",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            },
+            {
+              "heading": "电动车时代的困境",
+              "heading_anchor": "电动车时代的困境",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "遇到国务院叫停债务地铁，所以几千亿投资根本收不回来，现金流比那些借债早的城市还紧张。这就是柳州进入“四大网红”的原因。\n\n柳州的债务",
+                  "highlight": false
+                },
+                {
+                  "text": "危机",
+                  "highlight": true
+                },
+                {
+                  "text": "，会产生全国性",
+                  "highlight": false
+                },
+                {
+                  "text": "影响",
+                  "highlight": true
+                },
+                {
+                  "text": "吗？\n\n就债务规模来说，就算是四千亿的债，也就是",
+                  "highlight": false
+                },
+                {
+                  "text": "恒大",
+                  "highlight": true
+                },
+                {
+                  "text": "的四分之一，金融体系还能救得起。但问题是全国不止一个地级市柳州，或者说柳州也只是全国大多数地级市的缩影。2019年",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            },
+            {
+              "heading": "电动车时代的困境",
+              "heading_anchor": "电动车时代的困境",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "2017年，独山县刚刚借到上百亿的钱，正好在盖那座我看过的天下第一水司楼。所以柳州市在地方债和",
+                  "highlight": false
+                },
+                {
+                  "text": "房地产",
+                  "highlight": true
+                },
+                {
+                  "text": "的后半程入场，一狠心借了几千亿，想来个大力出奇迹。等到四五年后，第一批债务到期，",
+                  "highlight": false
+                },
+                {
+                  "text": "房地产",
+                  "highlight": true
+                },
+                {
+                  "text": "退潮，实体",
+                  "highlight": false
+                },
+                {
+                  "text": "经济",
+                  "highlight": true
+                },
+                {
+                  "text": "也没起来，柳州市荣幸成为地方债四大网红。\n\n柳州市这三四千亿的债务，都花到什么地方了？\n\n从债券市场公开资料可以看到，柳",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            }
+          ],
+          "matched_terms": [
+            "恒大",
+            "房地产",
+            "危机",
+            "经济",
+            "影响"
+          ]
+        },
+        {
+          "doc_id": "ShuiQianXiaoXi/0501-0600/0581.md",
+          "title": "睡前消息581",
+          "source_title": "【睡前消息581】信达支援贵州地方债，2023年酷似1999",
+          "channel": "ShuiQianXiaoXi",
+          "publication_date": "2023-04-25",
+          "score": 2.6026019351062555,
+          "snippets": [
+            {
+              "heading": "贵州化债喊救命",
+              "heading_anchor": "贵州化债喊救命",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "中国信达将通过组建50人金融专家团、建立“1+14+N”综合服务机制、开展“一对一”精准对接活动等具体举措，重点围绕服务实体",
+                  "highlight": false
+                },
+                {
+                  "text": "经济",
+                  "highlight": true
+                },
+                {
+                  "text": "、防范化解风险、助力国企改革、",
+                  "highlight": false
+                },
+                {
+                  "text": "房地产",
+                  "highlight": true
+                },
+                {
+                  "text": "纾困等方面与贵州开展合作，为贵州高质量发展和现代化建设提供优质金融服务。",
+                  "highlight": false
+                }
+              ]
+            },
+            {
+              "heading": "信达公司再出手",
+              "heading_anchor": "信达公司再出手",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "了房价，结果就是企业得到的资源少了，复杂工具不足，高端岗位稀缺。就算受了教育，年轻人也只能做简单劳动，同时还要承担高房价，所以对社会不满。\n\n这种",
+                  "highlight": false
+                },
+                {
+                  "text": "经济",
+                  "highlight": true
+                },
+                {
+                  "text": "问题90年代就出现过，1993年，中国人均GDP只有3000元，海南炒旅游概念，炒",
+                  "highlight": false
+                },
+                {
+                  "text": "房地产",
+                  "highlight": true
+                },
+                {
+                  "text": "，房价就到了每平方米7000，相当于今天的每平方米20万。有个段子，90年代建行自",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            },
+            {
+              "heading": "信达公司再出手",
+              "heading_anchor": "信达公司再出手",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "场上自己找工作。\n\n过去几年的问题和90年代很像：\n\n90年代地方国企糟蹋贷款，2015年之后的国有融资平台也无限借钱；90年代有",
+                  "highlight": false
+                },
+                {
+                  "text": "房地产",
+                  "highlight": true
+                },
+                {
+                  "text": "泡沫，2015年之后的房价显然也不反映真实需求；1997年有亚洲金融",
+                  "highlight": false
+                },
+                {
+                  "text": "危机",
+                  "highlight": true
+                },
+                {
+                  "text": "打击出口，最近几年也有疫情和贸易战。\n\n所以，当前的情况非常像1999年，只是中央国企和地方融资平台都没有搞大下",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            }
+          ],
+          "matched_terms": [
+            "房地产",
+            "危机",
+            "经济",
+            "影响"
+          ]
+        }
+      ]
+    },
+    {
+      "query": "中国人口出生率下降有哪些原因",
+      "snapshot_id": "s20261018t112012z_3f23dda",
+      "terms": [
+        "中国",
+        "人口",
+        "出生率",
+        "下降",
+        "原因"
+      ],
+      "total": 15,
+      "expected_relevant": [
+        "ShuiQianXiaoXi/0401-0500/0461.md"
+      ],
+      "hit_at_1": true,
+      "hit_at_3": true,
+      "known_relevant_recall_at_3": 1.0,
+      "literal_sentence_matches": 0,
+      "top_results": [
+        {
+          "doc_id": "ShuiQianXiaoXi/0401-0500/0461.md",
+          "title": "睡前消息461",
+          "source_title": "【睡前消息461】日本明石没有生育奇迹，中国呢？",
+          "channel": "ShuiQianXiaoXi",
+          "publication_date": "2022-07-22",
+          "score": 7.638525309990408,
+          "snippets": [
+            {
+              "heading": null,
+              "heading_anchor": "",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "明石市所在的兵库县2021年出生3.6万人，死亡6.3万，",
+                  "highlight": false
+                },
+                {
+                  "text": "出生率",
+                  "highlight": true
+                },
+                {
+                  "text": "为千分之6.5，和全国平均水平差不多。所以就算能分享神户、大阪的一些",
+                  "highlight": false
+                },
+                {
+                  "text": "人口",
+                  "highlight": true
+                },
+                {
+                  "text": "红利，总",
+                  "highlight": false
+                },
+                {
+                  "text": "人口",
+                  "highlight": true
+                },
+                {
+                  "text": "还是",
+                  "highlight": false
+                },
+                {
+                  "text": "下降",
+                  "highlight": true
+                },
+                {
+                  "text": "。而明石市的",
+                  "highlight": false
+                },
+                {
+                  "text": "出生率",
+                  "highlight": true
+                },
+                {
+                  "text": "是千分之9，只比死亡率低了一个千分点。稍微来一点",
+                  "highlight": false
+                },
+                {
+                  "text": "人口",
+                  "highlight": true
+                },
+                {
+                  "text": "净迁入，就能堵上缺口。所以明石市长有资格去国会传授经验。\n\n作为类比，2021年",
+                  "highlight": false
+                },
+                {
+                  "text": "中国",
+                  "highlight": true
+                },
+                {
+                  "text": "大陆",
+                  "highlight": false
+                },
+                {
+                  "text": "人口出生率",
+                  "highlight": true
+                },
+                {
+                  "text": "只有千分之7.5，其中江苏省",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            },
+            {
+              "heading": null,
+              "heading_anchor": "",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "。2021年，明石市出生",
+                  "highlight": false
+                },
+                {
+                  "text": "人口",
+                  "highlight": true
+                },
+                {
+                  "text": "2734人，死亡",
+                  "highlight": false
+                },
+                {
+                  "text": "人口",
+                  "highlight": true
+                },
+                {
+                  "text": "3057人，净减少323。死亡率高于",
+                  "highlight": false
+                },
+                {
+                  "text": "出生率",
+                  "highlight": true
+                },
+                {
+                  "text": "，还能够连续9年",
+                  "highlight": false
+                },
+                {
+                  "text": "人口",
+                  "highlight": true
+                },
+                {
+                  "text": "增长，",
+                  "highlight": false
+                },
+                {
+                  "text": "原因",
+                  "highlight": true
+                },
+                {
+                  "text": "很简单，是外来",
+                  "highlight": false
+                },
+                {
+                  "text": "人口",
+                  "highlight": true
+                },
+                {
+                  "text": "迁入。去年本地",
+                  "highlight": false
+                },
+                {
+                  "text": "人口",
+                  "highlight": true
+                },
+                {
+                  "text": "减少323，外来净迁入",
+                  "highlight": false
+                },
+                {
+                  "text": "人口",
+                  "highlight": true
+                },
+                {
+                  "text": "844人，所以总",
+                  "highlight": false
+                },
+                {
+                  "text": "人口",
+                  "highlight": true
+                },
+                {
+                  "text": "增加了521。而且，就算不考虑",
+                  "highlight": false
+                },
+                {
+                  "text": "人口",
+                  "highlight": true
+                },
+                {
+                  "text": "是怎么增加的，每年增加500多人都算成潜在劳动力，也不能缓解",
+                  "highlight": false
+                },
+                {
+                  "text": "人口",
+                  "highlight": true
+                },
+                {
+                  "text": "老龄化带来的劳动力",
+                  "highlight": false
+                },
+                {
+                  "text": "下降",
+                  "highlight": true
+                },
+                {
+                  "text": "问题。",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            },
+            {
+              "heading": null,
+              "heading_anchor": "",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "为生育政策典型呢？\n\n因为扣除了",
+                  "highlight": false
+                },
+                {
+                  "text": "人口",
+                  "highlight": true
+                },
+                {
+                  "text": "迁入之后，明石市的本地",
+                  "highlight": false
+                },
+                {
+                  "text": "人口下降",
+                  "highlight": true
+                },
+                {
+                  "text": "比较慢，所以迁入",
+                  "highlight": false
+                },
+                {
+                  "text": "人口",
+                  "highlight": true
+                },
+                {
+                  "text": "还能补上本地",
+                  "highlight": false
+                },
+                {
+                  "text": "人口",
+                  "highlight": true
+                },
+                {
+                  "text": "的减少，把总数拉回正增长。而大多数日本都市外围的副中心就算吸引了农村",
+                  "highlight": false
+                },
+                {
+                  "text": "人口",
+                  "highlight": true
+                },
+                {
+                  "text": "，也补不上本地缺口，往往总",
+                  "highlight": false
+                },
+                {
+                  "text": "人口",
+                  "highlight": true
+                },
+                {
+                  "text": "还在",
+                  "highlight": false
+                },
+                {
+                  "text": "下降",
+                  "highlight": true
+                },
+                {
+                  "text": "。所以把\"亏损\"比较少的明石市衬托成优等生。2021年，日本总",
+                  "highlight": false
+                },
+                {
+                  "text": "人口",
+                  "highlight": true
+                },
+                {
+                  "text": "超过1.2亿，出生婴儿81.1万，",
+                  "highlight": false
+                },
+                {
+                  "text": "出生率",
+                  "highlight": true
+                },
+                {
+                  "text": "千分之6.6，死亡率大概是千分之11，明显负增长。",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            }
+          ],
+          "matched_terms": [
+            "中国",
+            "人口",
+            "出生率",
+            "下降",
+            "原因"
+          ]
+        },
+        {
+          "doc_id": "ChanJingPoBiJi/2024-07-25.md",
+          "title": "产经破壁机2024-07-25",
+          "source_title": "【产经破壁机2024-07-25】政府送编制 学生不敢要",
+          "channel": "ChanJingPoBiJi",
+          "publication_date": "2024-07-25",
+          "score": 1.613332384996127,
+          "snippets": [
+            {
+              "heading": "年轻人对编制的热情为什么下降了",
+              "heading_anchor": "年轻人对编制的热情为什么下降了",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "年轻人是喜欢编制，但不一定喜欢东北，尤其是不一定喜欢黑龙江。2010年黑龙江还有3800万人，现在只有3000万，连哈尔滨都减少了63万，是",
+                  "highlight": false
+                },
+                {
+                  "text": "中国",
+                  "highlight": true
+                },
+                {
+                  "text": "唯一一个",
+                  "highlight": false
+                },
+                {
+                  "text": "人口下降",
+                  "highlight": true
+                },
+                {
+                  "text": "的省会城市。2019年的毕业季，当时还没有新冠疫情影响经济，东北地区20所代表性大学，就只有36.54%的毕业生留在东北，甚至已经上岗的专业技术人员也在往外跑。",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            },
+            {
+              "heading": "东北的编制为什么用不完",
+              "heading_anchor": "东北的编制为什么用不完",
+              "parts": [
+                {
+                  "text": "东北的编制为什么用不完\n\n",
+                  "highlight": false
+                },
+                {
+                  "text": "人口",
+                  "highlight": true
+                },
+                {
+                  "text": "外流，医生也往外走，东北本地会不会减少编制？\n\n",
+                  "highlight": false
+                },
+                {
+                  "text": "中国",
+                  "highlight": true
+                },
+                {
+                  "text": "的惯例是增加编制难，砍编制难上加难。先说两个数据：黑龙江省的",
+                  "highlight": false
+                },
+                {
+                  "text": "人口",
+                  "highlight": true
+                },
+                {
+                  "text": "占到",
+                  "highlight": false
+                },
+                {
+                  "text": "中国",
+                  "highlight": true
+                },
+                {
+                  "text": "的2.1%，而医院床位数量是全国的2.8%，账面数据比很多经济发达的地区还要强；而哈尔滨的人均医院病床数，在全国的大城市中排名第一。估算",
+                  "highlight": false
+                },
+                {
+                  "text": "中国",
+                  "highlight": true
+                },
+                {
+                  "text": "医院的编制有一个简便的办法，平均来说就是一个床位配一个编制内的医护人员，床位越多编制越多。黑龙江省的人均病",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            },
+            {
+              "heading": "一年3万8的年薪没有吸引力",
+              "heading_anchor": "一年3万8的年薪没有吸引力",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "网上的公开资料显示，友谊县卫健局下属5个单位，你们猜猜平均年薪是多少？一年3万8，刚毕业的学生只会更少。如果说年轻人愿意接受3万8的年薪，那",
+                  "highlight": false
+                },
+                {
+                  "text": "中国",
+                  "highlight": true
+                },
+                {
+                  "text": "大学生根本就不会有失业问题，所以说送编制也没有什么吸引力。2015年以来，",
+                  "highlight": false
+                },
+                {
+                  "text": "中国",
+                  "highlight": true
+                },
+                {
+                  "text": "大学生考编制的热情不断的上升，经济形势越差，年轻人就越喜欢体制内的工作，把编制当成了逃避经济低谷的避风港。但是友谊县的",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            }
+          ],
+          "matched_terms": [
+            "中国",
+            "人口",
+            "下降"
+          ]
+        },
+        {
+          "doc_id": "ShuiQianXiaoXi/0001-0100/0012.md",
+          "title": "睡前消息12",
+          "source_title": "【睡前消息12】在印度，你甚至可以找到全人工版“人工智能”",
+          "channel": "ShuiQianXiaoXi",
+          "publication_date": "2019-08-20",
+          "score": 1.5794514869889702,
+          "snippets": [
+            {
+              "heading": "孟加拉达卡火灾",
+              "heading_anchor": "孟加拉达卡火灾",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "和孟加拉相比，印度算是半个天堂，最近莫迪就想把400万孟加拉移民赶回去。现在，孟加拉新一代人识字率上升到75%，而且和",
+                  "highlight": false
+                },
+                {
+                  "text": "中国",
+                  "highlight": true
+                },
+                {
+                  "text": "的经济往来很密切。估计接下来几年日子能好过一点。不过女性地位很低，识字率只有一半，所以生育率还是很高，现在",
+                  "highlight": false
+                },
+                {
+                  "text": "人口",
+                  "highlight": true
+                },
+                {
+                  "text": "增长率还超过1%。在被",
+                  "highlight": false
+                },
+                {
+                  "text": "人口",
+                  "highlight": true
+                },
+                {
+                  "text": "压垮之前，孟加拉必须要给自己找一条出路。",
+                  "highlight": false
+                }
+              ]
+            },
+            {
+              "heading": "五菱宏光销量暴跌",
+              "heading_anchor": "五菱宏光销量暴跌",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "从全行业看，不止是五菱宏光，几乎所有小型MPV都很难过。过去小型MPV一个月卖十五万，现在不到八万，五菱宏光在其中不算特别惨。这是因为",
+                  "highlight": false
+                },
+                {
+                  "text": "中国",
+                  "highlight": true
+                },
+                {
+                  "text": "县以下",
+                  "highlight": false
+                },
+                {
+                  "text": "人口",
+                  "highlight": true
+                },
+                {
+                  "text": "的买车需求变了。在五菱宏光之前，我们有过一类国民神车，就是以\"长安面包\"为代表的\"轻面\"或者说\"面的\"。\"轻面\"用的是日本八十年代技术，客货混装。",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            },
+            {
+              "heading": "五菱宏光销量暴跌",
+              "heading_anchor": "五菱宏光销量暴跌",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "大环境的确很差，但没有这么惨。咱们先看数据，五菱宏光一度每个月卖8万辆，去年上半年40万辆，今年上半年只卖了16万，的确暴跌60%。但是，整体上客车销量只",
+                  "highlight": false
+                },
+                {
+                  "text": "下降",
+                  "highlight": true
+                },
+                {
+                  "text": "了10%，如果要评价数据，用10%的数据更合适。\n\n客车销量",
+                  "highlight": false
+                },
+                {
+                  "text": "下降",
+                  "highlight": true
+                },
+                {
+                  "text": "10%，五菱宏光跌了60%，这是什么",
+                  "highlight": false
+                },
+                {
+                  "text": "原因",
+                  "highlight": true
+                },
+                {
+                  "text": "？",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            }
+          ],
+          "matched_terms": [
+            "中国",
+            "人口",
+            "下降",
+            "原因"
+          ]
+        }
+      ]
+    },
+    {
+      "query": "人工智能发展对就业会有什么影响",
+      "snapshot_id": "s20261018t112012z_3f23dda",
+      "terms": [
+        "人工智能",
+        "发展",
+        "就业",
+        "影响"
+      ],
+      "total": 14,
+      "expected_relevant": [
+        "ShuiQianXiaoXi/0001-0100/0012.md",
+        "CanKaoXinXi/0201-0300/0266.md"
+      ],
+      "hit_at_1": true,
+      "hit_at_3": true,
+      "known_relevant_recall_at_3": 0.5,
+      "literal_sentence_matches": 0,
+      "top_results": [
+        {
+          "doc_id": "CanKaoXinXi/0201-0300/0266.md",
+          "title": "参考信息266",
+          "source_title": "【参考信息266】在线内容“短命”；国产AI困境",
+          "channel": "CanKaoXinXi",
+          "publication_date": "2024-05-20",
+          "score": 4.966645255401353,
+          "snippets": [
+            {
+              "heading": "AI军控谈判",
+              "heading_anchor": "AI军控谈判",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "美将建立",
+                  "highlight": false
+                },
+                {
+                  "text": "人工智能",
+                  "highlight": true
+                },
+                {
+                  "text": "风险和安全问题的专家磋商机制。5月6日中国领导人访问法国期间发表中法关于",
+                  "highlight": false
+                },
+                {
+                  "text": "人工智能",
+                  "highlight": true
+                },
+                {
+                  "text": "和全球治理的联合声明一共十条共识包括中法充分认识到",
+                  "highlight": false
+                },
+                {
+                  "text": "人工智能",
+                  "highlight": true
+                },
+                {
+                  "text": "技术快速",
+                  "highlight": false
+                },
+                {
+                  "text": "发展",
+                  "highlight": true
+                },
+                {
+                  "text": "的深刻",
+                  "highlight": false
+                },
+                {
+                  "text": "影响",
+                  "highlight": true
+                },
+                {
+                  "text": "以及与该技术相关的潜在和现存风险，致力于采取有效措施应对这些风险，并加强",
+                  "highlight": false
+                },
+                {
+                  "text": "人工智能",
+                  "highlight": true
+                },
+                {
+                  "text": "的全球治理。当前，美欧以月为单位迭代",
+                  "highlight": false
+                },
+                {
+                  "text": "人工智能",
+                  "highlight": true
+                },
+                {
+                  "text": "基础模型能力产业应用也处于领先身位。",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            },
+            {
+              "heading": "AI军控谈判",
+              "heading_anchor": "AI军控谈判",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "受安全叙事和竞争叙事的",
+                  "highlight": false
+                },
+                {
+                  "text": "影响",
+                  "highlight": true
+                },
+                {
+                  "text": "破坏治理的合作氛围。而《中法联合声明》第六、第七条坚持在联合国主导作用的基础上负责任的贡献多边积极力量。法国将于2025年举办",
+                  "highlight": false
+                },
+                {
+                  "text": "人工智能",
+                  "highlight": true
+                },
+                {
+                  "text": "峰会中国也将举办2024年世界",
+                  "highlight": false
+                },
+                {
+                  "text": "人工智能",
+                  "highlight": true
+                },
+                {
+                  "text": "大会即",
+                  "highlight": false
+                },
+                {
+                  "text": "人工智能",
+                  "highlight": true
+                },
+                {
+                  "text": "全球治理高级别会议声明第八和第九条聚焦潜在的",
+                  "highlight": false
+                },
+                {
+                  "text": "发展",
+                  "highlight": true
+                },
+                {
+                  "text": "赤字，希望依托联合国框架弥合数字鸿沟、提高",
+                  "highlight": false
+                },
+                {
+                  "text": "发展",
+                  "highlight": true
+                },
+                {
+                  "text": "中国家并提升“所有人”的",
+                  "highlight": false
+                },
+                {
+                  "text": "人工智能",
+                  "highlight": true
+                },
+                {
+                  "text": "能力，实现人类可持续",
+                  "highlight": false
+                },
+                {
+                  "text": "发展",
+                  "highlight": true
+                },
+                {
+                  "text": "目标",
+                  "highlight": false
+                }
+              ]
+            },
+            {
+              "heading": "院士讲AI差距",
+              "heading_anchor": "院士讲AI差距",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "4月26日，全国人大常委会闭幕会举行第十讲专题讲座。工程院院士、中科院计算技术研究所学术委员会主任、国科大计算机科学与技术学院院长孙凝晖做了题为《",
+                  "highlight": false
+                },
+                {
+                  "text": "人工智能",
+                  "highlight": true
+                },
+                {
+                  "text": "与智能计算的",
+                  "highlight": false
+                },
+                {
+                  "text": "发展",
+                  "highlight": true
+                },
+                {
+                  "text": "》讲座。他指出，我国",
+                  "highlight": false
+                },
+                {
+                  "text": "人工智能",
+                  "highlight": true
+                },
+                {
+                  "text": "技术与智能计算产业过去几年虽然取得很大成绩，但依然面临诸多",
+                  "highlight": false
+                },
+                {
+                  "text": "发展",
+                  "highlight": true
+                },
+                {
+                  "text": "困境特别是由美国技术打压政策带来的困难困境一是美国在AI核心能力上长期",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            }
+          ],
+          "matched_terms": [
+            "人工智能",
+            "发展",
+            "就业",
+            "影响"
+          ]
+        },
+        {
+          "doc_id": "CanKaoXinXi/0501-0600/0515.md",
+          "title": "参考信息515",
+          "source_title": "【参考信息515】财政供养人数；贵州市市通高铁",
+          "channel": "CanKaoXinXi",
+          "publication_date": "2025-10-13",
+          "score": 2.1512829925865216,
+          "snippets": [
+            {
+              "heading": "打破35岁门槛",
+              "heading_anchor": "打破35岁门槛",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "求。2024年，中共中央、国务院印发《关于实施",
+                  "highlight": false
+                },
+                {
+                  "text": "就业",
+                  "highlight": true
+                },
+                {
+                  "text": "优先战略 促进高质量充分",
+                  "highlight": false
+                },
+                {
+                  "text": "就业",
+                  "highlight": true
+                },
+                {
+                  "text": "的意见》，提出保障平等",
+                  "highlight": false
+                },
+                {
+                  "text": "就业",
+                  "highlight": true
+                },
+                {
+                  "text": "权利，破除",
+                  "highlight": false
+                },
+                {
+                  "text": "影响",
+                  "highlight": true
+                },
+                {
+                  "text": "劳动力人才流动的体制机制障碍，消除地域、身份、性别、年龄等",
+                  "highlight": false
+                },
+                {
+                  "text": "影响",
+                  "highlight": true
+                },
+                {
+                  "text": "平等",
+                  "highlight": false
+                },
+                {
+                  "text": "就业",
+                  "highlight": true
+                },
+                {
+                  "text": "的不合理限制和",
+                  "highlight": false
+                },
+                {
+                  "text": "就业",
+                  "highlight": true
+                },
+                {
+                  "text": "歧视。\n\n同时，随着延迟退休落地，部分地区人社部门表示，放宽年龄是为了与延迟退休政策相衔接，让劳动者的职业生命周期更加完整。",
+                  "highlight": false
+                }
+              ]
+            },
+            {
+              "heading": "打破35岁门槛",
+              "heading_anchor": "打破35岁门槛",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "此前在“问政四川”上，针对今年事业单位招聘年龄的问题，乐山人社局称将适当放宽。雅安人社局称已有招聘单位放宽至38岁。今年1月，四川省人社厅就《关于进一步深化",
+                  "highlight": false
+                },
+                {
+                  "text": "就业",
+                  "highlight": true
+                },
+                {
+                  "text": "领域改革促进高质量充分",
+                  "highlight": false
+                },
+                {
+                  "text": "就业",
+                  "highlight": true
+                },
+                {
+                  "text": "的实施意见（征求意见稿）》公开征求意见，提出取消应届生身份认定限制、调整机关公招年龄上限，支持事业单位适当放宽招聘年龄条件，并鼓励企业放宽用工年龄限制。",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            },
+            {
+              "heading": "财政供养人数",
+              "heading_anchor": "财政供养人数",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "相对规模上，2020年的供养率，也就是财政供养人员占常住人口比例上升到4.85%，平均每百人就有近5个。其中，在职人员占",
+                  "highlight": false
+                },
+                {
+                  "text": "就业",
+                  "highlight": true
+                },
+                {
+                  "text": "总人口的比重从5.04%上升到5.54%，意味着越来越多",
+                  "highlight": false
+                },
+                {
+                  "text": "就业",
+                  "highlight": true
+                },
+                {
+                  "text": "人员集中在机关事业单位。第二，财政供养人员的内部结构上，离退休人员占比快速上升，编外人员显著扩张，并且主要集中在县区级及以下的基层政府。",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            }
+          ],
+          "matched_terms": [
+            "就业",
+            "影响"
+          ]
+        },
+        {
+          "doc_id": "CanKaoXinXi/0401-0500/0490.md",
+          "title": "参考信息490",
+          "source_title": "【参考信息490】世界懒惰日；牛马电影；好莱坞开除工贼",
+          "channel": "CanKaoXinXi",
+          "publication_date": "2025-08-11",
+          "score": 1.889696263259526,
+          "snippets": [
+            {
+              "heading": "鹤岗百万元新盘",
+              "heading_anchor": "鹤岗百万元新盘",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "当地平均月薪仅3000元，远低于全国水平。而且",
+                  "highlight": false
+                },
+                {
+                  "text": "就业",
+                  "highlight": true
+                },
+                {
+                  "text": "机会主要集中在传统行业，新兴产业和高端岗位极为稀缺。年轻人由于缺乏职业",
+                  "highlight": false
+                },
+                {
+                  "text": "发展",
+                  "highlight": true
+                },
+                {
+                  "text": "空间而外流，进而形成了“人才空心化”的恶性循环。有鹤岗本地人直言，这里的",
+                  "highlight": false
+                },
+                {
+                  "text": "就业",
+                  "highlight": true
+                },
+                {
+                  "text": "机会除了参加公务员和事业编考试，当服务员、厨师、洗碗工、搓澡工或者自己经营小生意，其他的",
+                  "highlight": false
+                },
+                {
+                  "text": "就业",
+                  "highlight": true
+                },
+                {
+                  "text": "途径基本为零。无论实际情况怎样，鹤岗的房价仍在持续吸引着经济条件欠佳的年轻人。",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            },
+            {
+              "heading": "鹤岗百万元新盘",
+              "heading_anchor": "鹤岗百万元新盘",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "鹤岗近期发生的变化不只是高端小区开盘，这里还要建机场了。睡前消息934期刚刚聊过，欢迎回顾。近年来，鹤岗市政府也采取了一系列措施试图扭转局面，推动从资源型城市向多元化转型，包括积极",
+                  "highlight": false
+                },
+                {
+                  "text": "发展",
+                  "highlight": true
+                },
+                {
+                  "text": "石墨产业、现代农业、文化旅游以及电子商务等新兴产业。不过这些产业的成长需要时间，短期内难以弥补传统行业衰退带来的",
+                  "highlight": false
+                },
+                {
+                  "text": "就业",
+                  "highlight": true
+                },
+                {
+                  "text": "缺口。如何将这些计划转化为实际行动，并切实解决",
+                  "highlight": false
+                },
+                {
+                  "text": "就业",
+                  "highlight": true
+                },
+                {
+                  "text": "难题，依然是挑战。",
+                  "highlight": false
+                }
+              ]
+            },
+            {
+              "heading": "好莱坞开除工贼",
+              "heading_anchor": "好莱坞开除工贼",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "去议价能力，因为“最低合同标准”也是工会争取的。虽然失去了保护伞，不过非工会成员竞逐奥斯卡奖没有",
+                  "highlight": false
+                },
+                {
+                  "text": "影响",
+                  "highlight": true
+                },
+                {
+                  "text": "，但他俩无法再参与一年一度的编剧工会奖的角逐。\n\n编剧工会奖被视为奥斯卡剧本类奖项的风向标。不过这并不",
+                  "highlight": false
+                },
+                {
+                  "text": "影响",
+                  "highlight": true
+                },
+                {
+                  "text": "朴赞郁在好莱坞当导演，也不",
+                  "highlight": false
+                },
+                {
+                  "text": "影响",
+                  "highlight": true
+                },
+                {
+                  "text": "他在韩国等国际市场的",
+                  "highlight": false
+                },
+                {
+                  "text": "发展",
+                  "highlight": true
+                },
+                {
+                  "text": "，主要断送的是他在好莱坞当编剧的道路。我们历史书讲罢工时会提到工人纠察队，现在理解是为什么了。咱们东亚人卷的“基因”还是太强了。另外，国内企",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            }
+          ],
+          "matched_terms": [
+            "发展",
+            "就业",
+            "影响"
+          ]
+        }
+      ]
+    },
+    {
+      "query": "高铁建设是否会带来地方财政压力",
+      "snapshot_id": "s20261018t112012z_3f23dda",
+      "terms": [
+        "高铁",
+        "建设",
+        "带来",
+        "地方",
+        "财政",
+        "压力"
+      ],
+      "total": 14,
+      "expected_relevant": [
+        "ShuiQianXiaoXi/0201-0300/0280.md",
+        "CanKaoXinXi/0501-0600/0515.md"
+      ],
+      "hit_at_1": true,
+      "hit_at_3": true,
+      "known_relevant_recall_at_3": 1.0,
+      "literal_sentence_matches": 0,
+      "top_results": [
+        {
+          "doc_id": "CanKaoXinXi/0501-0600/0515.md",
+          "title": "参考信息515",
+          "source_title": "【参考信息515】财政供养人数；贵州市市通高铁",
+          "channel": "CanKaoXinXi",
+          "publication_date": "2025-10-13",
+          "score": 7.119167045147356,
+          "snippets": [
+            {
+              "heading": "贵州市市通高铁",
+              "heading_anchor": "贵州市市通高铁",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "0名，贵州包揽近半，前三名都坐落于此。贵州是我国唯一没有平原的省份，地无三尺平的山地省，在高速公路、",
+                  "highlight": false
+                },
+                {
+                  "text": "高铁建设",
+                  "highlight": true
+                },
+                {
+                  "text": "上跑赢了沿海经济大省。\n\n大基建对于拉动经济有一定作用，但作为债务",
+                  "highlight": false
+                },
+                {
+                  "text": "压力",
+                  "highlight": true
+                },
+                {
+                  "text": "最高的省份之一，外界担忧贵州",
+                  "highlight": false
+                },
+                {
+                  "text": "高铁",
+                  "highlight": true
+                },
+                {
+                  "text": "难度更大、成本更高，会给当地",
+                  "highlight": false
+                },
+                {
+                  "text": "带来",
+                  "highlight": true
+                },
+                {
+                  "text": "更沉重的债务负担。长期以来，贵州",
+                  "highlight": false
+                },
+                {
+                  "text": "地方",
+                  "highlight": true
+                },
+                {
+                  "text": "债主要来源于",
+                  "highlight": false
+                },
+                {
+                  "text": "高铁",
+                  "highlight": true
+                },
+                {
+                  "text": "、高速公路和大数据三个方面。",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            },
+            {
+              "heading": "贵州市市通高铁",
+              "heading_anchor": "贵州市市通高铁",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "早期的干线，如贵广",
+                  "highlight": false
+                },
+                {
+                  "text": "高铁",
+                  "highlight": true
+                },
+                {
+                  "text": "、贵南",
+                  "highlight": false
+                },
+                {
+                  "text": "高铁",
+                  "highlight": true
+                },
+                {
+                  "text": "，国铁集团出资占半壁江山，其他由",
+                  "highlight": false
+                },
+                {
+                  "text": "地方",
+                  "highlight": true
+                },
+                {
+                  "text": "分担。不过近年来，随着干线",
+                  "highlight": false
+                },
+                {
+                  "text": "高铁",
+                  "highlight": true
+                },
+                {
+                  "text": "逐步形成，新批复的",
+                  "highlight": false
+                },
+                {
+                  "text": "高铁",
+                  "highlight": true
+                },
+                {
+                  "text": "，",
+                  "highlight": false
+                },
+                {
+                  "text": "地方",
+                  "highlight": true
+                },
+                {
+                  "text": "出资成为主流。像盘兴",
+                  "highlight": false
+                },
+                {
+                  "text": "高铁",
+                  "highlight": true
+                },
+                {
+                  "text": "就由贵州自己承担80%，国铁出资比例降到20%。这就",
+                  "highlight": false
+                },
+                {
+                  "text": "带来",
+                  "highlight": true
+                },
+                {
+                  "text": "新的问题：",
+                  "highlight": false
+                },
+                {
+                  "text": "高铁",
+                  "highlight": true
+                },
+                {
+                  "text": "能否收回成本，基建",
+                  "highlight": false
+                },
+                {
+                  "text": "带来",
+                  "highlight": true
+                },
+                {
+                  "text": "的债务",
+                  "highlight": false
+                },
+                {
+                  "text": "压力",
+                  "highlight": true
+                },
+                {
+                  "text": "何以化解？\n\n随着大基建时代的结束，维护成本摆到了各地政府的台面上。贵州铜仁思",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            },
+            {
+              "heading": "财政供养人数",
+              "heading_anchor": "财政供养人数",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "2020年，",
+                  "highlight": false
+                },
+                {
+                  "text": "财政",
+                  "highlight": true
+                },
+                {
+                  "text": "供养人员中有近四成不是在职人员。离退休人数从2004年的1468万增长到2687万。随着老龄化加速和人均寿命延长，离退休人员规模膨胀给公共",
+                  "highlight": false
+                },
+                {
+                  "text": "财政带来",
+                  "highlight": true
+                },
+                {
+                  "text": "沉重",
+                  "highlight": false
+                },
+                {
+                  "text": "压力",
+                  "highlight": true
+                },
+                {
+                  "text": "。2022年，机关事业单位离退休人员平均退休工资约5927元，远高于企业离退休人员的平均养老金2995元。编外人员的规模2004年有215万，2018年就膨胀到442万。",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            }
+          ],
+          "matched_terms": [
+            "高铁",
+            "建设",
+            "带来",
+            "地方",
+            "财政",
+            "压力"
+          ]
+        },
+        {
+          "doc_id": "ShuiQianXiaoXi/0401-0500/0461.md",
+          "title": "睡前消息461",
+          "source_title": "【睡前消息461】日本明石没有生育奇迹，中国呢？",
+          "channel": "ShuiQianXiaoXi",
+          "publication_date": "2022-07-22",
+          "score": 4.698944479991101,
+          "snippets": [
+            {
+              "heading": "中国能从明石学什么",
+              "heading_anchor": "中国能从明石学什么",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "这次重组，基本条件是10年的债务改到20年，直接延期10年，利息从4-7%谈到了3%，银行的很多优质资产忽然就打折了。众所周知，在贵州省，遵义是贵阳之外",
+                  "highlight": false
+                },
+                {
+                  "text": "财政",
+                  "highlight": true
+                },
+                {
+                  "text": "状况最好的地级市。而遵义道桥",
+                  "highlight": false
+                },
+                {
+                  "text": "建设",
+                  "highlight": true
+                },
+                {
+                  "text": "公司是遵义国资委100%持股的融资平台，总资产1700亿。现在是作为贵州化解债务的试点来谈判的，恐怕其他融资平台的债务还拿不到这么好的重组条件。",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            },
+            {
+              "heading": "福利的钱从哪里来",
+              "heading_anchor": "福利的钱从哪里来",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "除此之外，明石市每年还要对外借债100亿日元以上，占市政府收入的10%左右。中央补贴和债务快速上涨，这才是明石市福利的来源。而日本中央",
+                  "highlight": false
+                },
+                {
+                  "text": "财政",
+                  "highlight": true
+                },
+                {
+                  "text": "也是靠借债运行。去年日本的",
+                  "highlight": false
+                },
+                {
+                  "text": "财政",
+                  "highlight": true
+                },
+                {
+                  "text": "赤字率达到40%，不借债立刻停转。\n\n2021",
+                  "highlight": false
+                },
+                {
+                  "text": "财政",
+                  "highlight": true
+                },
+                {
+                  "text": "年度结束的时候，日本的长期国家债务已经超过一千万亿日元，每年增长率超过10%。这说明，日本政府和明石市政府都用透支未来的方式维持当下的福利。",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            },
+            {
+              "heading": "中国能从明石学什么",
+              "heading_anchor": "中国能从明石学什么",
+              "parts": [
+                {
+                  "text": "中国能从明石学什么\n\n中国人应该怎么看待明石市的经验呢？\n\n455期节目的标题是《阆中核酸自费，\"普通\"中国城市没钱了》。当时我说，独山、鹤岗这些城市",
+                  "highlight": false
+                },
+                {
+                  "text": "财政",
+                  "highlight": true
+                },
+                {
+                  "text": "崩溃是小问题，只需要整顿局部秩序；阆中这种经济发展条件在中上水平的城市",
+                  "highlight": false
+                },
+                {
+                  "text": "财政",
+                  "highlight": true
+                },
+                {
+                  "text": "没钱了，是值得认真对待的致命问题，必须因此讨论全国的发展策略。日本的明石市也有类似的代表性，一般认为日本经济资源集中在两个或者三个大都市圈。",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            }
+          ],
+          "matched_terms": [
+            "高铁",
+            "建设",
+            "带来",
+            "地方",
+            "财政",
+            "压力"
+          ]
+        },
+        {
+          "doc_id": "ShuiQianXiaoXi/0201-0300/0280.md",
+          "title": "睡前消息280",
+          "source_title": "【睡前消息280】高铁大跃进之后，反思铁路建设模式",
+          "channel": "ShuiQianXiaoXi",
+          "publication_date": "2021-05-28",
+          "score": 4.495773092798951,
+          "snippets": [
+            {
+              "heading": "铁道部体制：高铁为何挤占货运",
+              "heading_anchor": "铁道部体制：高铁为何挤占货运",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "难了。而已经修好的",
+                  "highlight": false
+                },
+                {
+                  "text": "高铁",
+                  "highlight": true
+                },
+                {
+                  "text": "都要维持运营，客流量填不满就会亏损。\n\n现在18个铁路局有12个严重亏损，铁路总公司负债接近6万亿级别，再怎么用支援",
+                  "highlight": false
+                },
+                {
+                  "text": "地方",
+                  "highlight": true
+                },
+                {
+                  "text": "经济的理由去炒地产，也要向现实的财务",
+                  "highlight": false
+                },
+                {
+                  "text": "压力",
+                  "highlight": true
+                },
+                {
+                  "text": "低头，回到优先",
+                  "highlight": false
+                },
+                {
+                  "text": "建设",
+                  "highlight": true
+                },
+                {
+                  "text": "货运铁路的发展模式。估计接下来十几年还是铁路",
+                  "highlight": false
+                },
+                {
+                  "text": "建设",
+                  "highlight": true
+                },
+                {
+                  "text": "的黄金年代，但重点不再是高速客运铁路，而是新建货运铁路，重载铁路，升级现有的货运网络。\n\n5月26日，国家卫生健康委在北京发布《2020中国吸烟危害健康",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            },
+            {
+              "heading": "铁道部体制：高铁为何挤占货运",
+              "heading_anchor": "铁道部体制：高铁为何挤占货运",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "的房地产概念，",
+                  "highlight": false
+                },
+                {
+                  "text": "地方",
+                  "highlight": true
+                },
+                {
+                  "text": "政府可以征地搞",
+                  "highlight": false
+                },
+                {
+                  "text": "高铁",
+                  "highlight": true
+                },
+                {
+                  "text": "新城，而铁路部门也拥有车站和沿线的大片土地，可以置换到",
+                  "highlight": false
+                },
+                {
+                  "text": "高铁",
+                  "highlight": true
+                },
+                {
+                  "text": "新城附近赚钱。往往是",
+                  "highlight": false
+                },
+                {
+                  "text": "高铁",
+                  "highlight": true
+                },
+                {
+                  "text": "还没通车，地价已经炒起来了，给",
+                  "highlight": false
+                },
+                {
+                  "text": "地方",
+                  "highlight": true
+                },
+                {
+                  "text": "官员在换届之前就提供了资金和政绩。所以，往往是",
+                  "highlight": false
+                },
+                {
+                  "text": "地方",
+                  "highlight": true
+                },
+                {
+                  "text": "干部和铁道部联合起来，推动客运",
+                  "highlight": false
+                },
+                {
+                  "text": "高铁建设",
+                  "highlight": true
+                },
+                {
+                  "text": "，甚至挤占了普通货运铁路的",
+                  "highlight": false
+                },
+                {
+                  "text": "建设",
+                  "highlight": true
+                },
+                {
+                  "text": "资金。但是，铁路地产能增值，前提还是本地有足够发达的实体经济。",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            },
+            {
+              "heading": null,
+              "heading_anchor": "",
+              "parts": [
+                {
+                  "text": "…",
+                  "highlight": false
+                },
+                {
+                  "text": "划",
+                  "highlight": false
+                },
+                {
+                  "text": "建设",
+                  "highlight": true
+                },
+                {
+                  "text": "工作中，一些",
+                  "highlight": false
+                },
+                {
+                  "text": "地方",
+                  "highlight": true
+                },
+                {
+                  "text": "存在片面追求高标准、债务负担较重等问题。再看去年的文件，国家发改委也有表态，铁路",
+                  "highlight": false
+                },
+                {
+                  "text": "建设",
+                  "highlight": true
+                },
+                {
+                  "text": "方面要防止相互攀比、盲目",
+                  "highlight": false
+                },
+                {
+                  "text": "建设",
+                  "highlight": true
+                },
+                {
+                  "text": "以及片面追求高标准。中央政府的确在给铁路",
+                  "highlight": false
+                },
+                {
+                  "text": "建设",
+                  "highlight": true
+                },
+                {
+                  "text": "踩刹车。但是，并不是所有铁路",
+                  "highlight": false
+                },
+                {
+                  "text": "建设",
+                  "highlight": true
+                },
+                {
+                  "text": "都应该放慢速度。过去十几年",
+                  "highlight": false
+                },
+                {
+                  "text": "高铁建设",
+                  "highlight": true
+                },
+                {
+                  "text": "爆发式发展，普通铁路",
+                  "highlight": false
+                },
+                {
+                  "text": "建设",
+                  "highlight": true
+                },
+                {
+                  "text": "严重滞后。按照“十三五规划”，2020年底全国应该有15万公里铁路，其中高速铁路3万公里。",
+                  "highlight": false
+                },
+                {
+                  "text": "…",
+                  "highlight": false
+                }
+              ]
+            }
+          ],
+          "matched_terms": [
+            "高铁",
+            "建设",
+            "带来",
+            "地方",
+            "压力"
+          ]
+        }
+      ]
+    }
+  ]
+}

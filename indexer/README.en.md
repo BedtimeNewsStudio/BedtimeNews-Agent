@@ -32,13 +32,13 @@ One run:
 3. **Git sync** and pin the commit.
 4. **Plan**: the incremental base is the latest published snapshot of the current lineage (same pipeline fingerprint and vector space). Diff the transcripts against its `index_state`: added, body-modified, source-only (title/date/appendix) and deleted. Body edits go through embeddings; source-only edits rewrite the reader HTML and the downloadable Markdown. Nothing changed → `no_change`. No base (first build, a version bump, a new vector space) or `build --full` → full build.
 5. **GC, then disk precheck**: refuse to build unless the Postgres data filesystem has at least max(2 GB, 3 × the base snapshot's size) free (the 2 GB floor is the `BUILD_MIN_FREE_BYTES` environment variable, in bytes).
-6. **Phase A** (no transaction): chunk the transcripts to (re)index; reuse vectors by chunk-text hash, call the embedding API only for misses; render reader projections. New vectors stay in memory only.
-7. **Phase B** (one transaction holding the database advisory lock): create `rag_s<id>` → copy the base's four tables (incremental) → delete changed and deleted transcripts → insert chunks (reused vectors are joined server-side) → write `index_state`, titles and reader projections → `ANALYZE` → build the HNSW index → self-check → recheck that the base is still published and still the newest of its lineage → register as `published` → grant `rag_agent` read access → `COMMIT`.
+6. **Phase A** (no transaction): chunk the transcripts to (re)index; reuse vectors by chunk-text hash, call the embedding API only for misses; render reader and complete-body search projections. New vectors stay in memory only.
+7. **Phase B** (one transaction holding the database advisory lock): create `rag_s<id>` → copy the base's five payload tables (incremental) → delete changed and deleted transcripts → insert chunks (reused vectors are joined server-side) → write `index_state`, titles, reader/search projections and regenerated search statistics → `ANALYZE` → build HNSW and GIN indexes → self-check → recheck that the base is still published and still the newest of its lineage → register as `published` → grant `rag_agent` read access → `COMMIT`.
 8. **GC again** (a failure here is only logged: the run's result stands), then update `rag_meta.indexer_status`.
 
 Any failure, a killed process or a dropped connection rolls the whole Phase B transaction back: no half-built schema or registry row is ever left, and the published snapshots are untouched. On `SIGTERM` the indexer cancels the running statement and exits (compose allows 30 s).
 
-Measured on the full corpus (1,902 transcripts, 13,434 chunks, 2560 dimensions; local 4-core machine): an incremental build of one changed transcript takes ~19 s (Phase B ~14 s, mostly the HNSW build); a full build reusing every vector ~36 s; one snapshot is ~240 MB and a build writes ~200 MB of WAL.
+Historical full-corpus baseline before format 3, excluding search data and GIN costs (1,902 transcripts, 13,434 chunks, 2560 dimensions; local 4-core machine): an incremental build of one changed transcript takes ~19 s (Phase B ~14 s, mostly the HNSW build); a full build reusing every vector ~36 s; one snapshot is ~240 MB and a build writes ~200 MB of WAL.
 
 ## Configuration
 
@@ -56,7 +56,9 @@ The next run is always computed from the current time: a run that takes longer t
 
 ### Local sample mode
 
-`index_config.sample.yml` names eight deterministic transcripts covering ordinary, fractional, `misc`, and multi-channel URIs, plus a body `##` title that contains a space (参考信息17: each whitespace run in the anchor becomes one `-`, and the stored heading keeps the space). Run it only with `INDEXER_SCOPE=sample`, `INDEX_CONFIG_FILE=/app/index_config.sample.yml`, an isolated data directory, and a `POSTGRES_DB` ending in `_local`; the indexer refuses to build into any other database. `docker-compose.sample.yml` supplies the service overrides (the sample web listens on `SAMPLE_FRONTEND_PORT`, default 18080).
+`index_config.sample.yml` names fifteen deterministic transcripts covering ordinary, fractional, `misc`, and multi-channel URIs, plus a body `##` title that contains a space (参考信息17: each whitespace run in the anchor becomes one `-`, and the stored heading keeps the space). Run it only with `INDEXER_SCOPE=sample`, `INDEX_CONFIG_FILE=/app/index_config.sample.yml`, an isolated data directory, and a `POSTGRES_DB` ending in `_local`; the indexer refuses to build into any other database. `docker-compose.sample.yml` supplies the service overrides (the sample web listens on `SAMPLE_FRONTEND_PORT`, default 18080).
+
+The additional topic samples cover Guizhou/local debt, Evergrande, birth rates, AI, and rail construction for natural-language search evaluation.
 
 ### Document Filters
 
@@ -102,15 +104,15 @@ validation:
 
 Run inside the indexer container:
 
-| Command                                                     | Effect                                                                                                                                                                                    |
-| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `python -m src.snapshots list`                              | List snapshots: status, pinned, lineage (current/other), publish time, size, vector space                                                                                                 |
-| `python -m src.snapshots status`                            | Show `rag_meta.indexer_status` (last run, result, error, consecutive failures)                                                                                                            |
-| `python -m src.snapshots retire <id>`                       | Retire a snapshot (data rollback); agents fall back to the previous readable snapshot within 15 s                                                                                         |
-| `python -m src.snapshots unretire <id>`                     | Undo a retirement (retired snapshots are kept for 24 hours)                                                                                                                               |
-| `python -m src.snapshots pin <id>` / `unpin <id>`           | Pin or unpin; pinned snapshots are never garbage-collected                                                                                                                                |
-| `python -m src.snapshots build [--full]`                    | Run a build now, protected by the same run lock and advisory lock as the scheduled run                                                                                                    |
-| `python -m src.snapshots drop-previous-lineage [--dry-run]` | Once the current lineage is published, drop the previous chunking in this embedding space immediately. Does not touch the current lineage and does not wait 7 days. Run `--dry-run` first |
+| Command                                                     | Effect                                                                                                                                                                                         |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `python -m src.snapshots list`                              | List snapshots: status, pinned, lineage (current/other), publish time, size, vector space                                                                                                      |
+| `python -m src.snapshots status`                            | Show `rag_meta.indexer_status` (last run, result, error, consecutive failures)                                                                                                                 |
+| `python -m src.snapshots retire <id>`                       | Retire a snapshot (data rollback); agents fall back to the previous readable snapshot within 15 s                                                                                              |
+| `python -m src.snapshots unretire <id>`                     | Undo a retirement (retired snapshots are kept for 24 hours)                                                                                                                                    |
+| `python -m src.snapshots pin <id>` / `unpin <id>`           | Pin or unpin; pinned snapshots are never garbage-collected                                                                                                                                     |
+| `python -m src.snapshots build [--full]`                    | Run a build now, protected by the same run lock and advisory lock as the scheduled run                                                                                                         |
+| `python -m src.snapshots drop-previous-lineage [--dry-run]` | Once the current lineage is published, drop previous indexing lineages in this embedding space immediately. Does not touch the current lineage and does not wait 7 days. Run `--dry-run` first |
 
 ```bash
 docker compose exec indexer python -m src.snapshots list
@@ -195,7 +197,7 @@ rag_s<id>   read-only snapshots: document_chunks / documents / transcripts / ind
 - `doc_id`: the transcript's URI, **including `.md`**, e.g. `ShuiQianXiaoXi/0501-0600/0588.md` — byte-for-byte the key used by the upstream `URI映射.md`
 - `chunk_index`: 0-based index within document
 - `heading`: section heading, when there is one; empty for the preamble
-- `heading_anchor`: that section's anchor, the same string as the topic `h2` `id` in the reader. An empty string means no URL fragment. This column exists on format 2 and not on format 1
+- `heading_anchor`: that section's anchor, the same string as the topic `h2` `id` in the reader. An empty string means no URL fragment. This column exists in formats 2, 3, and 4, not format 1
 - `text`: chunk content
 - `word_count`: number of words
 - `embedding`: `halfvec(N)`, `N` being the dimension of the snapshot's vector space. The column **type** is intentionally fixed to `halfvec`: it fits any model up to 4000 dims at half the storage with negligible recall loss. An HNSW index (`halfvec_cosine_ops`, pgvector defaults `m=16`, `ef_construction=64`) serves the agent's nearest-neighbour search
@@ -218,6 +220,17 @@ Titles come from the upstream `URI映射.md`. A general rule (`{channel}/{bucket
 - `body_html`: the rendered page served by the agent's `/transcripts` API. A body topic `h2` carries an `id` equal to its anchor. A projection-version change re-renders and does not re-embed
 - `source_hash`, `projection_version`: re-render triggers (source edits or a renderer change)
 
+**`search_documents` / `search_statistics`** (format 4): complete visible body
+text, NFC/ASCII-normalized text, jieba search-segmented words, complete occurrence
+offsets in `token_data`, and total `token_count`. Word lexemes populate a native
+GIN `tsvector`; corpus statistics store nonempty-token document count and average
+token count. Query segmentation uses the same pinned dictionary, stopwords and
+normalization. Short passages are independent of embedding chunk filtering.
+Appendix-only edits reuse search data; body edits regenerate it. `SEARCH_VERSION`
+is 2 and participates in the fingerprint. Search errors or incomplete coverage
+abort publication; unchanged embedding vectors are reused. See the
+[backend design](../docs/designs/20261018_keyword-search-backend.md).
+
 **`index_state`**: build provenance, the baseline for the next incremental build (not read by the agent)
 
 - `file_path`: transcript URI
@@ -238,10 +251,10 @@ Titles come from the upstream `URI映射.md`. A general rule (`{channel}/{bucket
 
 ### Two compatibility dimensions
 
-| Dimension                          | Composition                                                                                                               | Role                                                                                        |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| **Pipeline fingerprint**           | Hash of (`format_version`, `normalization_version` = `BODY_NORMALIZATION_VERSION`, `chunker_version` = `CHUNKER_VERSION`) | Incremental builds only between snapshots with the same fingerprint; otherwise a full build |
-| **Vector space** `embedding_space` | `<model>@<dimension>`, e.g. `Qwen/Qwen3-Embedding-4B@2560`; overridable with `embedding.space_id`                         | Vectors are reused, and snapshots read by an agent, only within one vector space            |
+| Dimension                          | Composition                                                                                                                                 | Role                                                                                        |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| **Pipeline fingerprint**           | Hash of (`format_version`, `normalization_version` = `BODY_NORMALIZATION_VERSION`, `chunker_version` = `CHUNKER_VERSION`, `SEARCH_VERSION`) | Incremental builds only between snapshots with the same fingerprint; otherwise a full build |
+| **Vector space** `embedding_space` | `<model>@<dimension>`, e.g. `Qwen/Qwen3-Embedding-4B@2560`; overridable with `embedding.space_id`                                           | Vectors are reused, and snapshots read by an agent, only within one vector space            |
 
 - Bump `CHUNKER_VERSION` (`src/chunker.py`) whenever the chunking parameters or logic change, and `BODY_NORMALIZATION_VERSION` (`src/document_loader.py`) whenever normalization changes. Forgetting a bump mixes old and new chunking in one snapshot; code review must check for it.
 - Bump `FORMAT_VERSION` (`src/snapshot_schema.py`) whenever the structure or meaning of a table or column the agent reads changes, and add the new format to the agent's `SUPPORTED_FORMATS`.
@@ -263,7 +276,7 @@ GC runs before and after every build, each deletion in its own transaction holdi
 | `retired` snapshots are kept for 24 hours                                                                            | A mistaken retirement can be undone                          |
 | Nothing is deleted within 10 minutes of being superseded or retired                                                  | Protects in-flight requests (the agent switches within 15 s) |
 
-The 7 days above is the automatic collection. The format 2 full build reuses vectors from the old snapshot by chunk text, so wait until that build is published and the agent's `/health` names it before `drop-previous-lineage`. Dropping first discards vectors that have not been copied yet. The command then drops the previous chunking in the same embedding space: snapshots that did not cut the body on sibling `##` topics and have no `heading_anchor`, including `legacy`. It does not drop the previous snapshot kept in the current lineage. It refuses, and drops nothing, when no current-lineage snapshot is published or a previous snapshot is pinned. Run `--dry-run` first.
+The 7-day rule above is automatic collection. After a format or indexing-rule upgrade, wait for a current-lineage snapshot to be published and selected by the Agent before using `drop-previous-lineage`; the new build can reuse vectors from older snapshots first. The command removes every other pipeline fingerprint in the same embedding space, including format 2 snapshots with anchors but no search and `legacy`. It preserves the current lineage and refuses all deletion if no current-lineage snapshot is published or a target is pinned. Run `--dry-run` first.
 
 ## Upgrading from the pre-snapshot schema
 
@@ -383,7 +396,7 @@ docker compose exec indexer python -m src.debugger stats
 
 - **Local only**: the postgres data directory is in `.gitignore` and not tracked by version control
 - **Migration**: backups are portable and can be restored on different machines
-- **Disk space**: steady state is two snapshots (~500 MB); a build temporarily needs about one more snapshot plus WAL
+- **Disk space**: steady state is two snapshots (historically ~500 MB before search; add search tables and GIN indexes); a build temporarily needs about one more snapshot plus WAL
 
 ## Project Structure
 
@@ -403,6 +416,9 @@ indexer/src/
 ├── document_loader.py   # Markdown processing (BODY_NORMALIZATION_VERSION)
 ├── change_detector.py   # Source/body hash diff against a snapshot's index_state
 ├── chunker.py           # Semantic chunking (CHUNKER_VERSION)
+├── search_text.py      # Pinned word analysis shared with Agent
+├── search_projection.py # Complete-body word projection and offsets
+├── anchors.py          # Shared body-topic anchors
 ├── embeddings.py        # Embedding generation (OpenAI-compatible client)
 ├── debugger.py          # Read-only debug commands (test, stats, history, recent, inspect, logs)
 ├── transcript_export.py # Reader projection (Markdown -> HTML)

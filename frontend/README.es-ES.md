@@ -75,9 +75,9 @@ El frontend:
 - Se ejecuta en un contenedor Docker que sirve HTTP puro en el puerto 8080
   (sin TLS — la exposición pública y la terminación TLS se gestionan fuera de
   este repositorio)
-- Es el único servicio publicado al host (`FRONTEND_PORT`, por defecto 8080)
+- En el despliegue normal es el único servicio publicado al host (`FRONTEND_PORT`, por defecto 8080)
 - Hace proxy de `/chat` y de las APIs de transcripciones al agente a través
-  de la red interna de Docker; el agente nunca se expone al host
+  de la red interna de Docker; el overlay de muestras vincula el agente a loopback para desarrollar la API
 
 ## Componentes
 
@@ -114,6 +114,11 @@ El frontend:
 | GET    | `/robots.txt`                    | Permite todo; apunta al sitemap                                                                           |
 | GET    | `/sitemap.xml`                   | Inicio, listas por programa y cada transcripción                                                          |
 | GET    | `/s/{short_id}`                  | Enlace corto, `302` a la transcripción                                                                    |
+
+`GET /search` del agente es solo backend: este servicio no hace proxy de
+`/search` ni `/api/search` y no ofrece interfaz de búsqueda. Consulta la
+[API de búsqueda](../agent/README.es-ES.md#get-search). El acceso localhost en
+18001 pertenece al overlay de muestras, no a una ruta del frontend.
 
 ## Flujo de Desarrollo
 

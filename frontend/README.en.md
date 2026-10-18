@@ -63,9 +63,9 @@ The frontend:
 
 - Runs in a Docker container that serves plain HTTP on port 8080 (no TLS —
   public exposure and TLS termination are handled outside this repo)
-- Is the only service published to the host (`FRONTEND_PORT`, default 8080)
+- In the default deployment, is the only service published to the host (`FRONTEND_PORT`, default 8080)
 - Proxies `/chat` and transcript APIs to the agent over the internal Docker
-  network; the agent is never exposed to the host
+  network; the sample overlay separately binds the Agent to loopback for API development
 
 ## Components
 
@@ -99,6 +99,11 @@ The frontend:
 | GET    | `/robots.txt`                    | Allows all; points at the sitemap                                                          |
 | GET    | `/sitemap.xml`                   | Home, channel lists, every transcript                                                      |
 | GET    | `/s/{short_id}`                  | Short link, `302` to the transcript                                                        |
+
+The Agent's `GET /search` is a backend-only API; this service does not proxy
+`/search` or `/api/search` and provides no search interface. See the
+[Agent search API](../agent/README.en.md#get-search). Direct localhost access on
+port 18001 is provided only by the sample overlay, not by a frontend route.
 
 ## Development Workflow
 

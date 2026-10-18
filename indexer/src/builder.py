@@ -38,6 +38,8 @@ from .document_loader import load_indexable_source
 from .file_scanner import scan_files
 from .models import Chunk, LoadedIndexableSource, TranscriptProjection
 from .paths import CONTENTS_DIR
+from .search_projection import SEARCH_VERSION, SearchProjection, project_search
+from .search_text import lexeme
 from .settings import settings
 from .snapshot_schema import (
     COPY_COLUMNS,
@@ -46,6 +48,7 @@ from .snapshot_schema import (
     MAX_PARALLEL_MAINTENANCE_WORKERS,
     SNAPSHOT_TABLES,
     create_hnsw_sql,
+    create_search_index_sql,
     create_tables_sql,
     embedding_space,
     index_params,
@@ -123,6 +126,7 @@ class Prepared:
     reuse_source: SnapshotInfo | None
     embedded: int
     reused: int
+    search_documents: dict[str, SearchProjection] = field(default_factory=dict)
 
 
 def _check_cancel() -> None:
@@ -320,7 +324,10 @@ def prepare(conn: Connection, plan: BuildPlan) -> Prepared:
         if source is None:
             source = load_indexable_source(uri)
             plan.changes.loaded_sources[uri] = source
-        for chunk in chunk_document(source.document):
+        chunks = chunk_document(source.document)
+        if not chunks and (violation := chunker._body_violation(source.document.text)):
+            raise SelfCheckFailed(f"Invalid embedding body {uri}: {violation}")
+        for chunk in chunks:
             item = PreparedChunk(chunk, text_hash(chunk.text), None)
             prepared.append(item)
             if item.text_hash not in reusable:
@@ -365,6 +372,10 @@ def prepare(conn: Connection, plan: BuildPlan) -> Prepared:
         reuse_source=reuse_source,
         embedded=len(unique_misses),
         reused=len(prepared) - len(misses),
+        search_documents={
+            uri: project_search(plan.changes.loaded_sources[uri])
+            for uri in sorted(plan.reindex)
+        },
     )
 
 
@@ -391,7 +402,7 @@ def _columns_on(cursor: Cursor, schema: str, table: str) -> set[str]:
 
 
 def _copy_base(cursor: Cursor, base: str, target: str) -> None:
-    for table in SNAPSHOT_TABLES:
+    for table in COPY_COLUMNS:
         present = _columns_on(cursor, base, table)
         cols = tuple(c for c in COPY_COLUMNS[table] if c in present)
         if not cols:
@@ -514,6 +525,44 @@ def _write_index_state(cursor: Cursor, target: str, plan: BuildPlan) -> None:
         )
         if cursor.rowcount != 1:
             raise RuntimeError(f"index_state row missing for source-only edit: {uri}")
+
+
+def _write_search(cursor: Cursor, target: str, prepared: Prepared) -> None:
+    t = sql.Identifier(target)
+    for projection in prepared.search_documents.values():
+        _check_cancel()
+        # Materialize each vector separately so a PostgreSQL size-limit failure
+        # names the offending transcript and rolls the entire publication back.
+        try:
+            cursor.execute(
+                sql.SQL(
+                    "INSERT INTO {t}.search_documents VALUES "
+                    "(%s, %s, %s, %s, %s, array_to_tsvector(%s::text[]), %s, %s, %s)"
+                ).format(t=t),
+                (
+                    projection.doc_id,
+                    projection.body_text,
+                    projection.normalized_text,
+                    projection.token_count,
+                    Json(projection.token_data),
+                    projection.terms,
+                    projection.body_hash,
+                    SEARCH_VERSION,
+                    Json(projection.sections),
+                ),
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                f"Cannot index complete search body {projection.doc_id}: {exc}"
+            ) from exc
+    cursor.execute(
+        sql.SQL(
+            "INSERT INTO {t}.search_statistics "
+            "SELECT true, count(*), COALESCE(avg(token_count), 0), %s "
+            "FROM {t}.search_documents WHERE token_count > 0"
+        ).format(t=t),
+        (SEARCH_VERSION,),
+    )
 
 
 def _write_documents(cursor: Cursor, target: str, plan: BuildPlan) -> None:
@@ -664,10 +713,63 @@ def self_check(cursor: Cursor, target: str, *, check_model: bool) -> dict[str, A
             f"transcripts={len(reader_ids)}; e.g. "
             f"{sorted(state_ids ^ doc_ids ^ reader_ids)[:5]}"
         )
+    search_ids = ids(sql.SQL("SELECT doc_id FROM {t}.search_documents").format(t=t))
+    if search_ids != state_ids:
+        raise SelfCheckFailed(
+            f"search body coverage differs: {sorted(search_ids ^ state_ids)[:5]}"
+        )
+    cursor.execute(
+        sql.SQL(
+            "SELECT s.doc_id FROM {t}.search_documents s "
+            "JOIN {t}.index_state i ON i.file_path = s.doc_id "
+            "WHERE s.body_hash <> i.body_hash OR s.search_version <> %s "
+            "OR char_length(s.normalized_text) <> char_length(s.body_text) "
+            "OR s.token_count <> (SELECT COALESCE(sum(jsonb_array_length(value)), 0) FROM jsonb_each(s.token_data)) "
+            "OR (s.token_count > 0 AND length(s.search_terms) = 0) LIMIT 1"
+        ).format(t=t),
+        (SEARCH_VERSION,),
+    )
+    if bad := cursor.fetchone():
+        raise SelfCheckFailed(f"invalid search projection: {bad[0]}")
+    cursor.execute(
+        sql.SQL(
+            "SELECT document_count, average_token_count, search_version, "
+            "(SELECT count(*) FROM {t}.search_documents WHERE token_count > 0), "
+            "(SELECT COALESCE(avg(token_count), 0) FROM {t}.search_documents WHERE token_count > 0) "
+            "FROM {t}.search_statistics"
+        ).format(t=t)
+    )
+    search_count, average, version, actual_count, actual_average = fetch_row(cursor)
+    if (
+        search_count != actual_count
+        or version != SEARCH_VERSION
+        or not math.isclose(average, float(actual_average))
+    ):
+        raise SelfCheckFailed("search statistics disagree with searchable bodies")
+    cursor.execute(
+        sql.SQL(
+            "SELECT doc_id, (SELECT key FROM jsonb_each(token_data) LIMIT 1) FROM {t}.search_documents WHERE token_count > 0 ORDER BY doc_id LIMIT 1"
+        ).format(t=t)
+    )
+    if sample := cursor.fetchone():
+        cursor.execute(
+            sql.SQL(
+                "SELECT doc_id FROM {t}.search_documents WHERE search_terms @@ %s::tsquery AND token_data ? %s"
+            ).format(t=t),
+            (lexeme(sample[1]), sample[1]),
+        )
+        if sample[0] not in {row[0] for row in cursor.fetchall()}:
+            raise SelfCheckFailed(f"sampled search query missed {sample[0]}")
     chunk_docs = ids(
         sql.SQL("SELECT DISTINCT doc_id FROM {t}.document_chunks").format(t=t)
     )
-    if missing := state_ids - chunk_docs:
+    searchable_ids = ids(
+        sql.SQL(
+            "SELECT doc_id FROM {t}.search_documents WHERE char_length(body_text) > 0"
+        ).format(t=t)
+    )
+    # Short bodies remain searchable when they produce no embedding chunks.
+    if missing := state_ids - chunk_docs - searchable_ids:
         raise SelfCheckFailed(
             f"{len(missing)} transcripts have no chunks, e.g. {sorted(missing)[:5]}"
         )
@@ -690,27 +792,33 @@ def self_check(cursor: Cursor, target: str, *, check_model: bool) -> dict[str, A
 
     # Queryable: a sampled top-k served by the HNSW index returns k rows.
     k = min(QUERY_CHECK_K, total_chunks)
-    cursor.execute(
-        sql.SQL(
-            "SELECT embedding::text FROM {t}.document_chunks ORDER BY random() LIMIT 1"
-        ).format(t=t)
-    )
-    probe = fetch_row(cursor)[0]
-    cursor.execute("SET LOCAL enable_seqscan = off")
-    cursor.execute(
-        sql.SQL(
-            "SELECT count(*) FROM (SELECT chunk_id FROM {t}.document_chunks "
-            "ORDER BY embedding <=> %s::halfvec LIMIT %s) nearest"
-        ).format(t=t),
-        (probe, k),
-    )
-    got = fetch_row(cursor)[0]
-    cursor.execute("SET LOCAL enable_seqscan = on")
-    if got != k:
-        raise SelfCheckFailed(f"sampled top-{k} query returned {got} rows")
+    if k:
+        cursor.execute(
+            sql.SQL(
+                "SELECT embedding::text FROM {t}.document_chunks ORDER BY random() LIMIT 1"
+            ).format(t=t)
+        )
+        probe = fetch_row(cursor)[0]
+        cursor.execute("SET LOCAL enable_seqscan = off")
+        cursor.execute(
+            sql.SQL(
+                "SELECT count(*) FROM (SELECT chunk_id FROM {t}.document_chunks "
+                "ORDER BY embedding <=> %s::halfvec LIMIT %s) nearest"
+            ).format(t=t),
+            (probe, k),
+        )
+        got = fetch_row(cursor)[0]
+        cursor.execute("SET LOCAL enable_seqscan = on")
+        if got != k:
+            raise SelfCheckFailed(f"sampled top-{k} query returned {got} rows")
 
-    checks: dict[str, Any] = {"chunks": total_chunks, "transcripts": len(state_ids)}
-    if check_model:
+    checks: dict[str, Any] = {
+        "chunks": total_chunks,
+        "transcripts": len(state_ids),
+        "search_documents": search_count,
+        "search_version": SEARCH_VERSION,
+    }
+    if check_model and total_chunks:
         cursor.execute(
             sql.SQL(
                 "SELECT chunk_id, text, embedding::text FROM {t}.document_chunks "
@@ -820,6 +928,12 @@ def publish(
                 (gone,),
             )
             cursor.execute(
+                sql.SQL(
+                    "DELETE FROM {t}.search_documents WHERE doc_id = ANY(%s)"
+                ).format(t=ti),
+                (gone,),
+            )
+            cursor.execute(
                 sql.SQL("DELETE FROM {t}.index_state WHERE file_path = ANY(%s)").format(
                     t=ti
                 ),
@@ -831,6 +945,7 @@ def publish(
         _write_index_state(cursor, target, plan)
         _write_documents(cursor, target, plan)
         _write_transcripts(cursor, target, plan, prepared)
+        _write_search(cursor, target, prepared)
         _write_audit(cursor, plan)
         t = step("write", t)
 
@@ -843,6 +958,8 @@ def publish(
         t = step("analyze", t)
         cursor.execute(create_hnsw_sql(target))
         t = step("hnsw", t)
+        cursor.execute(create_search_index_sql(target))
+        t = step("search_index", t)
 
         checks = self_check(
             cursor, target, check_model=plan.full or prepared.embedded > 0

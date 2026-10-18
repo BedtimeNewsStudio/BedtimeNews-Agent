@@ -125,8 +125,12 @@ def test_higher_supported_format_beats_newer(db, monkeypatch):
     register(db, "s_v2", fmt=2, minutes_ago=30)
     register(db, "s_v1", fmt=1, minutes_ago=1)
     register(db, "s_v3", fmt=3)
-    # Production supports {1, 2}. Format 2 beats a newer format 1.
-    # Format 3 is not supported and is not selected.
+    register(db, "s_v4", fmt=4)
+    register(db, "s_v5", fmt=5)
+    # Format 4 supports analyzed search; a future format remains unreadable.
+    assert selected(db).snapshot_id == "s_v4"
+    # Older processes continue selecting their own highest supported format.
+    monkeypatch.setattr(snapshots, "SUPPORTED_FORMATS", frozenset({1, 2}))
     assert selected(db).snapshot_id == "s_v2"
     # A process that only supports {1} keeps reading format 1.
     monkeypatch.setattr(snapshots, "SUPPORTED_FORMATS", frozenset({1}))

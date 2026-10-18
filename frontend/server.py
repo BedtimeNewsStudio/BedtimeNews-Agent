@@ -7,8 +7,8 @@ Responsibilities:
   /transcripts/<URI>), robots.txt, sitemap.xml and short links (/s/<id>)
 - Expose the sample questions as JSON at /api/starters
 - Proxy the chat stream (/chat) and the transcript APIs (/api/transcripts…)
-  to the internal agent backend, which is not reachable from outside the
-  Docker network
+  to the internal agent backend (the sample overlay separately binds the
+  backend API to loopback; there is no frontend search proxy)
 - Report liveness (/healthz) and readiness (/readyz)
 
 The agent's /chat endpoint speaks Server-Sent Events:
@@ -59,7 +59,7 @@ logger = logging.getLogger(__name__)
 
 AGENT_BACKEND_HOST = os.environ.get("AGENT_BACKEND_HOST", "agent")
 AGENT_BACKEND_PORT = os.environ.get("AGENT_BACKEND_PORT", "8000")
-# Plain HTTP on purpose: the agent is only reachable on the private compose network.
+# Plain HTTP: the default deployment reaches the agent on private compose networks.
 AGENT_BASE_URL = f"http://{AGENT_BACKEND_HOST}:{AGENT_BACKEND_PORT}"  # NOSONAR
 CHAT_ENDPOINT = f"{AGENT_BASE_URL}/chat"
 TRANSCRIPTS_ENDPOINT = f"{AGENT_BASE_URL}/transcripts"
