@@ -28,7 +28,8 @@
   --accent2-rgb: 16, 163, 127;
   --on-accent: #ffffff;
   --user-bubble: #2f2f2f;
-  --max-col: 48rem;
+  --content-max: 800px;
+  --max-col: calc(var(--content-max) + 4rem);
   --font-cjk: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
     "Microsoft YaHei", "Noto Sans SC", "Segoe UI", sans-serif;
   --font-mono: ui-monospace, "SF Mono", "Menlo", "Consolas", monospace;
@@ -1085,7 +1086,7 @@ body {
   transition: flex-basis 0.46s var(--ease), border-left-width 0.46s var(--ease);
   /* Shared inset so chrome, list, and article share one vertical edge. */
   --reading-inline: clamp(1rem, 2.4vw, 1.5rem);
-  --reading-max: 52rem;
+  --reading-max: var(--content-max);
 }
 
 body[data-view="browse"] .reading-pane {
