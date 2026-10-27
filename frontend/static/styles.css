@@ -1072,6 +1072,105 @@ body {
   overflow-y: auto;
 }
 
+/* ---------------------------------------------------------- mode tabs (top)
+   AI对话 / 传统搜索. A bar as wide as the chat text column (--content-max),
+   centred on it; each label centred in its half, a centred divider between
+   them. Desktop and mobile alike; the active tab gets the accent underline.
+   The pane swap is pure CSS off body[data-mode] so no-JS visitors keep the
+   server-rendered AI tab. */
+.mode-tabs {
+  display: flex;
+  flex: 0 0 auto;
+  background: var(--bg);
+}
+
+/* The visible bar: text-column width, centred. The outer element stays full
+   width so it can hand the right half to the reading pane on desktop. */
+.mode-tabs-inner {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  max-width: var(--content-max);
+  margin-inline: auto;
+  border-bottom: 1px solid var(--line);
+}
+
+.mode-tab {
+  appearance: none;
+  position: relative;
+  flex: 1 1 50%;
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 0.7rem 0.5rem;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-cjk);
+  font-size: 0.95rem;
+  font-weight: 550;
+  letter-spacing: 0.08em;
+  text-align: center;
+  cursor: pointer;
+}
+
+/* The split between the two halves — same treatment as the bottom tabbar. */
+.mode-tab + .mode-tab {
+  border-left: 1px solid var(--line);
+}
+
+.mode-tab:hover {
+  color: var(--text-dim);
+}
+
+.mode-tab[aria-selected="true"] {
+  color: var(--text);
+  font-weight: 700;
+}
+
+/* Short centered underline, flush over the bar's bottom border. */
+.mode-tab[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -1px;
+  transform: translateX(-50%);
+  width: 3rem;
+  height: 2px;
+  background: var(--accent);
+}
+
+.mode-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* 传统搜索 takes the chat pane's place wholesale; display, not visibility —
+   nothing in the empty pane needs an exit animation. */
+.search-pane {
+  display: none;
+  flex: 1 1 0%;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+body[data-mode="search"] .search-pane {
+  display: flex;
+}
+
+body[data-mode="search"] .chat-pane {
+  display: none;
+}
+
+.search-coming-soon {
+  /* Solo child of the flex-column pane: auto margins centre it both ways. */
+  margin: auto;
+  color: var(--muted);
+  font-size: 1rem;
+  letter-spacing: 0.12em;
+}
+
 /* Clipped to zero width rather than display:none, because a display switch
    cannot be animated. app.js marks it inert while it is shut, so it stays out
    of the tab order and the accessibility tree. */
@@ -1671,6 +1770,25 @@ body[data-view="browse"] .reading-scroll {
     flex-wrap: nowrap;
   }
 
+  /* The tabs belong to the chat column: when the reading pane opens at exactly
+     half the viewport, the outer bar yields that half so the inner bar stays
+     centred over the chat column. The padding animates with the same timing
+     as the pane's flex-basis transition. */
+  .mode-tabs {
+    transition: padding-right 0.46s var(--ease);
+  }
+
+  body[data-view="browse"] .mode-tabs {
+    padding-right: 50%;
+  }
+
+  /* When the chat half is narrower than --content-max, the stage's inline
+     gutters squeeze the text column; shrink the bar the same amount so it
+     keeps hugging the text at any width. */
+  body[data-view="browse"] .mode-tabs-inner {
+    width: calc(100% - 2 * clamp(1rem, 4vw, 2rem));
+  }
+
   .channel-bar:not([hidden]) {
     display: flex !important;
     visibility: visible;
@@ -1818,6 +1936,7 @@ body[data-view="browse"] .reading-scroll {
   }
 
   .chat-pane,
+  .search-pane,
   .reading-pane {
     position: absolute;
     inset: 0;
@@ -1857,6 +1976,12 @@ body[data-view="browse"] .reading-scroll {
   }
 
   body[data-view="browse"] .chat-pane {
+    z-index: 1;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  body[data-view="browse"] .search-pane {
     z-index: 1;
     visibility: hidden;
     pointer-events: none;

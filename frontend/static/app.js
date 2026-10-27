@@ -66,6 +66,10 @@ const els = {
   readerBody: document.getElementById("reader-body"),
   readerState: document.getElementById("reader-state"),
   chatPane: document.getElementById("chat-pane"),
+  searchPane: document.getElementById("search-pane"),
+  modeTabs: document.getElementById("mode-tabs"),
+  modeTabChat: document.getElementById("mode-tab-chat"),
+  modeTabSearch: document.getElementById("mode-tab-search"),
   tabChat: document.getElementById("tab-chat"),
   tabArchive: document.getElementById("tab-archive"),
 };
@@ -699,6 +703,23 @@ function updateMobileTabs() {
   }
 }
 
+// Top mode tabs: AI对话 vs 传统搜索. Pure client state — the server always
+// renders the AI tab, so every load and every refresh starts there, and the
+// tabs change nothing else: the reading pane (view=browse) stays open and the
+// URL keeps pointing at the transcript. The pane swap itself is CSS on
+// body[data-mode]; here we only keep the attributes in step (hidden for the
+// a11y tree, roving tabindex + aria-selected for tabs).
+function setMode(mode) {
+  document.body.dataset.mode = mode;
+  const search = mode === "search";
+  els.searchPane.toggleAttribute("hidden", !search);
+  for (const tab of [els.modeTabChat, els.modeTabSearch]) {
+    const selected = tab.dataset.mode === mode;
+    tab.setAttribute("aria-selected", selected ? "true" : "false");
+    tab.tabIndex = selected ? 0 : -1;
+  }
+}
+
 function preferredArchiveChannel() {
   try {
     const saved = sessionStorage.getItem("archive-channel");
@@ -1228,6 +1249,9 @@ function showChat() {
   currentChannel = null;
   setView("chat");
   setPanelLevel(null);
+  // The left-pane mode (AI对话 / 传统搜索) is the top tabs' state alone:
+  // home landings — including closing the reading pane — keep whatever mode
+  // was chosen. Only entering the site or a refresh resets to the AI tab.
   document.title = "睡前消息知识库";
 }
 
@@ -2146,6 +2170,26 @@ async function loadVersion() {
 
 els.reshuffle.addEventListener("click", renderSampleQuestions);
 
+// Top mode tabs: click or Left/Right arrows, per the tabs pattern.
+if (els.modeTabs) {
+  els.modeTabs.addEventListener("click", (event) => {
+    const tab = event.target.closest(".mode-tab");
+    if (!tab) return;
+    setMode(tab.dataset.mode);
+  });
+  els.modeTabs.addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    const tabs = [els.modeTabChat, els.modeTabSearch];
+    const current = tabs.indexOf(document.activeElement);
+    if (current === -1) return;
+    event.preventDefault();
+    const step = event.key === "ArrowRight" ? 1 : tabs.length - 1;
+    const next = tabs[(current + step) % tabs.length];
+    next.focus();
+    setMode(next.dataset.mode);
+  });
+}
+
 const initialDataPromise = Promise.all([
   loadSampleQuestions(),
   loadVersion(),
@@ -2168,9 +2212,11 @@ if (
   els.input.focus();
 }
 
-// Deep link: /?q=... opens straight into a query (shareable links).
+// Deep link: /?q=... opens straight into a query (shareable links). The query
+// streams into the chat pane, so force the AI tab even if 传统搜索 was chosen.
 const deepLink = new URLSearchParams(location.search).get("q");
 if (deepLink && document.body.dataset.view === "chat") {
+  setMode("chat");
   await askQuestion(deepLink);
 }
 await Promise.all([initialDataPromise, routePromise]);

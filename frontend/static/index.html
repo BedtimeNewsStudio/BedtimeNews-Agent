@@ -44,7 +44,7 @@
   <link rel="stylesheet" href="/styles.css" />
 </head>
 
-<body data-view="__BODY_VIEW__" data-panel="__BODY_PANEL__" data-ssr-doc-id="__SSR_DOC_ID__">
+<body data-view="__BODY_VIEW__" data-panel="__BODY_PANEL__" data-ssr-doc-id="__SSR_DOC_ID__" data-mode="chat">
   <a class="skip-link" href="#app-shell">跳到主要内容</a>
 
   <header class="masthead">
@@ -84,8 +84,21 @@
     </div>
   </header>
 
+  <!-- Top-level mode switch: AI chat vs keyword search. Client-side state —
+       the server always serves the AI tab, and every load starts there. The
+       bar is as wide as the chat text column; on desktop the outer element
+       yields the right half to the reading pane (see styles.css). -->
+  <nav class="mode-tabs" id="mode-tabs" aria-label="搜索方式">
+    <div class="mode-tabs-inner">
+      <button class="mode-tab" id="mode-tab-chat" type="button" data-mode="chat" aria-selected="true"
+        aria-controls="chat-pane" tabindex="0">AI对话</button>
+      <button class="mode-tab" id="mode-tab-search" type="button" data-mode="search" aria-selected="false"
+        aria-controls="search-pane" tabindex="-1">传统搜索</button>
+    </div>
+  </nav>
+
   <main class="app-shell" id="app-shell" tabindex="-1">
-    <section class="chat-pane" id="chat-pane" aria-label="知识库 Agent">
+    <section class="chat-pane" id="chat-pane" role="tabpanel" aria-label="知识库 Agent">
       <div class="stage" id="stage">
         <section class="hero" id="hero">
           <div class="sample-section">
@@ -122,6 +135,11 @@
         </form>
         <p class="composer-note">仅回答节目相关问题 · 刷新清空对话</p>
       </footer>
+    </section>
+
+    <!-- 传统搜索：占位面板，内容待接入。 -->
+    <section class="search-pane" id="search-pane" role="tabpanel" aria-label="传统搜索" hidden>
+      <p class="search-coming-soon">Coming Soon</p>
     </section>
 
     <!-- The archive and the reader share one pane: a window the chat pushes
