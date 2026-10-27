@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = "==3.14.*"
 
 [manifest]
@@ -42,7 +42,7 @@ wheels = [
 
 [[package]]
 name = "bedtimenews"
-version = "0.5.3"
+version = "0.5.4"
 source = { virtual = "." }
 dependencies = [
     { name = "bedtimenews-agent" },
@@ -75,7 +75,7 @@ dev = [
 
 [[package]]
 name = "bedtimenews-agent"
-version = "0.5.3"
+version = "0.5.4"
 source = { editable = "agent" }
 dependencies = [
     { name = "fastapi" },
@@ -106,7 +106,7 @@ requires-dist = [
 
 [[package]]
 name = "bedtimenews-frontend"
-version = "0.5.3"
+version = "0.5.4"
 source = { editable = "frontend" }
 dependencies = [
     { name = "fastapi" },
@@ -123,7 +123,7 @@ requires-dist = [
 
 [[package]]
 name = "bedtimenews-indexer"
-version = "0.5.3"
+version = "0.5.4"
 source = { editable = "indexer" }
 dependencies = [
     { name = "bleach" },
