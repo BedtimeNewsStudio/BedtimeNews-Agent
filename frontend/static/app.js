@@ -70,6 +70,11 @@ const els = {
   modeTabs: document.getElementById("mode-tabs"),
   modeTabChat: document.getElementById("mode-tab-chat"),
   modeTabSearch: document.getElementById("mode-tab-search"),
+  latestView: document.getElementById("latest-view"),
+  latestList: document.getElementById("latest-list"),
+  latestEnd: document.getElementById("latest-end"),
+  latestEndChips: document.getElementById("latest-end-chips"),
+  latestState: document.getElementById("latest-state"),
   tabChat: document.getElementById("tab-chat"),
   tabArchive: document.getElementById("tab-archive"),
 };
@@ -654,6 +659,202 @@ function renderArchive(items = transcriptItems || []) {
   }
 }
 
+/* ------------------------------------------------------------------- latest */
+
+// The desktop landing desk: the newest transcripts, each with its topic
+// headings. Rebuilt on every landing — the index and the per-document
+// projections are fetched fresh, so newly published episodes simply become
+// the new top of the list; nothing about the selection is persisted.
+const LATEST_COUNT = 50;
+
+// Client-side mirror of indexer/src/anchors.py: the anchor of a topic heading
+// is its slug. Newer snapshots ship the ids on the topic h2s; legacy ones do
+// not, so the reader body gets the missing ids here and hash links jump to
+// the paragraph instead of the document top.
+function headingSlug(text) {
+  let value = text.trim();
+  const mdLink = /\[([^\[\]]*)\]\([^)]*\)/g;
+  let previous = null;
+  while (previous !== value) {
+    previous = value;
+    value = value.replace(mdLink, "$1");
+  }
+  value = value.replace(/\[\^[^\]]*\]/g, "").trim();
+  for (const wrapper of ["**", "__", "`"]) {
+    const size = wrapper.length;
+    if (
+      value.length >= size * 2 + 1 &&
+      value.startsWith(wrapper) &&
+      value.endsWith(wrapper) &&
+      !value.slice(size, -size).includes(wrapper)
+    ) {
+      value = value.slice(size, -size);
+    }
+  }
+  return value.replace(/\s+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+// Assign ids to a rendered body's topic h2s where missing. Document-order
+// dedupe (-2, -3, ...) mirrors assign_heading_anchors. 正文/附录 carry no
+// anchor — they are structure, not topics.
+function ensureHeadingAnchors(container) {
+  if (!container) return;
+  const used = new Set();
+  for (const heading of container.querySelectorAll("h2")) {
+    const text = heading.textContent.trim();
+    if (!text || text === "正文" || text === "附录") continue;
+    let id = heading.id;
+    if (!id) {
+      const base = headingSlug(text);
+      if (!base) continue;
+      let suffix = 2;
+      id = base;
+      while (used.has(id)) id = `${base}-${suffix++}`;
+      heading.id = id;
+    }
+    used.add(id);
+  }
+}
+
+// Topic h2s of the body: everything between 正文 and 附录, each with the
+// anchor a reader of the same body would land on.
+function latestHeadings(bodyHtml) {
+  const frame = new DOMParser().parseFromString(bodyHtml || "", "text/html");
+  const used = new Set();
+  const out = [];
+  for (const heading of frame.querySelectorAll("h2")) {
+    const text = heading.textContent.trim();
+    if (!text || text === "正文" || text === "附录") continue;
+    let anchor = heading.id;
+    if (!anchor) {
+      const base = headingSlug(text);
+      if (!base) continue;
+      let suffix = 2;
+      anchor = base;
+      while (used.has(anchor)) anchor = `${base}-${suffix++}`;
+    }
+    used.add(anchor);
+    out.push({ text, anchor });
+  }
+  return out;
+}
+
+function latestItemNode(item) {
+  const li = document.createElement("li");
+  li.className = "latest-item";
+
+  const head = document.createElement("a");
+  head.className = "latest-item-link";
+  head.href = transcriptPath(item.doc_id);
+  head.dataset.route = "";
+  const title = document.createElement("span");
+  title.className = "latest-item-title";
+  title.textContent = item.source_title || item.canonical_title || item.doc_id;
+  head.append(title);
+  // The episode title already carries the channel name (【参考信息654】…), so
+  // the meta slot shows the date alone.
+  if (item.publication_date) {
+    const meta = document.createElement("span");
+    meta.className = "latest-item-meta";
+    meta.textContent = item.publication_date;
+    head.append(meta);
+  }
+  li.appendChild(head);
+
+  const headings = document.createElement("ul");
+  headings.className = "latest-item-headings";
+  const pending = document.createElement("li");
+  pending.className = "latest-item-pending";
+  pending.setAttribute("aria-hidden", "true");
+  headings.appendChild(pending);
+  li.appendChild(headings);
+  return li;
+}
+
+async function fillLatestHeadings(node, uri, generation) {
+  try {
+    const response = await fetch(
+      `/api/transcripts/${uri.split("/").map(encodeURIComponent).join("/")}`,
+    );
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const article = await response.json();
+    if (generation !== routeGeneration || panelLevel !== "latest") return;
+    const listNode = node.querySelector(".latest-item-headings");
+    if (!listNode) return;
+    const headings = latestHeadings(article.body_html);
+    if (!headings.length) {
+      listNode.remove();
+      return;
+    }
+    listNode.replaceChildren(
+      ...headings.map((heading) => {
+        const li = document.createElement("li");
+        const link = document.createElement("a");
+        link.href = transcriptPath(uri) + (heading.anchor ? `#${encodeURIComponent(heading.anchor)}` : "");
+        link.dataset.route = "";
+        link.textContent = heading.text;
+        li.appendChild(link);
+        return li;
+      }),
+    );
+  } catch (error) {
+    if (generation !== routeGeneration || panelLevel !== "latest") return;
+    console.error("Latest transcript headings unavailable.", error);
+    node.querySelector(".latest-item-headings")?.remove();
+  }
+}
+
+async function renderLatest() {
+  const generation = routeGeneration;
+  els.latestList.replaceChildren();
+  els.latestEnd.hidden = true;
+  els.latestState.hidden = true;
+  try {
+    const items = await loadTranscriptIndex();
+    if (generation !== routeGeneration || panelLevel !== "latest") return;
+    // Newest publication_date first, same key as the archive; undated last.
+    const newest = items
+      .slice()
+      .sort((a, b) => {
+        const ka = archiveSortKey(a);
+        const kb = archiveSortKey(b);
+        if (ka < kb) return 1;
+        if (ka > kb) return -1;
+        return 0;
+      })
+      .slice(0, LATEST_COUNT);
+    if (!newest.length) {
+      els.latestState.hidden = false;
+      els.latestState.textContent = "暂无文稿。";
+      return;
+    }
+    const nodes = newest.map(latestItemNode);
+    els.latestList.replaceChildren(...nodes);
+    for (const [index, item] of newest.entries()) {
+      void fillLatestHeadings(nodes[index], item.doc_id, generation);
+    }
+    // End matter: one chip per channel into the full archives. The five
+    // columns are fixed, so the chips are rebuilt cheaply on every render.
+    els.latestEndChips.replaceChildren(
+      ...CHANNEL_ORDER.map((channel) => {
+        const chip = document.createElement("a");
+        chip.className = "latest-end-chip";
+        chip.href = `/transcripts?channel=${encodeURIComponent(channel)}`;
+        chip.dataset.route = "";
+        chip.textContent = channelLabel(channel);
+        return chip;
+      }),
+    );
+    els.latestEnd.hidden = false;
+  } catch (error) {
+    if (generation !== routeGeneration || panelLevel !== "latest") return;
+    console.error("Transcript index unavailable.", error);
+    els.latestEnd.hidden = true;
+    els.latestState.hidden = false;
+    els.latestState.textContent = "文稿目录暂时不可用，请稍后重试。";
+  }
+}
+
 /* --------------------------------------------------------------- panel view */
 
 // Squeezing the column rewraps the conversation. A reader who was following the
@@ -771,6 +972,7 @@ function setPanelLevel(level) {
   document.body.dataset.panel = level ?? "";
   els.archiveView.hidden = level !== "archive";
   els.readerView.hidden = level !== "reader";
+  els.latestView.hidden = level !== "latest";
   updateReadingBar();
   void updateShareButton();
   updateChannelBar();
@@ -1088,6 +1290,13 @@ function updateReadingBar() {
   els.readingBack.tabIndex = canGoBack ? 0 : -1;
   els.readingBack.setAttribute("aria-hidden", canGoBack ? "false" : "true");
 
+  // The close button only closes the desk from the archive/reader levels; on
+  // the landing desk it would just re-render the latest list, so it stays out.
+  const canClose = panelLevel !== "latest";
+  els.readingClose.classList.toggle("is-slot-hidden", !canClose);
+  els.readingClose.tabIndex = canClose ? 0 : -1;
+  els.readingClose.setAttribute("aria-hidden", canClose ? "false" : "true");
+
   const docBackTargetUri = panelLevel === "reader" ? docBackTarget() : null;
   if (els.readingDocBack) {
     els.readingDocBack.hidden = false;
@@ -1228,6 +1437,9 @@ async function showReader(uri, generation) {
     document.title = `${displayTitle} · 睡前消息知识库`;
     els.readerTitle.textContent = displayTitle;
     els.readerBody.innerHTML = article.body_html;
+    // Legacy snapshots ship h2s without ids; assign the shared slugs so hash
+    // links (citations, the landing desk's heading chips) reach the paragraph.
+    ensureHeadingAnchors(els.readerBody);
     delete document.body.dataset.ssrDocId;
     prepareTranscriptLinks(els.readerBody);
     els.readerState.textContent = "";
@@ -1243,15 +1455,20 @@ async function showReader(uri, generation) {
 /* -------------------------------------------------------------- the router */
 
 // The landing surface: the conversation centred, no channel chosen. Also the
-// destination for a route that has nothing to show.
+// destination for a route that has nothing to show. Desktop keeps the reading
+// desk open beside it with the newest transcripts, so the pane never sits
+// empty; mobile stays a full-screen chat (bottom tabs switch the modes).
 function showChat() {
   currentArticle = null;
   currentChannel = null;
-  setView("chat");
-  setPanelLevel(null);
-  // The left-pane mode (AI对话 / 传统搜索) is the top tabs' state alone:
-  // home landings — including closing the reading pane — keep whatever mode
-  // was chosen. Only entering the site or a refresh resets to the AI tab.
+  if (mobileLayout.matches) {
+    setView("chat");
+    setPanelLevel(null);
+  } else {
+    setView("browse");
+    setPanelLevel("latest");
+    void renderLatest();
+  }
   document.title = "睡前消息知识库";
 }
 
@@ -2199,14 +2416,18 @@ const initialDataPromise = Promise.all([
     console.warn("Transcript index unavailable; the channel bar stays hidden.", error);
   }),
 ]);
+// A server-rendered article body (deep link) may come from a legacy snapshot
+// without heading ids; anchor them before any hash scroll can run.
+ensureHeadingAnchors(els.readerBody);
 // Not awaited before the focus decision: every route sets data-view
 // synchronously, so the landing surface is already known.
 const routePromise = renderRoute();
 
 // Same reasoning as after a run: autofocus on a phone opens the keyboard over
-// the sample questions before the reader has seen them.
+// the sample questions before the reader has seen them. Desktop always lands
+// beside the reading desk (view=browse), so its check is layout, not view.
 if (
-  document.body.dataset.view === "chat" &&
+  (!mobileLayout.matches || document.body.dataset.view === "chat") &&
   !window.matchMedia("(pointer: coarse)").matches
 ) {
   els.input.focus();
@@ -2214,8 +2435,10 @@ if (
 
 // Deep link: /?q=... opens straight into a query (shareable links). The query
 // streams into the chat pane, so force the AI tab even if 传统搜索 was chosen.
+// The view check must not key off data-view: on desktop the landing route now
+// opens the reading desk (view=browse) while the chat pane stays interactive.
 const deepLink = new URLSearchParams(location.search).get("q");
-if (deepLink && document.body.dataset.view === "chat") {
+if (deepLink) {
   setMode("chat");
   await askQuestion(deepLink);
 }

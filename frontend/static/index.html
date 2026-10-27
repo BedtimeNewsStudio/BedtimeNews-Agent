@@ -187,6 +187,20 @@
       </header>
       <div class="reading-scroll" id="reading-scroll">
         <div class="content-pane">
+          <!-- Desktop landing desk: the newest transcripts, refreshed on every
+               load. Hidden on mobile, where the pane stays a browse overlay. -->
+          <section class="latest-view" id="latest-view" hidden aria-labelledby="latest-title">
+            <header class="latest-head">
+              <h1 id="latest-title">最新文稿</h1>
+            </header>
+            <ol class="latest-list" id="latest-list"></ol>
+            <div class="latest-end" id="latest-end" hidden>
+              <p class="latest-end-label">浏览全部文稿</p>
+              <div class="latest-end-chips" id="latest-end-chips"></div>
+            </div>
+            <p class="latest-state" id="latest-state" role="status" hidden></p>
+          </section>
+
           <section class="archive-view" id="archive-view" __ARCHIVE_HIDDEN__ aria-labelledby="archive-title">
             <header class="archive-head">
               <h1 id="archive-title">__ARCHIVE_TITLE__</h1>
