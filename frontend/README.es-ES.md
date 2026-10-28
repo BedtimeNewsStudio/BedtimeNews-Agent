@@ -35,9 +35,13 @@ completa de la pila.
     enlace「最新文稿」(icono de reloj) tras un separador vertical, y controles
     de GitHub y tema enmarcados (esquinas redondeadas). Inicios: una pregunta
     por categoría en una cuadrícula de 2×4, más los enlaces「浏览全部文稿」.
-  - **Móvil (≤900px):** chat (o búsqueda) **o** archivo/lector a pantalla
-    completa, de forma mutuamente excluyente; las pestañas inferiores
-    「对话 | 文稿」dividen la barra por la mitad. Los inicios son ocho
+  - **Móvil (≤900px):** 检索 (chat con IA o búsqueda) **o** archivo/lector a
+    pantalla completa, de forma mutuamente excluyente; las pestañas inferiores
+    「检索 | 文稿」dividen la barra por la mitad, y「检索」vuelve al chat o a la
+    búsqueda que se usaba. Una transcripción abierta desde una respuesta de la
+    IA o desde los resultados de búsqueda flota sobre ellos: al cerrarla se
+    vuelve a la misma conversación o resultados, con el mismo desplazamiento.
+    Los inicios son ocho
     preguntas en una cuadrícula de 2×4 (sin etiquetas de categoría ni enlaces
     de exploración — se usa la pestaña de archivo). Los iconos del encabezado no tienen borde; el control de
     edición de GitHub es solo de escritorio.

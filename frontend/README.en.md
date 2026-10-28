@@ -29,8 +29,12 @@ See the [main README](../README.en.md) for full-stack setup.
     transcript. Masthead shows channel links, a「最新文稿」link (clock icon)
     after a vertical divider, and framed GitHub + theme controls. Starters:
     one question per category in a 2×4 grid, plus「浏览全部文稿」channel links.
-  - **Mobile (≤900px):** full-screen chat (or search) **or** archive/reader;
-    bottom tabs「对话 | 文稿」split the bar in half. Starters are eight
+  - **Mobile (≤900px):** full-screen 检索 (AI chat or search) **or**
+    archive/reader; bottom tabs「检索 | 文稿」split the bar in half, and
+    「检索」returns to whichever of AI chat or search was last in use. A
+    transcript opened from an AI answer or the search results floats over
+    them: closing it returns to the same conversation or results, at the same
+    scroll position. Starters are eight
     questions in a 2×4 grid (no category labels, no browse links). Masthead icons are borderless; the
     GitHub Edit control is desktop-only.
 - **Reading chrome:** fixed-height slots (back / edit / close) so list↔article

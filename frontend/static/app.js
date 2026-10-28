@@ -1611,9 +1611,9 @@ function showLatest() {
 // it is for the route render it triggers.
 let keepModeOnNextRoute = false;
 
-// True while the reader holds a transcript reached from the search results
-// (links followed inside it keep the flag); any other route clears it.
-let readerFromSearch = false;
+// Which left surface ("chat" or "search") the transcript in the reader was
+// opened from; links followed inside it keep it, any other route clears it.
+let readerFrom = null;
 
 async function renderRoute() {
   const generation = ++routeGeneration;
@@ -1621,12 +1621,12 @@ async function renderRoute() {
   const channel = new URLSearchParams(search).get("channel") || null;
 
   if (isSearchPath(pathname)) {
-    readerFromSearch = false;
+    readerFrom = null;
     showSearchRoute(new URLSearchParams(search).get("q")?.trim() ?? "");
     return;
   }
   readingRoutePath = `${pathname}${search}`;
-  if (!pathname.startsWith("/transcripts/")) readerFromSearch = false;
+  if (!pathname.startsWith("/transcripts/")) readerFrom = null;
 
   // A channel is the whole of this route now; without one there is no page here.
   if (pathname === "/transcripts" || pathname === "/transcripts/") {
@@ -1776,17 +1776,24 @@ els.channelBar.addEventListener("click", (event) => {
 });
 // Close steps back one level: an article returns to its channel's list, a
 // channel list returns to the landing desk.
-// Mobile shows one surface at a time, so a transcript opened from the search
-// results floats over them: closing it returns to the same results, at the
-// same scroll position, rather than to the channel list (desktop keeps the
-// list, since the results never left the left half there).
+// Mobile shows one surface at a time, so a transcript opened from an AI
+// answer or the search results floats over them: closing it returns to the
+// same conversation or results, at the same scroll position, rather than to
+// the channel list (desktop keeps the list, since the left half never left).
 els.readingClose.addEventListener("click", () => {
-  if (mobileLayout.matches && readerFromSearch && searchState?.query) {
-    navigate(searchPath(searchState.query));
+  if (mobileLayout.matches && readerFrom) {
+    navigate(leftSurfacePath(readerFrom));
     return;
   }
   navigate(readingBackTarget() ?? "/");
 });
+
+// The address of a left surface as it stands: the current search (or the
+// empty search page), or the home route for the conversation.
+function leftSurfacePath(mode) {
+  if (mode === "search") return searchPath(searchState?.query ?? "");
+  return "/";
+}
 els.readingShare?.addEventListener("click", () => {
   if (els.shareSheet?.open) closeShareSheet();
   else void openShareSheet();
@@ -1804,9 +1811,11 @@ els.shareSheet?.addEventListener("close", () => {
   els.readingShare?.setAttribute("aria-expanded", "false");
 });
 
+// 检索 returns to whichever left surface was in use (AI对话 or 搜索), as it
+// was left.
 els.tabChat?.addEventListener("click", (event) => {
   event.preventDefault();
-  navigate("/");
+  navigate(leftSurfacePath(document.body.dataset.mode));
 });
 els.tabArchive?.addEventListener("click", (event) => {
   event.preventDefault();
@@ -2641,7 +2650,10 @@ if (els.modeTabs) {
 
 // Runs before the document-level router (bubbling reaches this pane first).
 els.searchResults?.addEventListener("click", (event) => {
-  if (event.target.closest("a[data-route]")) readerFromSearch = true;
+  if (event.target.closest("a[data-route]")) readerFrom = "search";
+});
+els.chatPane?.addEventListener("click", (event) => {
+  if (event.target.closest('a[data-route], a[href^="/transcripts/"]')) readerFrom = "chat";
 });
 
 // 搜索: explicit submit (button or Enter) — no live-as-you-type calls.
