@@ -777,7 +777,7 @@ function updateMobileTabs() {
   }
 }
 
-// Top mode tabs: AI对话 vs 传统搜索. Pure client state — the server always
+// Top mode tabs: AI对话 vs 搜索. Pure client state — the server always
 // renders the AI tab, so every load and every refresh starts there, and the
 // tabs change nothing else: the reading pane (view=browse) stays open and the
 // URL keeps pointing at the transcript. The pane swap itself is CSS on
@@ -797,7 +797,7 @@ function setMode(mode) {
 
 /* ------------------------------------------------------------------ search */
 
-// 传统搜索 state. Results stay in the pane when the user flips back to
+// 搜索 state. Results stay in the pane when the user flips back to
 // AI对话; a new search replaces them. The cursor returned by the backend is
 // bound to the analyzed terms and page size, so it is only used verbatim.
 let searchState = null;
@@ -893,6 +893,51 @@ async function fetchSearchPage(query, cursor) {
   return response.json();
 }
 
+// The 搜索 tab has its own address: /search, and /search?q=… once a query
+// has run. On desktop the address otherwise belongs to the reading pane, so
+// this is the path to restore when the reader returns to AI对话.
+let readingRoutePath = "/";
+
+function searchPath(query) {
+  return query ? `/search?q=${encodeURIComponent(query)}` : "/search";
+}
+
+function isSearchPath(pathname) {
+  return pathname === "/search" || pathname === "/search/";
+}
+
+// Records the search in the address bar without re-rendering the route:
+// whatever the reading pane shows stays put. While a transcript is open beside
+// it (desktop), the address keeps pointing at that transcript instead.
+function pushSearchUrl(query) {
+  if (!mobileLayout.matches && panelLevel === "reader") return;
+  const next = searchPath(query);
+  const current = `${location.pathname}${location.search}`;
+  if (next === current) return;
+  history.pushState({}, "", next);
+  document.title = query
+    ? `${query} - 搜索 · 睡前消息知识库`
+    : "搜索 · 睡前消息知识库";
+}
+
+// A submitted query: from the form, a starter chip, or the address bar.
+function submitSearch(query) {
+  els.searchInput.value = query;
+  pushSearchUrl(query);
+  void runSearch(query);
+}
+
+function resetSearch() {
+  searchSeq++;
+  searchState = null;
+  els.searchPane.classList.add("is-idle");
+  els.searchResults.classList.remove("is-busy");
+  els.searchResults.replaceChildren();
+  els.searchInput.value = "";
+  setSearchStatus("");
+  els.searchGo.disabled = false;
+}
+
 async function runSearch(query) {
   const seq = ++searchSeq;
   // First search docks the box to the top row so results read under it.
@@ -982,7 +1027,7 @@ function renderSearchStarters() {
   if (!holder || !searchStarters.length) return;
   const pool = searchStarters.slice();
   const picked = [];
-  while (picked.length < 6 && pool.length) {
+  while (picked.length < 10 && pool.length) {
     picked.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
   }
   holder.replaceChildren(
@@ -992,8 +1037,7 @@ function renderSearchStarters() {
       chip.className = "search-starter";
       chip.textContent = query;
       chip.addEventListener("click", () => {
-        els.searchInput.value = query;
-        void runSearch(query);
+        submitSearch(query);
         els.searchInput.focus();
       });
       return chip;
@@ -1553,10 +1597,26 @@ function showChat() {
   document.title = "睡前消息知识库";
 }
 
+// /latest: the desk on its own address. Desktop looks the same as the home
+// page; mobile opens the list full-screen instead of the chat.
+function showLatest() {
+  currentArticle = null;
+  currentChannel = null;
+  setView("browse");
+  setPanelLevel("latest");
+  document.title = "最新文稿 · 睡前消息知识库";
+}
+
 async function renderRoute() {
   const generation = ++routeGeneration;
   const { pathname, search } = window.location;
   const channel = new URLSearchParams(search).get("channel") || null;
+
+  if (isSearchPath(pathname)) {
+    showSearchRoute(new URLSearchParams(search).get("q")?.trim() ?? "");
+    return;
+  }
+  readingRoutePath = `${pathname}${search}`;
 
   // A channel is the whole of this route now; without one there is no page here.
   if (pathname === "/transcripts" || pathname === "/transcripts/") {
@@ -1595,10 +1655,41 @@ async function renderRoute() {
     return;
   }
 
+  if (pathname === "/latest" || pathname === "/latest/") {
+    setMode("chat");
+    showLatest();
+    return;
+  }
+
   if (pathname !== "/" && pathname !== "") {
     history.replaceState({}, "", "/");
+    readingRoutePath = "/";
   }
+  setMode("chat");
   showChat();
+}
+
+// /search and /search?q=…: the 搜索 tab, running the query in the address
+// unless it is already the one on screen (back/forward between searches).
+function showSearchRoute(query) {
+  // Mobile shows the search pane full-screen (the left half); desktop keeps
+  // whatever the reading pane already has, or opens the desk on first load.
+  if (mobileLayout.matches) {
+    setView("chat");
+    setPanelLevel(null);
+  } else if (!panelLevel) {
+    setView("browse");
+    setPanelLevel("latest");
+  }
+  setMode("search");
+  document.title = query ? `${query} - 搜索 · 睡前消息知识库` : "搜索 · 睡前消息知识库";
+  if (!query) {
+    if (searchState) resetSearch();
+    return;
+  }
+  if (searchState?.query === query) return;
+  els.searchInput.value = query;
+  void runSearch(query);
 }
 
 // Every transcript link in the page — channel chips, archive rows, citations in
@@ -1630,7 +1721,7 @@ function navigate(href) {
 /* --------------------------------------------------------- chat pane state */
 
 function syncChatPanelAccessibility() {
-  // Mobile uses full-screen modes (tabs), not a side drawer. 传统搜索 is one
+  // Mobile uses full-screen modes (tabs), not a side drawer. 搜索 is one
   // of those modes: whichever of the two left panes is showing owns focus.
   if (mobileLayout.matches) {
     const browse = document.body.dataset.view === "browse";
@@ -1646,6 +1737,14 @@ function syncChatPanelAccessibility() {
   els.chatPane.removeAttribute("aria-hidden");
   els.searchPane.toggleAttribute("inert", false);
 }
+
+document.getElementById("masthead-latest").addEventListener("click", (event) => {
+  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  event.preventDefault();
+  navigate("/latest");
+  // Clicking again on the same route still returns the list to its start.
+  els.readingScroll.scrollTo({ top: 0 });
+});
 
 els.archiveSearch.addEventListener("input", () => renderArchive());
 els.channelBar.addEventListener("click", (event) => {
@@ -2476,12 +2575,31 @@ async function loadVersion() {
 
 els.reshuffle.addEventListener("click", renderSampleQuestions);
 
+// A tab switch moves the address between /search and the reading pane's own
+// route, without re-rendering the reading pane. The 搜索 tab always opens the
+// empty search page, the same as visiting /search.
+function switchMode(mode) {
+  if (mode === "search") {
+    setMode("search");
+    resetSearch();
+    pushSearchUrl("");
+    els.searchInput.focus();
+    return;
+  }
+  if (mode === document.body.dataset.mode) return;
+  setMode(mode);
+  if (isSearchPath(location.pathname)) {
+    history.pushState({}, "", readingRoutePath);
+    document.title = "睡前消息知识库";
+  }
+}
+
 // Top mode tabs: click or Left/Right arrows, per the tabs pattern.
 if (els.modeTabs) {
   els.modeTabs.addEventListener("click", (event) => {
     const tab = event.target.closest(".mode-tab");
     if (!tab) return;
-    setMode(tab.dataset.mode);
+    switchMode(tab.dataset.mode);
   });
   els.modeTabs.addEventListener("keydown", (event) => {
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
@@ -2492,11 +2610,11 @@ if (els.modeTabs) {
     const step = event.key === "ArrowRight" ? 1 : tabs.length - 1;
     const next = tabs[(current + step) % tabs.length];
     next.focus();
-    setMode(next.dataset.mode);
+    switchMode(next.dataset.mode);
   });
 }
 
-// 传统搜索: explicit submit (button or Enter) — no live-as-you-type calls.
+// 搜索: explicit submit (button or Enter) — no live-as-you-type calls.
 els.searchForm?.addEventListener("submit", (event) => {
   event.preventDefault();
   // An empty input submits the starter currently shown as the placeholder.
@@ -2504,8 +2622,7 @@ els.searchForm?.addEventListener("submit", (event) => {
   const placeholder = currentSearchPlaceholder();
   const query = typed || (searchStarters.includes(placeholder) ? placeholder : "");
   if (query) {
-    els.searchInput.value = query;
-    void runSearch(query);
+    submitSearch(query);
     // Focus returns to the input so the query can be edited and re-run at once.
     els.searchInput.focus();
   }
@@ -2534,14 +2651,17 @@ if (
   (!mobileLayout.matches || document.body.dataset.view === "chat") &&
   !window.matchMedia("(pointer: coarse)").matches
 ) {
-  els.input.focus();
+  // /search lands in the search box; a results page keeps focus off it.
+  if (document.body.dataset.mode !== "search") els.input.focus();
+  else if (!searchState) els.searchInput.focus();
 }
 
 // Deep link: /?q=... opens straight into a query (shareable links). The query
-// streams into the chat pane, so force the AI tab even if 传统搜索 was chosen.
+// streams into the chat pane, so force the AI tab even if 搜索 was chosen.
 // The view check must not key off data-view: on desktop the landing route now
 // opens the reading desk (view=browse) while the chat pane stays interactive.
-const deepLink = new URLSearchParams(location.search).get("q");
+const deepLink =
+  location.pathname === "/" ? new URLSearchParams(location.search).get("q") : null;
 if (deepLink) {
   setMode("chat");
   await askQuestion(deepLink);

@@ -71,7 +71,7 @@ LATEST_ENDPOINT = f"{AGENT_BASE_URL}/latest"
 STATIC_DIR = Path(__file__).parent / "static"
 PAGE_TEMPLATE = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
 SITE_NAME = "睡前消息知识库"
-SITE_DESCRIPTION = "在同一处阅读睡前消息文稿，并随时向知识库 Agent 提问。"
+SITE_DESCRIPTION = "在同一处阅读、全文搜索睡前消息文稿，并随时向知识库 Agent 提问。"
 CHANNEL_ORDER = (
     "ShuiQianXiaoXi",
     "CanKaoXinXi",
@@ -157,6 +157,10 @@ async def security_headers(request: Request, call_next):
     # Legacy twin of CSP frame-ancestors 'none', for browsers without it.
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    # Data endpoints are fetched by pages, never landed on: keep them out of
+    # search indexes without blocking crawlers that render the pages.
+    if request.url.path.startswith("/api/"):
+        response.headers["X-Robots-Tag"] = "noindex"
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; script-src 'self' 'unsafe-inline'; "
         "style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; "
@@ -317,10 +321,12 @@ async def _latest_desk_html() -> str:
         return cached
     try:
         payload = await _fetch_upstream_json(LATEST_ENDPOINT)
-        html = _render_latest_desk(payload.get("items") or [])
+        items = payload.get("items") or []
+        html = _render_latest_desk(items)
         _latest_desk_html_cache.clear()
         _latest_desk_html_cache["at"] = time.monotonic()
         _latest_desk_html_cache["html"] = html
+        _latest_desk_html_cache["items"] = items
         return html
     except _UpstreamError:
         # A stale desk beats an empty one; the note only shows when nothing
@@ -328,6 +334,36 @@ async def _latest_desk_html() -> str:
         if cached:
             return cached
         return '<p class="latest-state">文稿目录暂时不可用，请稍后重试。</p>'
+
+
+def _latest_item_list_json_ld() -> dict[str, Any] | None:
+    """ItemList for /latest, from the items behind the desk just rendered."""
+    items = _latest_desk_html_cache.get("items") or []
+    elements = []
+    for position, item in enumerate(items, start=1):
+        doc_id = str(item.get("doc_id") or "")
+        if not doc_id:
+            continue
+        elements.append(
+            {
+                "@type": "ListItem",
+                "position": position,
+                "url": _absolute_url(_transcript_path(doc_id)),
+                "name": str(
+                    item.get("source_title") or item.get("canonical_title") or doc_id
+                ),
+            }
+        )
+    if not elements:
+        return None
+    return {
+        "@context": "https://schema.org",
+        "@type": "ItemList",
+        "name": "最新文稿",
+        "itemListOrder": "https://schema.org/ItemListOrderDescending",
+        "numberOfItems": len(elements),
+        "itemListElement": elements,
+    }
 
 
 def _validate_transcript_uri(doc_id: str) -> str:
@@ -613,10 +649,15 @@ def _seo_head(
     image_url = _absolute_url("/bedtimenews.webp")
     tags = []
     if noindex:
+        # A noindex page names no canonical: pointing elsewhere while asking
+        # not to be indexed sends search engines two conflicting signals.
         tags.append('<meta name="robots" content="noindex" />')
+    else:
+        tags.append(
+            f'<link rel="canonical" href="{escape(canonical_url, quote=True)}" />'
+        )
     tags.extend(
         [
-            f'<link rel="canonical" href="{escape(canonical_url, quote=True)}" />',
             f'<meta property="og:site_name" content="{escape(SITE_NAME, quote=True)}" />',
             f'<meta property="og:title" content="{escape(title, quote=True)}" />',
             f'<meta property="og:description" content="{escape(description, quote=True)}" />',
@@ -706,6 +747,7 @@ def _render_shell(
     extra_json_ld: list[dict] | None = None,
     noindex: bool = False,
     latest_desk: str = "",
+    search_query: str | None = None,
 ) -> str:
     canonical_url = _absolute_url(canonical_path)
     replacements = {
@@ -723,6 +765,10 @@ def _render_shell(
         ),
         "__BODY_VIEW__": escape(body_view, quote=True),
         "__BODY_PANEL__": escape(body_panel, quote=True),
+        "__BODY_MODE__": "chat" if search_query is None else "search",
+        "__SEARCH_HIDDEN__": "hidden" if search_query is None else "",
+        "__SEARCH_IDLE__": "" if search_query else " is-idle",
+        "__SEARCH_QUERY__": escape(search_query or "", quote=True),
         "__SSR_DOC_ID__": escape(ssr_doc_id, quote=True),
         "__CHANNEL_NAV__": _render_channel_nav(active_channel),
         "__READING_INERT__": "" if body_view == "browse" else "inert",
@@ -778,7 +824,10 @@ def _render_sitemap(items: list[dict]) -> str:
         if (value := _lastmod(item.get("updated_at")))
     ]
     latest = max(all_lastmods, default=None)
-    urls: list[tuple[str, str | None]] = [(_absolute_url("/"), latest)]
+    urls: list[tuple[str, str | None]] = [
+        (_absolute_url("/"), latest),
+        (_absolute_url("/latest"), latest),
+    ]
     for channel in valid_channels:
         channel_lastmods = [
             value
@@ -1015,7 +1064,7 @@ async def keyword_search(
     limit: Annotated[int, Query(ge=1, le=50)] = 20,
     cursor: Annotated[str | None, Query(max_length=16384)] = None,
 ) -> Response:
-    """Proxy the agent's keyword search for the 传统搜索 pane.
+    """Proxy the agent's keyword search for the 搜索 pane.
 
     Status codes pass through untouched — the pane distinguishes 410 (stale
     cursor: search again) from 422 (query problem) from 503 (service down).
@@ -1123,6 +1172,71 @@ async def home(request: Request) -> Response:
         canonical_path="/",
         extra_json_ld=[website_json_ld],
         latest_desk=await _latest_desk_html(),
+    )
+    return _generated_response(request, html, media_type="text/html")
+
+
+SEARCH_QUERY_MAX = 512
+
+
+@app.get("/search", include_in_schema=False)
+async def search_page(
+    request: Request, q: Annotated[str | None, Query()] = None
+) -> Response:
+    # The 搜索 tab at its own address. With ?q= the page opens with the query
+    # in the box and the client runs it at once, like a results page. The
+    # results themselves come from /api/search, so result pages stay noindex.
+    query = (q or "").strip()[:SEARCH_QUERY_MAX]
+    title = f"{query} - 搜索 · {SITE_NAME}" if query else f"搜索 · {SITE_NAME}"
+    html = _render_shell(
+        title=title,
+        description=f"按关键词搜索{SITE_NAME}的全部文稿正文。",
+        canonical_path="/search",
+        latest_desk=await _latest_desk_html(),
+        noindex=bool(query),
+        search_query=query,
+    )
+    return _generated_response(request, html, media_type="text/html")
+
+
+@app.get("/opensearch.xml", include_in_schema=False)
+async def opensearch_description(request: Request) -> Response:
+    # Lets browsers offer bedtime.blog as a site search (e.g. Chrome's
+    # "Tab to search"), pointing at the /search?q= results page.
+    body = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/"'
+        ' xmlns:moz="http://www.mozilla.org/2006/browser/search/">\n'
+        f"  <ShortName>{escape(SITE_NAME)}</ShortName>\n"
+        f"  <Description>按关键词搜索{escape(SITE_NAME)}的全部文稿正文</Description>\n"
+        "  <InputEncoding>UTF-8</InputEncoding>\n"
+        f'  <Image width="{SITE_LOGO_WIDTH}" height="{SITE_LOGO_HEIGHT}"'
+        f' type="image/webp">{escape(_absolute_url("/bedtimenews.webp"))}</Image>\n'
+        '  <Url type="text/html" method="get"'
+        f' template="{escape(_absolute_url("/search"))}?q={{searchTerms}}"/>\n'
+        f"  <moz:SearchForm>{escape(_absolute_url('/search'))}</moz:SearchForm>\n"
+        "</OpenSearchDescription>\n"
+    )
+    return _generated_response(
+        request, body, media_type="application/opensearchdescription+xml"
+    )
+
+
+@app.get("/latest", include_in_schema=False)
+async def latest_page(request: Request) -> Response:
+    # The same desk the home page shows beside the chat, at its own address so
+    # it can be linked and opened directly (mobile lands on the list itself).
+    breadcrumb = _breadcrumb_json_ld(("首页", "/"), ("最新文稿", "/latest"))
+    desk = await _latest_desk_html()
+    item_list = _latest_item_list_json_ld()
+    html = _render_shell(
+        title=f"最新文稿 · {SITE_NAME}",
+        description=f"{SITE_NAME}最近发布的文稿，按发布日期倒序排列。",
+        canonical_path="/latest",
+        latest_desk=desk,
+        body_view="browse",
+        body_panel="latest",
+        extra_json_ld=[breadcrumb, item_list] if item_list else [breadcrumb],
     )
     return _generated_response(request, html, media_type="text/html")
 

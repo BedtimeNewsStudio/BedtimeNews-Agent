@@ -279,6 +279,10 @@ def test_root_is_server_rendered_with_crawlable_channel_links(client):
     assert '<link rel="canonical" href="https://bedtime.blog/"' in response.text
     assert '<meta property="og:type" content="website"' in response.text
     assert response.text.count('class="channel-chip"') == 5
+    assert 'id="masthead-latest" href="/latest" data-route' in response.text
+    assert response.text.index('id="channel-bar"') < response.text.index(
+        'id="masthead-latest"'
+    )
     assert 'href="/transcripts?channel=ShuiQianXiaoXi"' in response.text
     assert '<script type="module" src="/app.js"></script>' in response.text
     assert "__PAGE_" not in response.text
@@ -584,6 +588,91 @@ def test_head_on_missing_transcript_is_still_a_404(client, monkeypatch):
     assert response.content == b""
 
 
+def test_search_page_opens_the_search_tab(client):
+    response = client.get("/search")
+
+    assert response.status_code == 200
+    assert '<link rel="canonical" href="https://bedtime.blog/search"' in response.text
+    assert 'data-mode="search"' in response.text
+    assert 'class="search-pane is-idle"' in response.text
+    assert "noindex" not in response.text
+
+
+def test_search_page_with_query_prefills_and_is_noindex(client):
+    response = client.get("/search", params={"q": " 独山县<b> "})
+
+    assert response.status_code == 200
+    assert "<title>独山县&lt;b&gt; - 搜索 · 睡前消息知识库</title>" in response.text
+    assert 'value="独山县&lt;b&gt;"' in response.text
+    assert 'class="search-pane"' in response.text
+    assert '<meta name="robots" content="noindex"' in response.text
+    # A noindex page must not also point search engines at a canonical.
+    assert 'rel="canonical"' not in response.text
+
+
+def test_other_pages_open_the_chat_tab(client):
+    response = client.get("/")
+
+    assert 'data-mode="chat"' in response.text
+    assert 'value=""' in response.text
+    assert "__SEARCH" not in response.text
+
+
+def test_latest_page_renders_the_desk_at_its_own_address(client):
+    response = client.get("/latest")
+
+    assert response.status_code == 200
+    assert '<link rel="canonical" href="https://bedtime.blog/latest"' in response.text
+    assert "<title>最新文稿 · 睡前消息知识库</title>" in response.text
+    assert 'data-panel="latest"' in response.text
+    assert 'data-view="browse"' in response.text
+
+
+def test_latest_page_lists_the_desk_as_structured_data(client, monkeypatch):
+    monkeypatch.setattr(
+        server, "_client", _FakeJsonClient(_json_upstream(200, _latest_desk_payload()))
+    )
+
+    response = client.get("/latest")
+
+    blocks = [
+        json.loads(block)
+        for block in re.findall(
+            r'<script type="application/ld\+json">(.*?)</script>',
+            response.text,
+            re.DOTALL,
+        )
+    ]
+    item_list = next(block for block in blocks if block.get("@type") == "ItemList")
+    first = item_list["itemListElement"][0]
+    assert first["position"] == 1
+    assert first["url"].startswith("https://bedtime.blog/transcripts/")
+    assert item_list["numberOfItems"] == len(item_list["itemListElement"])
+
+
+def test_opensearch_description_points_at_the_search_page(client):
+    response = client.get("/opensearch.xml")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith(
+        "application/opensearchdescription+xml"
+    )
+    root = ET.fromstring(response.content)
+    namespace = {"os": "http://a9.com/-/spec/opensearch/1.1/"}
+    url = root.find("os:Url", namespace)
+    assert url is not None
+    assert url.get("template") == "https://bedtime.blog/search?q={searchTerms}"
+    assert root.findtext("os:ShortName", namespaces=namespace) == "睡前消息知识库"
+    home = client.get("/")
+    assert 'rel="search" type="application/opensearchdescription+xml"' in home.text
+    assert 'href="/opensearch.xml"' in home.text
+
+
+def test_api_responses_are_noindex_but_pages_are_not(client):
+    assert client.get("/api/starters").headers["x-robots-tag"] == "noindex"
+    assert "x-robots-tag" not in client.get("/").headers
+
+
 def test_sitemap_contains_root_channels_articles_and_lastmods(client, monkeypatch):
     items = [
         _index_item(
@@ -610,6 +699,7 @@ def test_sitemap_contains_root_channels_articles_and_lastmods(client, monkeypatc
     locations = [element.text for element in root.findall("sm:url/sm:loc", namespace)]
     assert locations == [
         "https://bedtime.blog/",
+        "https://bedtime.blog/latest",
         "https://bedtime.blog/transcripts?channel=ShuiQianXiaoXi",
         "https://bedtime.blog/transcripts?channel=ChanJingPoBiJi",
         "https://bedtime.blog/transcripts/ShuiQianXiaoXi/0001-0100/0001.md",

@@ -11,6 +11,7 @@
   <meta name="public-base-url" content="__PUBLIC_BASE_URL__" />
   <!--SSR_HEAD-->
   <link rel="icon" type="image/webp" href="/bedtimenews.webp" />
+  <link rel="search" type="application/opensearchdescription+xml" title="睡前消息知识库" href="/opensearch.xml" />
   <script>
     // Set theme before first paint to avoid a flash.
     (function () {
@@ -44,7 +45,7 @@
   <link rel="stylesheet" href="/styles.css" />
 </head>
 
-<body data-view="__BODY_VIEW__" data-panel="__BODY_PANEL__" data-ssr-doc-id="__SSR_DOC_ID__" data-mode="chat">
+<body data-view="__BODY_VIEW__" data-panel="__BODY_PANEL__" data-ssr-doc-id="__SSR_DOC_ID__" data-mode="__BODY_MODE__">
   <a class="skip-link" href="#app-shell">跳到主要内容</a>
 
   <header class="masthead">
@@ -56,7 +57,19 @@
 
     <!-- Server-rendered as real links; app.js enriches titles/counts and keeps
          navigation inside the SPA once JavaScript is available. -->
-    <nav class="channel-bar" id="channel-bar" aria-label="栏目">__CHANNEL_NAV__</nav>
+    <div class="masthead-navigation">
+      <nav class="channel-bar" id="channel-bar" aria-label="栏目">__CHANNEL_NAV__</nav>
+      <div class="masthead-latest-group">
+        <a class="masthead-latest" id="masthead-latest" href="/latest" data-route>
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false" fill="none"
+            stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="8.5" />
+            <path d="M12 7v5l3 2" />
+          </svg>
+          最新文稿
+        </a>
+      </div>
+    </div>
 
     <div class="masthead-right">
       <nav class="masthead-links" aria-label="外部链接">
@@ -84,8 +97,9 @@
     </div>
   </header>
 
-  <!-- Top-level mode switch: AI chat vs keyword search. Client-side state —
-       the server always serves the AI tab, and every load starts there. The
+  <!-- Top-level mode switch: AI chat vs keyword search. /search (and
+       /search?q=…) is served with the 搜索 tab open; every other page starts
+       on AI对话. The
        bar is as wide as the chat text column; on desktop the outer element
        yields the right half to the reading pane (see styles.css). -->
   <nav class="mode-tabs" id="mode-tabs" aria-label="搜索方式">
@@ -93,7 +107,7 @@
       <button class="mode-tab" id="mode-tab-chat" type="button" data-mode="chat" aria-selected="true"
         aria-controls="chat-pane" tabindex="0">AI对话</button>
       <button class="mode-tab" id="mode-tab-search" type="button" data-mode="search" aria-selected="false"
-        aria-controls="search-pane" tabindex="-1">传统搜索</button>
+        aria-controls="search-pane" tabindex="-1">搜索</button>
     </div>
   </nav>
 
@@ -137,12 +151,12 @@
       </footer>
     </section>
 
-    <!-- 传统搜索：按词搜索全部正文，结果点击进阅读器。 -->
-    <section class="search-pane is-idle" id="search-pane" role="tabpanel" aria-label="传统搜索" hidden>
+    <!-- 搜索：按词搜索全部正文，结果点击进阅读器。 -->
+    <section class="search-pane__SEARCH_IDLE__" id="search-pane" role="tabpanel" aria-label="搜索" __SEARCH_HIDDEN__>
       <div class="search-intro">
         <img class="search-logo" src="/bedtimenews-logo.png" alt="" />
         <form class="search-form" id="search-form">
-          <input class="search-input" id="search-input" type="search" placeholder="搜索文稿正文" aria-label="搜索文稿正文"
+          <input class="search-input" id="search-input" type="search" value="__SEARCH_QUERY__" placeholder="搜索文稿正文" aria-label="搜索文稿正文"
             autocomplete="off" spellcheck="false" enterkeyhint="search" maxlength="512" />
           <button type="submit" class="search-go" id="search-go">搜索</button>
         </form>

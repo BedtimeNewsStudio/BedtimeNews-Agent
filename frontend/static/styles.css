@@ -28,14 +28,14 @@
   --accent2-rgb: 16, 163, 127;
   --on-accent: #ffffff;
   --user-bubble: #2f2f2f;
-  --content-max: 800px;
+  --content-max: 880px;
   --max-col: calc(var(--content-max) + 4rem);
   --font-cjk: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
     "Microsoft YaHei", "Noto Sans SC", "Segoe UI", sans-serif;
   --font-mono: ui-monospace, "SF Mono", "Menlo", "Consolas", monospace;
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
   --touch: 44px;
-  --tabbar-h: calc(3.25rem + env(safe-area-inset-bottom, 0px));
+  --tabbar-h: calc(2.33rem + env(safe-area-inset-bottom, 0px));
   --mast-h: 3.25rem;
 }
 
@@ -194,6 +194,50 @@ body {
 
 .mast-icon svg {
   display: block;
+}
+
+/* A separate destination, not a sixth programme. Mobile keeps its existing
+   channel row; display: contents leaves those grid items in place. */
+.masthead-navigation {
+  display: contents;
+}
+
+.masthead-latest-group {
+  display: none;
+}
+
+.masthead-latest {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2rem;
+  padding: 0.35rem 0.65rem;
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--font-cjk);
+  font-size: 0.9rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.masthead-latest svg {
+  flex: 0 0 auto;
+}
+
+.masthead-latest:hover,
+.masthead-latest:focus-visible {
+  color: var(--text);
+}
+
+body[data-panel="latest"] .masthead-latest {
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 var(--accent);
 }
 
 .masthead-right {
@@ -397,33 +441,23 @@ body {
   text-align: left;
   background: transparent;
   border: 0;
-  border-left: 1px solid var(--line);
   color: var(--text);
   font-family: var(--font-cjk);
   font-size: 0.92rem;
   line-height: 1.4;
-  padding: 0.4rem 0 0.4rem 0.75rem;
+  padding: 0.4rem 0;
   cursor: pointer;
-  transition: border-color 0.18s var(--ease), color 0.18s var(--ease),
-    padding-left 0.18s var(--ease);
+  transition: color 0.18s var(--ease);
 }
 
-.topic:hover,
-.topic:focus-visible {
-  border-left-color: var(--accent);
-  color: var(--text);
-  padding-left: 1rem;
-  outline: none;
-}
-
-.topic::before {
-  content: "▸ ";
-  color: var(--muted);
-}
-
-.topic:hover::before,
-.topic:focus-visible::before {
+.topic:hover {
   color: var(--accent);
+}
+
+.topic:focus-visible {
+  color: var(--accent);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* ----------------------------------------------------------------------- log */
@@ -864,16 +898,18 @@ body {
 
 .composer-form {
   display: flex;
-  align-items: flex-end;
-  gap: 0.5rem;
+  align-items: stretch;
+  min-height: 3.25rem;
   background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 24px;
-  padding: 0.45rem 0.45rem 0.45rem 1rem;
+  border: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  padding: 0;
 }
 
 .composer-form:focus-within {
-  border-color: var(--text-dim);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .composer-prompt {
@@ -882,6 +918,7 @@ body {
 
 .composer-input {
   flex: 1;
+  min-width: 0;
   resize: none;
   background: transparent;
   border: 0;
@@ -891,8 +928,8 @@ body {
   font-size: 1rem;
   line-height: 1.5;
   max-height: 8rem;
-  padding: 0.45rem 0;
-  min-height: 1.5rem;
+  padding: 0.875rem 1.1rem;
+  min-height: 3.25rem;
 }
 
 .composer-input::placeholder {
@@ -903,15 +940,15 @@ body {
   flex-shrink: 0;
   appearance: none;
   border: 0;
-  border-radius: 999px;
+  border-radius: 0;
   background: var(--accent);
   color: var(--on-accent);
   font-family: var(--font-cjk);
   font-weight: 600;
   font-size: 0.85rem;
-  min-width: 2.5rem;
-  min-height: 2.5rem;
-  padding: 0 0.85rem;
+  min-width: 3.25rem;
+  min-height: 3.25rem;
+  padding: 0 1rem;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -921,6 +958,11 @@ body {
 
 .composer-send:hover:not(:disabled) {
   background: var(--accent-strong);
+}
+
+.composer-send:focus-visible {
+  outline: 2px solid var(--on-accent);
+  outline-offset: -4px;
 }
 
 .composer-send:disabled {
@@ -1044,7 +1086,7 @@ body {
 }
 
 /* ---------------------------------------------------------- mode tabs (top)
-   AI对话 / 传统搜索. A bar as wide as the chat text column (--content-max),
+   AI对话 / 搜索. A bar as wide as the chat text column (--content-max),
    centred on it; each label centred in its half, a centred divider between
    them. Desktop and mobile alike; the active tab gets the accent underline.
    The pane swap is pure CSS off body[data-mode] so no-JS visitors keep the
@@ -1116,7 +1158,7 @@ body {
   outline-offset: -2px;
 }
 
-/* 传统搜索 takes the chat pane's place wholesale; display, not visibility —
+/* 搜索 takes the chat pane's place wholesale; display, not visibility —
    results stay mounted while the AI tab is showing. */
 .search-pane {
   --reading-inline: clamp(1rem, 2.4vw, 1.5rem);
@@ -1167,12 +1209,19 @@ body[data-mode="search"] .chat-pane {
   display: none;
 }
 
+/* Docked: a clear gap under the mode tabs (and room for the focus ring). */
+.search-pane:not(.is-idle) .search-form {
+  margin-top: 1rem;
+}
+
 .search-pane.is-idle .search-starters {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 0.45rem;
-  margin-top: 1rem;
+  gap: 0.6rem;
+  width: calc(100% - 2 * var(--reading-inline));
+  max-width: var(--content-max);
+  margin: 1.1rem auto 0;
 }
 
 .search-pane:not(.is-idle) .search-starters {
@@ -1181,13 +1230,15 @@ body[data-mode="search"] .chat-pane {
 
 .search-starter {
   appearance: none;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: var(--surface);
   color: var(--text-dim);
   font-family: var(--font-cjk);
-  font-size: 0.85rem;
-  padding: 0.35rem 0.8rem;
+  font-size: 1rem;
+  padding: 0.5rem 1.1rem;
   cursor: pointer;
 }
 
@@ -1237,6 +1288,24 @@ body[data-mode="search"] .chat-pane {
   color: var(--text);
   font-family: var(--font-cjk);
   font-size: 1.05rem;
+}
+
+/* A larger clear button than WebKit's default, drawn as a masked X so it
+   follows the theme colour. */
+.search-input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-left: 0.6rem;
+  background-color: var(--muted);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm4.3 12.9-1.4 1.4L12 13.4l-2.9 2.9-1.4-1.4 2.9-2.9-2.9-2.9 1.4-1.4 2.9 2.9 2.9-2.9 1.4 1.4-2.9 2.9z'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm4.3 12.9-1.4 1.4L12 13.4l-2.9 2.9-1.4-1.4 2.9-2.9-2.9-2.9 1.4-1.4 2.9 2.9 2.9-2.9 1.4 1.4-2.9 2.9z'/%3E%3C/svg%3E") center / contain no-repeat;
+  cursor: pointer;
+}
+
+.search-input::-webkit-search-cancel-button:hover {
+  background-color: var(--text-dim);
 }
 
 .search-input::placeholder {
@@ -2118,6 +2187,37 @@ body[data-mode="search"] .chat-pane {
     flex-wrap: nowrap;
   }
 
+  .masthead-navigation {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    min-width: 0;
+    margin-left: 0.85rem;
+  }
+
+  .masthead-navigation .channel-bar {
+    flex: 0 1 auto;
+    margin-left: 0;
+  }
+
+  .channel-chip {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .wordmark-cn {
+    font-size: 0.9rem;
+    line-height: 1.2;
+  }
+
+  .masthead-latest-group {
+    display: flex;
+    flex: 0 0 auto;
+    margin-left: 0.6rem;
+    padding-left: 0.85rem;
+    border-left: 1px solid var(--line);
+  }
+
   /* The desk half is permanent: the pane sits at 50% from first paint (the
      server-rendered home page carries the desk), so no open/close animation
      exists and the tabs live over the chat column unconditionally. */
@@ -2185,14 +2285,21 @@ body[data-mode="search"] .chat-pane {
     padding-top: clamp(0.8rem, 1.5vw, 1.2rem);
   }
 
-  /* Eight starters, one per row, left-aligned; the 浏览全部文稿 block takes
-     a full-width footer below them. */
+  /* Eight starters in two equal columns and four rows. */
   .sample-grid {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .sample-grid .latest-end {
     grid-column: 1 / -1;
+  }
+
+  .sample-grid .latest-end-label {
+    font-size: 1.4rem;
+  }
+
+  .sample-grid .latest-end-chip {
+    font-size: 1.1rem;
   }
 
   .hero {
@@ -2415,7 +2522,7 @@ body[data-mode="search"] .chat-pane {
   }
 
   /* Mobile archive is a full-screen mode reached from the bottom 文稿 tab;
-     the AI对话/传统搜索 switch belongs to the chat surface only. */
+     the AI对话/搜索 switch belongs to the chat surface only. */
   body[data-view="browse"] .mode-tabs {
     display: none;
   }
@@ -2432,7 +2539,7 @@ body[data-mode="search"] .chat-pane {
     grid-template-columns: 1fr 1fr;
     flex: 0 0 auto;
     align-items: stretch;
-    min-height: var(--tabbar-h);
+    height: var(--tabbar-h);
     padding: 0;
     padding-bottom: env(safe-area-inset-bottom, 0px);
     background: var(--bg);
@@ -2446,7 +2553,7 @@ body[data-mode="search"] .chat-pane {
     align-items: center;
     justify-content: center;
     width: 100%;
-    min-height: var(--touch);
+    min-height: 0;
     margin: 0;
     border: 0;
     border-radius: 0;
@@ -2457,7 +2564,7 @@ body[data-mode="search"] .chat-pane {
     font-weight: 550;
     letter-spacing: 0.12em;
     cursor: pointer;
-    padding: 0.85rem 0.5rem;
+    padding: 0 0.5rem;
     text-decoration: none;
   }
 
@@ -2496,8 +2603,8 @@ body[data-mode="search"] .chat-pane {
   }
 
   .composer-send {
-    width: 2.5rem;
-    height: 2.5rem;
+    width: 3.25rem;
+    height: auto;
     padding: 0;
     letter-spacing: 0;
   }

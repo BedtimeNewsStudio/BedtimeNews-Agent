@@ -83,6 +83,15 @@ CATEGORIES: list[Category] = [
             {
                 "question": "“湖北湖南东北化”指的是什么现象？",
             },
+            {
+                "question": "正威集团的巨额营业收入和各地工厂的实际生产情况，为什么会对不上？",
+            },
+            {
+                "question": "鹤岗人口持续减少，建设新机场的客流预测和投资回报该怎么算？",
+            },
+            {
+                "question": "保交楼为什么离不开房企融资？销售低迷怎样传导到竣工进度？",
+            },
         ],
     },
     {
@@ -138,6 +147,15 @@ CATEGORIES: list[Category] = [
             },
             {
                 "question": "网瘾学校的暴力为什么说只是武校的零头？",
+            },
+            {
+                "question": "农村留守儿童到底有多少？不同统计口径为什么会得出差距很大的数字？",
+            },
+            {
+                "question": "户籍制度改革如何影响人口流动和城乡公共服务？节目谈过哪些障碍？",
+            },
+            {
+                "question": "职工养老保险与城乡居民养老保险的待遇差距，为什么值得关注？",
             },
         ],
     },
@@ -195,6 +213,15 @@ CATEGORIES: list[Category] = [
             {
                 "question": "“无工作社会”和“新一代潘晓之问”讨论的是什么？",
             },
+            {
+                "question": "中考后的普职分流为什么引发争议？德国职业教育的经验能否照搬？",
+            },
+            {
+                "question": "AI替代初级岗位，会怎样影响年轻人的入行机会和人才培养？",
+            },
+            {
+                "question": "节目讨论过哪些劳动仲裁案例？劳动者维权为什么常常遇到阻力？",
+            },
         ],
     },
     {
@@ -251,6 +278,15 @@ CATEGORIES: list[Category] = [
             {
                 "question": "中国氦气是怎么突围的？",
             },
+            {
+                "question": "武汉弘芯的芯片项目是怎么运作的？为什么风险还会传到济南？",
+            },
+            {
+                "question": "天龙三号试车时为什么会意外升空？事故暴露了哪些工程问题？",
+            },
+            {
+                "question": "星链从造火箭发展到批量造卫星，产业化的关键变化有哪些？",
+            },
         ],
     },
     {
@@ -306,6 +342,15 @@ CATEGORIES: list[Category] = [
             },
             {
                 "question": "中印关系为什么出现了解冻？",
+            },
+            {
+                "question": "苏联解体前，中国媒体如何评价戈尔巴乔夫？这种评价经历了哪些变化？",
+            },
+            {
+                "question": "“一带一路”的项目和投资规模，为什么很难用一个总数说明？",
+            },
+            {
+                "question": "琉球的本土认同、日本统治和美军基地之间，有怎样的历史关系？",
             },
         ],
     },
@@ -369,6 +414,15 @@ CATEGORIES: list[Category] = [
             {
                 "question": "法国为什么要围剿SHEIN？",
             },
+            {
+                "question": "光伏产业为什么反复出现产能过剩？补贴和出口退税在其中起了什么作用？",
+            },
+            {
+                "question": "欧盟电池碳足迹要求，为什么会影响宁德时代等企业获取绿电？",
+            },
+            {
+                "question": "网约车平台降低抽成，能否缓解司机在运力饱和下的收入压力？",
+            },
         ],
     },
     {
@@ -421,6 +475,15 @@ CATEGORIES: list[Category] = [
             },
             {
                 "question": "电动车新规为什么要让车主交钱修路？",
+            },
+            {
+                "question": "引江济淮工程为什么被称为安徽的“小南水北调”？它兼顾了哪些用途？",
+            },
+            {
+                "question": "北煤南运为什么既要修重载铁路，又要发展特高压输电？",
+            },
+            {
+                "question": "毛虾为什么能逼停核电站？海水冷却系统面临哪些风险？",
             },
         ],
     },
@@ -481,31 +544,84 @@ CATEGORIES: list[Category] = [
             {
                 "question": "减肥药赛道为什么突然卷了起来？",
             },
+            {
+                "question": "健康税为什么针对烟草、酒精和含糖饮料？公共卫生与财政目标如何兼顾？",
+            },
+            {
+                "question": "高价儿童近视防控镜片的宣传，为什么不能代替临床证据？",
+            },
+            {
+                "question": "老年保健品会销如何把产品、讲师和健康馆连成一套销售体系？",
+            },
         ],
     },
 ]
 
-# Keyword-search starters for the 传统搜索 pane. Each entry is a full query:
-# the backend hits any one of the words and ranks multi-word coverage higher.
-# Chosen from a document-frequency + year-coverage pass over every 正文
-# (2026-10-28): each line threads a topic the show has returned to across
-# most years of its archive, including the recurring "老朋友" (独山县, 正威
-# 集团) and the signature 社会化抚养 proposal. The input placeholder rotates
-# through this list; the pane shows six random entries as chips.
+# Search starters are single keywords, named entities or natural phrases,
+# not bags of loosely related words. They cover recurring cases and long-run
+# themes found in transcript bodies and topic headings. The placeholder draws
+# from the full library; chips sample six. Chinese phrases are segmented by
+# the existing search backend, not treated as exact-phrase constraints.
 SEARCH_STARTERS: list[str] = [
-    "地方债 城投债 独山县",
-    "房地产 房价 鹤岗",
-    "恒大 许家印 正威集团 王文银",
-    "人口 生育 社会化抚养",
-    "教育 高考 职业教育",
-    "医保 集采 药价",
-    "养老金 延迟退休 社保",
-    "芯片 半导体 光刻机",
-    "中美 关税 贸易战",
-    "AI 大模型 人工智能",
-    "台湾 台积电",
-    "乌克兰 俄乌",
-    "粮食安全 耕地 种子",
-    "水利 核电 高铁",
-    "统计 GDP 造假",
+    "地方债务",
+    "房地产税",
+    "人口老龄化",
+    "高考",
+    "药品集采",
+    "延迟退休",
+    "光刻机",
+    "贸易战",
+    "人工智能",
+    "台积电",
+    "俄乌战争",
+    "粮食安全",
+    "城市更新",
+    "统计造假",
+    "生育率",
+    "独山县",
+    "正威集团",
+    "鹤岗",
+    "恒大",
+    "万科",
+    "柳州轻轨",
+    "武汉弘芯",
+    "社会化抚养",
+    "土地财政",
+    "烂尾楼",
+    "职业教育",
+    "衡水中学",
+    "山河大学",
+    "生育补贴",
+    "留守儿童",
+    "户籍制度",
+    "外卖骑手",
+    "劳动仲裁",
+    "失业保险",
+    "星舰",
+    "星链",
+    "可回收火箭",
+    "阿尔忒弥斯",
+    "半导体",
+    "大基金",
+    "氦气",
+    "琉球",
+    "雅万高铁",
+    "叙利亚",
+    "苏联解体",
+    "一带一路",
+    "核电",
+    "南水北调",
+    "特高压",
+    "页岩气",
+    "高标准农田",
+    "宁德时代",
+    "光伏",
+    "网约车",
+    "快递",
+    "中成药",
+    "鸿茅药酒",
+    "保健品",
+    "健康税",
+    "消费税",
+    "戒网瘾学校",
 ]
