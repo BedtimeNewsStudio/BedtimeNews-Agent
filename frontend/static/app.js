@@ -1611,16 +1611,22 @@ function showLatest() {
 // it is for the route render it triggers.
 let keepModeOnNextRoute = false;
 
+// True while the reader holds a transcript reached from the search results
+// (links followed inside it keep the flag); any other route clears it.
+let readerFromSearch = false;
+
 async function renderRoute() {
   const generation = ++routeGeneration;
   const { pathname, search } = window.location;
   const channel = new URLSearchParams(search).get("channel") || null;
 
   if (isSearchPath(pathname)) {
+    readerFromSearch = false;
     showSearchRoute(new URLSearchParams(search).get("q")?.trim() ?? "");
     return;
   }
   readingRoutePath = `${pathname}${search}`;
+  if (!pathname.startsWith("/transcripts/")) readerFromSearch = false;
 
   // A channel is the whole of this route now; without one there is no page here.
   if (pathname === "/transcripts" || pathname === "/transcripts/") {
@@ -1770,7 +1776,17 @@ els.channelBar.addEventListener("click", (event) => {
 });
 // Close steps back one level: an article returns to its channel's list, a
 // channel list returns to the landing desk.
-els.readingClose.addEventListener("click", () => navigate(readingBackTarget() ?? "/"));
+// Mobile shows one surface at a time, so a transcript opened from the search
+// results floats over them: closing it returns to the same results, at the
+// same scroll position, rather than to the channel list (desktop keeps the
+// list, since the results never left the left half there).
+els.readingClose.addEventListener("click", () => {
+  if (mobileLayout.matches && readerFromSearch && searchState?.query) {
+    navigate(searchPath(searchState.query));
+    return;
+  }
+  navigate(readingBackTarget() ?? "/");
+});
 els.readingShare?.addEventListener("click", () => {
   if (els.shareSheet?.open) closeShareSheet();
   else void openShareSheet();
@@ -2622,6 +2638,11 @@ if (els.modeTabs) {
     switchMode(next.dataset.mode);
   });
 }
+
+// Runs before the document-level router (bubbling reaches this pane first).
+els.searchResults?.addEventListener("click", (event) => {
+  if (event.target.closest("a[data-route]")) readerFromSearch = true;
+});
 
 // 搜索: explicit submit (button or Enter) — no live-as-you-type calls.
 els.searchForm?.addEventListener("submit", (event) => {
