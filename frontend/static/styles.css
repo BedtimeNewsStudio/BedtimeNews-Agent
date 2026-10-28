@@ -1167,6 +1167,36 @@ body[data-mode="search"] .chat-pane {
   display: none;
 }
 
+.search-pane.is-idle .search-starters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.45rem;
+  margin-top: 1rem;
+}
+
+.search-pane:not(.is-idle) .search-starters {
+  display: none;
+}
+
+.search-starter {
+  appearance: none;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-dim);
+  font-family: var(--font-cjk);
+  font-size: 0.85rem;
+  padding: 0.35rem 0.8rem;
+  cursor: pointer;
+}
+
+.search-starter:hover,
+.search-starter:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 @media (max-width: 900px) {
   .search-pane.is-idle .search-intro {
     left: 50%;
@@ -1177,15 +1207,16 @@ body[data-mode="search"] .chat-pane {
   }
 }
 
-/* Search row mirrors the reading bar's height so both halves share one
-   top-band rhythm. The input is an inset field: slightly darker than the
-   surface around it, no border until focus. */
+/* A single rounded field with a flush accent-coloured submit segment.
+   The shared outline belongs to the form, not to either half. */
 .search-form {
   flex: 0 0 auto;
-  position: relative;
   display: flex;
-  align-items: center;
-  height: calc(var(--touch) + 1.1rem);
+  align-items: stretch;
+  height: 3.25rem;
+  border-radius: 10px;
+  background: var(--surface-2);
+  overflow: hidden;
   /* Match the result column in both idle and docked states, without a
      second layer of gutters shrinking the input inside the form. */
   width: calc(100% - 2 * var(--reading-inline));
@@ -1198,11 +1229,11 @@ body[data-mode="search"] .chat-pane {
   flex: 1 1 auto;
   min-width: 0;
   width: 100%;
-  height: 3.25rem;
+  height: 100%;
   border: 0;
-  border-radius: 10px;
-  padding: 0 4.9rem 0 1.1rem;
-  background: var(--surface-2);
+  border-radius: 0;
+  padding: 0 1.1rem;
+  background: transparent;
   color: var(--text);
   font-family: var(--font-cjk);
   font-size: 1.05rem;
@@ -1212,20 +1243,21 @@ body[data-mode="search"] .chat-pane {
   color: var(--muted);
 }
 
-.search-input:focus {
+.search-form:focus-within {
   outline: 2px solid var(--accent);
-  outline-offset: -1px;
+  outline-offset: 2px;
+}
+
+.search-input:focus {
+  outline: none;
 }
 
 .search-go {
   appearance: none;
-  position: absolute;
-  top: 50%;
-  right: 0.4rem;
-  transform: translateY(-50%);
-  height: calc(100% - 0.8rem);
+  flex: 0 0 auto;
+  height: 100%;
   border: 0;
-  border-radius: 8px;
+  border-radius: 0;
   padding: 0 1rem;
   background: var(--accent);
   color: var(--on-accent);
@@ -1240,8 +1272,8 @@ body[data-mode="search"] .chat-pane {
 }
 
 .search-go:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline: 2px solid var(--on-accent);
+  outline-offset: -4px;
 }
 
 .search-go:disabled {

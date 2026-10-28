@@ -484,3 +484,28 @@ CATEGORIES: list[Category] = [
         ],
     },
 ]
+
+# Keyword-search starters for the 传统搜索 pane. Each entry is a full query:
+# the backend hits any one of the words and ranks multi-word coverage higher.
+# Chosen from a document-frequency + year-coverage pass over every 正文
+# (2026-10-28): each line threads a topic the show has returned to across
+# most years of its archive, including the recurring "老朋友" (独山县, 正威
+# 集团) and the signature 社会化抚养 proposal. The input placeholder rotates
+# through this list; the pane shows six random entries as chips.
+SEARCH_STARTERS: list[str] = [
+    "地方债 城投债 独山县",
+    "房地产 房价 鹤岗",
+    "恒大 许家印 正威集团 王文银",
+    "人口 生育 社会化抚养",
+    "教育 高考 职业教育",
+    "医保 集采 药价",
+    "养老金 延迟退休 社保",
+    "芯片 半导体 光刻机",
+    "中美 关税 贸易战",
+    "AI 大模型 人工智能",
+    "台湾 台积电",
+    "乌克兰 俄乌",
+    "粮食安全 耕地 种子",
+    "水利 核电 高铁",
+    "统计 GDP 造假",
+]

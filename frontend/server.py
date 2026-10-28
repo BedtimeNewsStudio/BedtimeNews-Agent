@@ -53,7 +53,7 @@ from fastapi.responses import (
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
-from starters import CATEGORIES
+from starters import CATEGORIES, SEARCH_STARTERS
 
 logger = logging.getLogger(__name__)
 
@@ -904,8 +904,8 @@ async def readyz() -> JSONResponse:
 
 @app.get("/api/starters")
 async def get_starters() -> JSONResponse:
-    """Sample questions (grouped by category) for the empty-state list."""
-    return JSONResponse({"categories": CATEGORIES})
+    """Sample questions plus the keyword-search starters for the empty state."""
+    return JSONResponse({"categories": CATEGORIES, "search": SEARCH_STARTERS})
 
 
 # A ChatRequest holds at most a 2000-character question and eight prior

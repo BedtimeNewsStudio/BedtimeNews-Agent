@@ -405,6 +405,8 @@ function shuffle(items) {
 }
 
 let sampleCategories = [];
+let searchStarters = [];
+let searchPlaceholderTimer = null;
 
 function renderSampleQuestions() {
   els.grid.replaceChildren();
@@ -464,7 +466,10 @@ async function loadSampleQuestions() {
     const res = await fetch("/api/starters");
     const data = await res.json();
     sampleCategories = data.categories || [];
+    searchStarters = data.search || [];
     renderSampleQuestions();
+    renderSearchStarters();
+    startSearchPlaceholderRotation();
     els.reshuffle.hidden = sampleCategories.length === 0;
   } catch (err) {
     console.error("Failed to load sample questions.", err);
@@ -909,6 +914,7 @@ async function runSearch(query) {
     };
     els.searchResults.classList.remove("is-busy");
     renderSearchPage(data, { append: false });
+    els.searchResults.scrollTop = 0;
     setSearchStatus(
       data.total > 0 ? `找到 ${data.total} 篇相关文稿` : "没有匹配的文稿，换个说法试试。",
     );
@@ -949,6 +955,50 @@ async function loadMoreSearch() {
       els.searchGo.disabled = false;
     }
   }
+}
+
+// The input placeholder rotates through the whole starter library every 5s;
+// the chips below the box are a random subset of six per page load. With an
+// empty input, submitting searches the starter currently on display.
+function currentSearchPlaceholder() {
+  return els.searchInput.getAttribute("placeholder") || "";
+}
+
+function startSearchPlaceholderRotation() {
+  if (!searchStarters.length || searchPlaceholderTimer) return;
+  const rotate = () => {
+    let next = searchStarters[Math.floor(Math.random() * searchStarters.length)];
+    while (searchStarters.length > 1 && next === currentSearchPlaceholder()) {
+      next = searchStarters[Math.floor(Math.random() * searchStarters.length)];
+    }
+    els.searchInput.placeholder = next;
+  };
+  rotate();
+  searchPlaceholderTimer = setInterval(rotate, 5000);
+}
+
+function renderSearchStarters() {
+  const holder = document.querySelector(".search-starters");
+  if (!holder || !searchStarters.length) return;
+  const pool = searchStarters.slice();
+  const picked = [];
+  while (picked.length < 6 && pool.length) {
+    picked.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+  }
+  holder.replaceChildren(
+    ...picked.map((query) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "search-starter";
+      chip.textContent = query;
+      chip.addEventListener("click", () => {
+        els.searchInput.value = query;
+        void runSearch(query);
+        els.searchInput.focus();
+      });
+      return chip;
+    }),
+  );
 }
 
 function preferredArchiveChannel() {
@@ -2449,8 +2499,12 @@ if (els.modeTabs) {
 // 传统搜索: explicit submit (button or Enter) — no live-as-you-type calls.
 els.searchForm?.addEventListener("submit", (event) => {
   event.preventDefault();
-  const query = els.searchInput.value.trim();
+  // An empty input submits the starter currently shown as the placeholder.
+  const typed = els.searchInput.value.trim();
+  const placeholder = currentSearchPlaceholder();
+  const query = typed || (searchStarters.includes(placeholder) ? placeholder : "");
   if (query) {
+    els.searchInput.value = query;
     void runSearch(query);
     // Focus returns to the input so the query can be edited and re-run at once.
     els.searchInput.focus();
