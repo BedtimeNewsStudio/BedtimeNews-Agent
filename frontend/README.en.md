@@ -23,13 +23,15 @@ See the [main README](../README.en.md) for full-stack setup.
 - **Type:** system CJK sans; monospace only for a few machine labels. No webfont
   CDN.
 - **Layout (automatic by viewport; no manual desktop/mobile switch):**
-  - **Desktop (>900px):** chat-centred landing; opening a transcript squeezes in
-    a right-hand reading pane. Masthead shows channel chips, framed GitHub +
-    theme controls. Starters: one question per category plus a「浏览文稿」
-    control.
-  - **Mobile (≤900px):** full-screen chat **or** archive/reader; bottom tabs
-    「对话 | 文稿」split the bar in half. Starters are eight flat questions (no
-    category labels, no browse button). Masthead icons are borderless; the
+  - **Desktop (>900px):** a permanent 50/50 split. The left half has the
+    「AI对话 | 搜索」tabs; the right half is the reading pane, showing「最新文稿」
+    (the latest 50, server-rendered) by default, or a channel list or a
+    transcript. Masthead shows channel links, a「最新文稿」link (clock icon)
+    after a vertical divider, and framed GitHub + theme controls. Starters:
+    one question per category in a 2×4 grid, plus「浏览全部文稿」channel links.
+  - **Mobile (≤900px):** full-screen chat (or search) **or** archive/reader;
+    bottom tabs「对话 | 文稿」split the bar in half. Starters are eight
+    questions in a 2×4 grid (no category labels, no browse links). Masthead icons are borderless; the
     GitHub Edit control is desktop-only.
 - **Reading chrome:** fixed-height slots (back / edit / close) so list↔article
   borders do not jump; in-article heading/footnote rule lines are suppressed.
@@ -41,7 +43,18 @@ See the [main README](../README.en.md) for full-stack setup.
 - Anonymous chat (no authentication)
 - System-aware light/dark theme with SVG toggle
 - Sample questions (categorised on desktop, flat on mobile) and desktop
-  「浏览文稿」
+  「浏览全部文稿」
+- The「搜索」pane: keyword search over every transcript, highlighted hits,
+  snippets that link to the matching section. When idle it shows the logo and
+  10 random search starters; the placeholder rotates through starters every 5 s
+- Search has its own address: `/search` opens the empty「搜索」page (so does
+  clicking the「搜索」tab), each search updates the address to
+  `/search?q=<keyword>`, and opening that address runs the search at once. On
+  desktop, while a transcript is open in the right pane, the address stays on
+  that transcript. Browsers can add the site as a search engine via
+  `/opensearch.xml`
+- 「最新文稿」has its own address, `/latest` (same as the home page on desktop;
+  full-screen list on mobile)
 - Channel chips, newest-first archive lists (undated last), article reader
 - Desktop GitHub Edit link into
   `BedtimeNews-Transcripts/edit/main/contents/…`
@@ -71,9 +84,10 @@ The frontend:
 
 - **server.py** — FastAPI: `static/`, server-rendered home, channel and
   transcript pages, `/api/starters`, transcript and keyword-search API proxies,
-  `/chat` SSE proxy,
-  robots/sitemap/short links, health endpoints
-- **starters.py** — sample-question data (categories + questions)
+  `/chat` SSE proxy, the `/search` and `/latest` pages,
+  robots/sitemap/OpenSearch/short links, health endpoints
+- **starters.py** — sample-question data (categories + questions) and search
+  starters
 - **static/index.html** — markup, theme boot, mobile tab bar, turn templates
 - **static/styles.css** — solid tokens and desktop/mobile layout
 - **static/app.js** — routing, archive/reader, starters, composer, theme, SSE,
@@ -88,9 +102,11 @@ The frontend:
 | Method | Path                             | Purpose                                                                                    |
 | ------ | -------------------------------- | ------------------------------------------------------------------------------------------ |
 | GET    | `/`                              | Home page: the SPA shell (`static/index.html`) rendered with canonical/SEO metadata        |
+| GET    | `/latest`                        | Latest transcripts (the home page's reading pane, with `ItemList` structured data)         |
+| GET    | `/search?q={keyword}`            | Opens the「搜索」tab; with `q`, prefilled and run at once (results `noindex`, no canonical)  |
 | GET    | `/transcripts?channel={channel}` | Server-rendered channel list (`/transcripts` without a channel: `308` to `/`)              |
 | GET    | `/transcripts/{doc_id}`          | Server-rendered transcript page                                                            |
-| GET    | `/api/starters`                  | Sample questions JSON (`categories`)                                                       |
+| GET    | `/api/starters`                  | Sample questions and search starters JSON (`categories`, `search`)                         |
 | GET    | `/api/search`                    | Keyword search (proxied to the agent; status codes pass through)                           |
 | GET    | `/api/transcripts`               | Transcript index (proxied)                                                                 |
 | GET    | `/api/transcripts/{doc_id}`      | One transcript (proxied; a malformed `doc_id` is a `404` without calling the agent)        |
@@ -99,13 +115,17 @@ The frontend:
 | GET    | `/readyz`                        | Readiness of this instance: status code of the agent's `/health` (200 / 503), trimmed body |
 | GET    | `/index.html`                    | `308` redirect to `/`                                                                      |
 | GET    | `/robots.txt`                    | Allows all; points at the sitemap                                                          |
-| GET    | `/sitemap.xml`                   | Home, channel lists, every transcript                                                      |
+| GET    | `/sitemap.xml`                   | Home, `/latest`, channel lists, every transcript                                           |
+| GET    | `/opensearch.xml`                | OpenSearch description; browser site search points at `/search?q=`                         |
 | GET    | `/s/{short_id}`                  | Short link, `302` to the transcript                                                        |
 
 This service proxies `/api/search` to the agent's `GET /search`; the keyword
 search pane is built on it. See the
 [Agent search API](../agent/README.en.md#get-search). Direct localhost access on
 port 18001 is provided only by the sample overlay, not by a frontend route.
+Every `/api/` response carries `X-Robots-Tag: noindex` so data endpoints stay
+out of search indexes; they are not blocked in robots.txt, so crawlers can
+still render the pages that fetch them.
 
 ## Development Workflow
 

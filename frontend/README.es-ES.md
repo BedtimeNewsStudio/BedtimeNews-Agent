@@ -27,16 +27,19 @@ completa de la pila.
   etiquetas legibles por máquina. Sin CDN de webfonts.
 - **Diseño (automático según el viewport; sin cambio manual
   escritorio/móvil):**
-  - **Escritorio (>900px):** aterrizaje centrado en el chat; al abrir una
-    transcripción se incorpora un panel de lectura a la derecha. El encabezado
-    muestra chips de canal (睡前消息 / 参考信息 / …) y controles de GitHub y
-    tema enmarcados (esquinas redondeadas). Inicios: una pregunta por
-    categoría más un control「浏览文稿」debajo.
-  - **Móvil (≤900px):** chat **o** archivo/lector a pantalla completa, de
-    forma mutuamente excluyente; las pestañas inferiores「对话 | 文稿」dividen
-    la barra por la mitad. Los inicios son ocho preguntas planas (sin
-    etiquetas de categoría, sin botón de exploración — se usa la pestaña de
-    archivo). Los iconos del encabezado no tienen borde; el control de
+  - **Escritorio (>900px):** división fija en dos mitades. La izquierda tiene
+    las pestañas「AI对话 | 搜索」; la derecha es el panel de lectura, que por
+    defecto muestra「最新文稿」(las 50 más recientes, renderizadas en el
+    servidor), o bien la lista de un programa o una transcripción. El
+    encabezado muestra los enlaces de programa (睡前消息 / 参考信息 / …), un
+    enlace「最新文稿」(icono de reloj) tras un separador vertical, y controles
+    de GitHub y tema enmarcados (esquinas redondeadas). Inicios: una pregunta
+    por categoría en una cuadrícula de 2×4, más los enlaces「浏览全部文稿」.
+  - **Móvil (≤900px):** chat (o búsqueda) **o** archivo/lector a pantalla
+    completa, de forma mutuamente excluyente; las pestañas inferiores
+    「对话 | 文稿」dividen la barra por la mitad. Los inicios son ocho
+    preguntas en una cuadrícula de 2×4 (sin etiquetas de categoría ni enlaces
+    de exploración — se usa la pestaña de archivo). Los iconos del encabezado no tienen borde; el control de
     edición de GitHub es solo de escritorio.
 - **Cromado de lectura:** ranuras de altura fija (atrás / editar / cerrar)
   para que las líneas divisorias de lista↔artículo no salten al cambiar de
@@ -51,7 +54,19 @@ completa de la pila.
 - Chat anónimo (sin autenticación)
 - Tema claro/oscuro consciente del sistema con interruptor SVG
 - Preguntas de muestra (por categoría en escritorio, planas en móvil) y
-  「浏览文稿」 en escritorio
+  「浏览全部文稿」 en escritorio
+- El panel「搜索」: búsqueda por palabras clave en todas las transcripciones,
+  coincidencias resaltadas y fragmentos que enlazan a la sección. En reposo
+  muestra el logo y 10 inicios de búsqueda al azar; el texto de ejemplo del
+  campo rota entre inicios cada 5 s
+- La búsqueda tiene dirección propia: `/search` abre la página「搜索」vacía
+  (igual que pulsar la pestaña「搜索」), cada búsqueda actualiza la dirección a
+  `/search?q=<palabra>` y abrir esa dirección ejecuta la búsqueda al instante.
+  En escritorio, con una transcripción abierta en el panel derecho, la
+  dirección sigue siendo la de esa transcripción. Los navegadores pueden
+  añadir el sitio como buscador mediante `/opensearch.xml`
+- 「最新文稿」tiene dirección propia, `/latest` (igual que el inicio en
+  escritorio; lista a pantalla completa en móvil)
 - Chips de canal, listas de archivo ordenadas de más nueva a más vieja (sin
   fecha al final), lector de artículos
 - Enlace de edición de GitHub en escritorio hacia
@@ -85,8 +100,10 @@ El frontend:
   servidor la página de inicio, las de programa y las de transcripción, expone
   `/api/starters`, proxy de las APIs de transcripciones y búsqueda por palabras,
   proxy del SSE de
-  `/chat`, robots/sitemap/enlaces cortos y endpoints de salud
-- **starters.py** — datos de preguntas de muestra (categorías + preguntas)
+  `/chat`, las páginas `/search` y `/latest`, robots/sitemap/OpenSearch/enlaces
+  cortos y endpoints de salud
+- **starters.py** — datos de preguntas de muestra (categorías + preguntas) e
+  inicios de búsqueda
 - **static/index.html** — marcado de la página, script de arranque de tema,
   barra de pestañas móvil, plantillas de turnos
 - **static/styles.css** — tokens de color planos y diseño escritorio/móvil
@@ -103,9 +120,11 @@ El frontend:
 | Método | Ruta                             | Propósito                                                                                                 |
 | ------ | -------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | GET    | `/`                              | Inicio: el armazón de la SPA (`static/index.html`) con metadatos canónicos/SEO                            |
+| GET    | `/latest`                        | Últimas transcripciones (el panel de lectura del inicio, con datos estructurados `ItemList`)              |
+| GET    | `/search?q={keyword}`            | Abre la pestaña「搜索」; con `q`, la rellena y busca al instante (resultados `noindex`, sin canónica)      |
 | GET    | `/transcripts?channel={channel}` | Lista de un programa renderizada en el servidor (`/transcripts` sin programa: `308` a `/`)                |
 | GET    | `/transcripts/{doc_id}`          | Página de transcripción renderizada en el servidor                                                        |
-| GET    | `/api/starters`                  | JSON de preguntas de muestra (`categories`)                                                               |
+| GET    | `/api/starters`                  | JSON de preguntas de muestra e inicios de búsqueda (`categories`, `search`)                               |
 | GET    | `/api/search`                    | Búsqueda por palabras clave (proxy al agente; los códigos de estado se mantienen)                         |
 | GET    | `/api/transcripts`               | Índice de transcripciones (proxy)                                                                         |
 | GET    | `/api/transcripts/{doc_id}`      | Una transcripción (proxy; un `doc_id` mal formado da `404` sin llamar al agente)                          |
@@ -114,13 +133,17 @@ El frontend:
 | GET    | `/readyz`                        | Disponibilidad de esta instancia: código de estado del `/health` del agente (200 / 503), cuerpo recortado |
 | GET    | `/index.html`                    | Redirección `308` a `/`                                                                                   |
 | GET    | `/robots.txt`                    | Permite todo; apunta al sitemap                                                                           |
-| GET    | `/sitemap.xml`                   | Inicio, listas por programa y cada transcripción                                                          |
+| GET    | `/sitemap.xml`                   | Inicio, `/latest`, listas por programa y cada transcripción                                               |
+| GET    | `/opensearch.xml`                | Descripción OpenSearch; la búsqueda del navegador apunta a `/search?q=`                                   |
 | GET    | `/s/{short_id}`                  | Enlace corto, `302` a la transcripción                                                                    |
 
-Este servicio traslada `/api/search` al `GET /search` del agente; el panel de
-búsqueda tradicional se basa en él. Consulta la
+Este servicio traslada `/api/search` al `GET /search` del agente; el panel
+「搜索」se basa en él. Consulta la
 [API de búsqueda](../agent/README.es-ES.md#get-search). El acceso localhost en
 18001 pertenece al overlay de muestras, no a una ruta del frontend.
+Todas las respuestas de `/api/` llevan `X-Robots-Tag: noindex` para que los
+endpoints de datos no se indexen; no se bloquean en robots.txt, así los
+rastreadores pueden seguir renderizando las páginas que los usan.
 
 ## Flujo de Desarrollo
 

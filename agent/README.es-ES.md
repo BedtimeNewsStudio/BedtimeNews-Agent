@@ -181,7 +181,7 @@ cobertura y proximidad, sin exigir la pregunta literal completa. Las letras ASCI
 no distinguen mayúsculas. No hay llamadas a modelos ni modos exacto/relajado.
 
 **Endpoint interno:** `/search` permanece en la red interna; el servicio web lo
-traslada como `/api/search` para el panel de búsqueda tradicional. El puerto
+traslada como `/api/search` para el panel「搜索」. El puerto
 normal del agente es privado; el overlay
 de muestras lo vincula a `127.0.0.1:18001` (`SAMPLE_AGENT_PORT` cambia el puerto).
 

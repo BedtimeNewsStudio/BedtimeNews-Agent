@@ -19,11 +19,14 @@ agent 后端；文稿列表与正文阅读器同源托管于 `/transcripts`。
   `:root`，浅色在 `[data-theme="light"]`。
 - **字体：** 系统 CJK 无衬线栈；等宽仅用于少量机器标签。不加载 webfont CDN。
 - **布局（自动按视口宽度，无手动切换）：**
-  - **桌面（>900px）：** 对话居中；打开文稿时右侧挤出阅读栏（双栏）。
-    页头显示栏目 chips（睡前消息 / 参考信息 / …）、GitHub 与主题按钮
-    （圆角方框）。示例区按 8 类各 1 题，下方有「浏览文稿」入口。
-  - **手机（≤900px）：** 对话与文稿全屏互斥；底栏「对话 | 文稿」左右半分。
-    示例区不显示类名，仅 8 个 starter；无「浏览文稿」按钮（用底栏文稿）。
+  - **桌面（>900px）：** 常驻左右各半的双栏。左栏顶部是「AI对话 | 搜索」
+    两个 tab；右栏是阅读栏，默认显示「最新文稿」（最近 50 篇，服务端渲染），
+    也显示栏目列表或文稿正文。页头显示栏目链接（睡前消息 / 参考信息 / …）、
+    以竖线隔开的「最新文稿」（时钟图标），以及 GitHub 与主题按钮（圆角方框）。
+    示例区按 8 类各 1 题、两列四行，下方有「浏览全部文稿」栏目入口。
+  - **手机（≤900px）：** 对话（或搜索）与文稿全屏互斥；底栏「对话 | 文稿」
+    左右半分。示例区不显示类名，8 个 starter 两列四行；无「浏览全部文稿」
+    入口（用底栏文稿）。
     页头图标无边框；Edit 链接仅桌面显示。
 - **阅读栏：** 固定高度槽位（返回 / Edit / 关闭），列表↔正文切换时顶部分割线
   不跳动；正文内不渲染标题/`h2`/脚注分隔横线。
@@ -35,7 +38,13 @@ agent 后端；文稿列表与正文阅读器同源托管于 `/transcripts`。
 - 匿名聊天（无需登录）
 - 系统感知浅/深主题 + SVG 手动切换
 - 示例问题（桌面按类、手机扁平）与桌面「浏览全部文稿」栏目入口
-- 「传统搜索」面板：按词搜索全部正文，命中词高亮，摘要直达对应段落
+- 「搜索」面板：按词搜索全部正文，命中词高亮，摘要直达对应段落。空闲时
+  显示 logo 与随机 10 个搜索 starter，输入框占位文字每 5 秒轮换一个 starter
+- 搜索有独立地址：`/search` 打开空白的「搜索」页（点击「搜索」tab 同理）；每次搜索把地址更新为
+  `/search?q=<关键词>`，直接访问该地址会立即执行搜索。桌面右栏已打开文稿时，
+  地址保持为该文稿，不被搜索覆盖。浏览器可通过 `/opensearch.xml` 把本站
+  添加为站内搜索
+- 「最新文稿」有独立地址 `/latest`（桌面与首页相同；手机直接全屏显示列表）
 - 栏目 chips + 文稿列表（发布时间新→旧，无日期沉底）+ 正文阅读
 - 桌面文稿页 GitHub Edit（指向 Transcripts 仓库 `edit/main/contents/…`）
 - 实时 SSE 流式输出与可见流水线步骤
@@ -59,8 +68,8 @@ Frontend：
 
 - **server.py** — FastAPI：托管 `static/`，服务端渲染首页、栏目页与文稿页，
   `/api/starters`、文稿与关键词搜索 API 代理、`/chat` SSE 代理、
-  robots/sitemap/短链接、健康检查端点
-- **starters.py** — 示例问题数据（类别 + 问题）
+  `/search`、`/latest` 页面、robots/sitemap/OpenSearch/短链接、健康检查端点
+- **starters.py** — 示例问题数据（类别 + 问题）与搜索 starter
 - **static/index.html** — 标记、主题引导脚本、底栏 tab、对话模板
 - **static/styles.css** — 纯色设计令牌与桌面/手机布局
 - **static/app.js** — 路由、栏目/列表/正文、示例、composer、主题、SSE、Markdown
@@ -74,9 +83,11 @@ Frontend：
 | 方法 | 路径                             | 用途                                                                       |
 | ---- | -------------------------------- | -------------------------------------------------------------------------- |
 | GET  | `/`                              | 首页：带规范链接与 SEO 元数据渲染的 SPA 外壳（`static/index.html`）        |
+| GET  | `/latest`                        | 最新文稿（同首页的阅读栏，带 `ItemList` 结构化数据）                       |
+| GET  | `/search?q={keyword}`            | 打开「搜索」tab；带 `q` 时预填并立即搜索（结果页 `noindex`、无 canonical） |
 | GET  | `/transcripts?channel={channel}` | 服务端渲染的栏目列表（不带 channel 的 `/transcripts`：`308` 到 `/`）       |
 | GET  | `/transcripts/{doc_id}`          | 服务端渲染的文稿页                                                         |
-| GET  | `/api/starters`                  | 示例问题 JSON（`categories`）                                              |
+| GET  | `/api/starters`                  | 示例问题与搜索 starter JSON（`categories`、`search`）                      |
 | GET  | `/api/search`                    | 关键词搜索（代理 agent；状态码透传）                                       |
 | GET  | `/api/transcripts`               | 文稿索引（代理 agent）                                                     |
 | GET  | `/api/transcripts/{doc_id}`      | 单篇文稿（代理 agent；格式不合法的 `doc_id` 直接返回 `404`，不调用 agent） |
@@ -85,11 +96,14 @@ Frontend：
 | GET  | `/readyz`                        | 本实例的就绪检查：Agent `/health` 的状态码（200 / 503），响应体经裁剪      |
 | GET  | `/index.html`                    | `308` 重定向到 `/`                                                         |
 | GET  | `/robots.txt`                    | 允许全部抓取，并指向 sitemap                                               |
-| GET  | `/sitemap.xml`                   | 首页、各栏目列表及全部文稿                                                 |
+| GET  | `/sitemap.xml`                   | 首页、`/latest`、各栏目列表及全部文稿                                      |
+| GET  | `/opensearch.xml`                | OpenSearch 描述，浏览器站内搜索指向 `/search?q=`                           |
 | GET  | `/s/{short_id}`                  | 短链接，`302` 跳转到文稿                                                   |
 
-本服务把 `/api/search` 代理给 agent 的 `GET /search`，「传统搜索」面板即基于它。
+本服务把 `/api/search` 代理给 agent 的 `GET /search`，「搜索」面板即基于它。
 参数和返回值见 [Agent 搜索 API](../agent/README.md#get-search)。
+所有 `/api/` 响应都带 `X-Robots-Tag: noindex`，不进入搜索引擎索引，但不在
+robots.txt 中屏蔽，以免影响爬虫渲染页面。
 localhost 的 18001 端口由 sample overlay 直接发布，不是前端路由。
 
 ## 开发流程
