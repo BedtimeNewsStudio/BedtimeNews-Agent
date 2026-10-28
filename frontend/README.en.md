@@ -70,7 +70,8 @@ The frontend:
 ## Components
 
 - **server.py** — FastAPI: `static/`, server-rendered home, channel and
-  transcript pages, `/api/starters`, transcript API proxy, `/chat` SSE proxy,
+  transcript pages, `/api/starters`, transcript and keyword-search API proxies,
+  `/chat` SSE proxy,
   robots/sitemap/short links, health endpoints
 - **starters.py** — sample-question data (categories + questions)
 - **static/index.html** — markup, theme boot, mobile tab bar, turn templates
@@ -90,6 +91,7 @@ The frontend:
 | GET    | `/transcripts?channel={channel}` | Server-rendered channel list (`/transcripts` without a channel: `308` to `/`)              |
 | GET    | `/transcripts/{doc_id}`          | Server-rendered transcript page                                                            |
 | GET    | `/api/starters`                  | Sample questions JSON (`categories`)                                                       |
+| GET    | `/api/search`                    | Keyword search (proxied to the agent; status codes pass through)                           |
 | GET    | `/api/transcripts`               | Transcript index (proxied)                                                                 |
 | GET    | `/api/transcripts/{doc_id}`      | One transcript (proxied; a malformed `doc_id` is a `404` without calling the agent)        |
 | POST   | `/chat`                          | Proxies the agent SSE stream (body over 128 KiB: `413`)                                    |
@@ -100,8 +102,8 @@ The frontend:
 | GET    | `/sitemap.xml`                   | Home, channel lists, every transcript                                                      |
 | GET    | `/s/{short_id}`                  | Short link, `302` to the transcript                                                        |
 
-The Agent's `GET /search` is a backend-only API; this service does not proxy
-`/search` or `/api/search` and provides no search interface. See the
+This service proxies `/api/search` to the agent's `GET /search`; the keyword
+search pane is built on it. See the
 [Agent search API](../agent/README.en.md#get-search). Direct localhost access on
 port 18001 is provided only by the sample overlay, not by a frontend route.
 

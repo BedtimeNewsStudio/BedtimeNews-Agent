@@ -34,8 +34,8 @@ reader. Built with LangGraph, any OpenAI-compatible chat/embedding endpoints (th
 
 **Key Features:**
 
-- Backend keyword search over complete bodies with relevance ranking and snippets
-  (Agent API only; no frontend exposure)
+- Keyword search over complete bodies with relevance ranking and snippets
+  (powering the web UI's keyword-search pane)
 - Automatic query routing (archive retrieval vs constrained direct handling)
 - Query optimization and semantic search
 - LLM-based document grading
@@ -87,9 +87,10 @@ binds the Agent to `127.0.0.1:18001` (`SAMPLE_AGENT_PORT`).
 | `GET`  | `/transcripts/{doc_id}` | One reader projection by URI                                                           |
 | `GET`  | `/health`               | Agent readiness and selected snapshot                                                  |
 
-**Keyword search is backend only.** The web service does not proxy `/search` or
-`/api/search` and has no search interface. Its existing chat and transcript
-routes remain described in the [frontend endpoint reference](frontend/README.en.md#endpoints).
+**Keyword search:** the web UI's keyword-search pane sends queries to
+`/api/search`, which the web service proxies to the agent's `/search` (that
+endpoint itself stays on the internal network). The pane's routes are described
+in the [frontend endpoint reference](frontend/README.en.md#endpoints).
 See the [Agent API reference](agent/README.en.md#api-reference) for parameters,
 response fields, and status codes, and the [completed search backend design](docs/designs/20261018_keyword-search-backend.md).
 

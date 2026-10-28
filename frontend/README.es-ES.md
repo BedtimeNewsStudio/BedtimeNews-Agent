@@ -83,7 +83,8 @@ El frontend:
 
 - **server.py** — aplicación FastAPI: sirve `static/`, renderiza en el
   servidor la página de inicio, las de programa y las de transcripción, expone
-  `/api/starters`, proxy de las APIs de transcripciones, proxy del SSE de
+  `/api/starters`, proxy de las APIs de transcripciones y búsqueda por palabras,
+  proxy del SSE de
   `/chat`, robots/sitemap/enlaces cortos y endpoints de salud
 - **starters.py** — datos de preguntas de muestra (categorías + preguntas)
 - **static/index.html** — marcado de la página, script de arranque de tema,
@@ -105,6 +106,7 @@ El frontend:
 | GET    | `/transcripts?channel={channel}` | Lista de un programa renderizada en el servidor (`/transcripts` sin programa: `308` a `/`)                |
 | GET    | `/transcripts/{doc_id}`          | Página de transcripción renderizada en el servidor                                                        |
 | GET    | `/api/starters`                  | JSON de preguntas de muestra (`categories`)                                                               |
+| GET    | `/api/search`                    | Búsqueda por palabras clave (proxy al agente; los códigos de estado se mantienen)                         |
 | GET    | `/api/transcripts`               | Índice de transcripciones (proxy)                                                                         |
 | GET    | `/api/transcripts/{doc_id}`      | Una transcripción (proxy; un `doc_id` mal formado da `404` sin llamar al agente)                          |
 | POST   | `/chat`                          | Hace proxy del flujo SSE del agente al navegador (cuerpo de más de 128 KiB: `413`)                        |
@@ -115,8 +117,8 @@ El frontend:
 | GET    | `/sitemap.xml`                   | Inicio, listas por programa y cada transcripción                                                          |
 | GET    | `/s/{short_id}`                  | Enlace corto, `302` a la transcripción                                                                    |
 
-`GET /search` del agente es solo backend: este servicio no hace proxy de
-`/search` ni `/api/search` y no ofrece interfaz de búsqueda. Consulta la
+Este servicio traslada `/api/search` al `GET /search` del agente; el panel de
+búsqueda tradicional se basa en él. Consulta la
 [API de búsqueda](../agent/README.es-ES.md#get-search). El acceso localhost en
 18001 pertenece al overlay de muestras, no a una ruta del frontend.
 

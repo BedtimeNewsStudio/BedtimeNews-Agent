@@ -38,8 +38,8 @@ PostgreSQL + pgvector.
 
 **Características Principales:**
 
-- Búsqueda backend del cuerpo completo con relevancia y fragmentos
-  (solo API del agente, sin exposición al frontend)
+- Búsqueda por palabras clave del cuerpo completo con relevancia y fragmentos
+  (alimentando el panel de búsqueda de la interfaz web)
 - Enrutamiento automático de consultas (recuperación de archivo vs manejo directo restringido)
 - Optimización de consultas y búsqueda semántica
 - Calificación basada en LLM de documentos
@@ -94,9 +94,10 @@ red privada de la aplicación. El overlay de muestras lo vincula además a
 | `GET`  | `/transcripts/{doc_id}` | Una proyección de lectura por URI                                                |
 | `GET`  | `/health`               | Disponibilidad y snapshot seleccionado                                           |
 
-**La búsqueda es solo backend.** Web no hace proxy de `/search` ni `/api/search`
-y no tiene interfaz de búsqueda. Las rutas existentes de chat y transcripciones
-están en la [referencia del frontend](frontend/README.es-ES.md#endpoints). Consulta
+**Búsqueda por palabras clave:** el panel «Búsqueda tradicional» de la web envía
+las consultas a `/api/search`, y web las traslada al `/search` del agente (ese
+endpoint permanece en la red interna). Las rutas del panel están en la
+[referencia del frontend](frontend/README.es-ES.md#endpoints). Consulta
 parámetros, respuestas y errores en la [API del agente](agent/README.es-ES.md#referencia-de-api)
 y el [diseño backend completado](docs/designs/20261018_keyword-search-backend.md).
 

@@ -1117,8 +1117,9 @@ body {
 }
 
 /* 传统搜索 takes the chat pane's place wholesale; display, not visibility —
-   nothing in the empty pane needs an exit animation. */
+   results stay mounted while the AI tab is showing. */
 .search-pane {
+  --reading-inline: clamp(1rem, 2.4vw, 1.5rem);
   display: none;
   flex: 1 1 0%;
   flex-direction: column;
@@ -1134,12 +1135,182 @@ body[data-mode="search"] .chat-pane {
   display: none;
 }
 
-.search-coming-soon {
-  /* Solo child of the flex-column pane: auto margins centre it both ways. */
-  margin: auto;
+/* Search row mirrors the reading bar's height so both halves share one
+   top-band rhythm. The input is an inset field: slightly darker than the
+   surface around it, no border until focus. */
+.search-form {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  height: calc(var(--touch) + 1.1rem);
+  padding: 0 var(--reading-inline);
+  border-bottom: 1px solid var(--line);
+}
+
+.search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  border-radius: 10px;
+  padding: 0.55rem 0.9rem;
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: var(--font-cjk);
+  font-size: 0.95rem;
+}
+
+.search-input::placeholder {
   color: var(--muted);
-  font-size: 1rem;
-  letter-spacing: 0.12em;
+}
+
+.search-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.search-go {
+  appearance: none;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 10px;
+  padding: 0.55rem 1rem;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-family: var(--font-cjk);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.search-go:hover {
+  background: var(--accent-strong);
+}
+
+.search-go:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.search-go:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.search-status {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0.8rem var(--reading-inline) 0.2rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.search-status:empty {
+  display: none;
+}
+
+.search-status.is-busy {
+  color: var(--text-dim);
+}
+
+.search-results {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.4rem var(--reading-inline) 2rem;
+}
+
+.search-result {
+  border-bottom: 1px solid var(--line);
+  padding: 0.95rem 0;
+}
+
+.search-result-link {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.15rem 0.75rem;
+  align-items: baseline;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.search-result-link:hover .search-result-title,
+.search-result-link:focus-visible .search-result-title {
+  color: var(--accent);
+}
+
+.search-result-title {
+  font-weight: 600;
+  font-size: 0.98rem;
+  line-height: 1.45;
+  transition: color 0.18s var(--ease);
+}
+
+.search-result-meta {
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+/* One snippet row per topic section: the topic tag, then the extract with
+   the matched words in the accent color. */
+.search-snippet {
+  display: block;
+  margin-top: 0.5rem;
+  text-decoration: none;
+}
+
+.search-snippet-heading {
+  display: inline-block;
+  margin-right: 0.5rem;
+  padding: 0.05rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.search-snippet-heading:empty {
+  display: none;
+}
+
+.search-snippet-text {
+  display: inline;
+  margin: 0.2rem 0 0;
+  color: var(--text-dim);
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+.search-snippet:hover .search-snippet-text,
+.search-snippet:focus-visible .search-snippet-text {
+  color: var(--text);
+}
+
+.search-hit {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.search-more {
+  appearance: none;
+  display: block;
+  margin: 1.1rem auto 0;
+  padding: 0.45rem 1.2rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--font-cjk);
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
+.search-more:hover,
+.search-more:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 /* Clipped-to-zero pane states are gone: desktop is a permanent split (below),

@@ -170,8 +170,9 @@ transcript can match any analyzed word. Ranking combines weighted word BM25,
 query-word coverage, and proximity; the whole question need not appear verbatim.
 ASCII case is ignored. No model call or separate exact/relaxed mode is used.
 
-**Backend only:** the web service does not proxy `/search` or `/api/search` and
-has no search interface. The normal Agent port is private; the sample overlay
+**Internal endpoint:** `/search` itself stays on the internal network; the web
+service proxies it as `/api/search` for the keyword search pane. The normal
+Agent port is private; the sample overlay
 binds `127.0.0.1:18001` (`SAMPLE_AGENT_PORT` overrides the port).
 
 ```sh

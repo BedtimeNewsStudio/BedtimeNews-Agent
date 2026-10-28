@@ -180,8 +180,9 @@ Basta que coincida una palabra analizada. La relevancia combina BM25 ponderado,
 cobertura y proximidad, sin exigir la pregunta literal completa. Las letras ASCII
 no distinguen mayúsculas. No hay llamadas a modelos ni modos exacto/relajado.
 
-**Solo backend:** el servicio web no hace proxy de `/search` ni `/api/search` y
-no tiene interfaz de búsqueda. El puerto normal del agente es privado; el overlay
+**Endpoint interno:** `/search` permanece en la red interna; el servicio web lo
+traslada como `/api/search` para el panel de búsqueda tradicional. El puerto
+normal del agente es privado; el overlay
 de muestras lo vincula a `127.0.0.1:18001` (`SAMPLE_AGENT_PORT` cambia el puerto).
 
 ```sh

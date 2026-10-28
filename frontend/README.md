@@ -34,7 +34,8 @@ agent 后端；文稿列表与正文阅读器同源托管于 `/transcripts`。
 
 - 匿名聊天（无需登录）
 - 系统感知浅/深主题 + SVG 手动切换
-- 示例问题（桌面按类、手机扁平）与桌面「浏览文稿」
+- 示例问题（桌面按类、手机扁平）与桌面「浏览全部文稿」栏目入口
+- 「传统搜索」面板：按词搜索全部正文，命中词高亮，摘要直达对应段落
 - 栏目 chips + 文稿列表（发布时间新→旧，无日期沉底）+ 正文阅读
 - 桌面文稿页 GitHub Edit（指向 Transcripts 仓库 `edit/main/contents/…`）
 - 实时 SSE 流式输出与可见流水线步骤
@@ -57,8 +58,8 @@ Frontend：
 ## 组件
 
 - **server.py** — FastAPI：托管 `static/`，服务端渲染首页、栏目页与文稿页，
-  `/api/starters`、文稿 API 代理、`/chat` SSE 代理、robots/sitemap/短链接、
-  健康检查端点
+  `/api/starters`、文稿与关键词搜索 API 代理、`/chat` SSE 代理、
+  robots/sitemap/短链接、健康检查端点
 - **starters.py** — 示例问题数据（类别 + 问题）
 - **static/index.html** — 标记、主题引导脚本、底栏 tab、对话模板
 - **static/styles.css** — 纯色设计令牌与桌面/手机布局
@@ -76,6 +77,7 @@ Frontend：
 | GET  | `/transcripts?channel={channel}` | 服务端渲染的栏目列表（不带 channel 的 `/transcripts`：`308` 到 `/`）       |
 | GET  | `/transcripts/{doc_id}`          | 服务端渲染的文稿页                                                         |
 | GET  | `/api/starters`                  | 示例问题 JSON（`categories`）                                              |
+| GET  | `/api/search`                    | 关键词搜索（代理 agent；状态码透传）                                       |
 | GET  | `/api/transcripts`               | 文稿索引（代理 agent）                                                     |
 | GET  | `/api/transcripts/{doc_id}`      | 单篇文稿（代理 agent；格式不合法的 `doc_id` 直接返回 `404`，不调用 agent） |
 | POST | `/chat`                          | 将 agent 的 SSE 流代理给浏览器（请求体超过 128 KiB：`413`）                |
@@ -86,8 +88,8 @@ Frontend：
 | GET  | `/sitemap.xml`                   | 首页、各栏目列表及全部文稿                                                 |
 | GET  | `/s/{short_id}`                  | 短链接，`302` 跳转到文稿                                                   |
 
-Agent 的 `GET /search` 仅为后端 API；本服务不代理 `/search` 或 `/api/search`，
-也没有搜索界面。参数和返回值见 [Agent 搜索 API](../agent/README.md#get-search)。
+本服务把 `/api/search` 代理给 agent 的 `GET /search`，「传统搜索」面板即基于它。
+参数和返回值见 [Agent 搜索 API](../agent/README.md#get-search)。
 localhost 的 18001 端口由 sample overlay 直接发布，不是前端路由。
 
 ## 开发流程

@@ -63,6 +63,7 @@ AGENT_BACKEND_PORT = os.environ.get("AGENT_BACKEND_PORT", "8000")
 AGENT_BASE_URL = f"http://{AGENT_BACKEND_HOST}:{AGENT_BACKEND_PORT}"  # NOSONAR
 CHAT_ENDPOINT = f"{AGENT_BASE_URL}/chat"
 TRANSCRIPTS_ENDPOINT = f"{AGENT_BASE_URL}/transcripts"
+SEARCH_ENDPOINT = f"{AGENT_BASE_URL}/search"
 # Internal-only: the agent's landing-desk payload. Rendered into the home page
 # server-side; never proxied, so no public API exposes the newest list.
 LATEST_ENDPOINT = f"{AGENT_BASE_URL}/latest"
@@ -400,7 +401,10 @@ def _generated_response(
 
 
 async def _get_upstream(
-    client: httpx.AsyncClient, url: str, headers: dict | None = None
+    client: httpx.AsyncClient,
+    url: str,
+    headers: dict | None = None,
+    params: dict | None = None,
 ) -> httpx.Response:
     """GET from the agent, retrying once if a reused connection was already closed.
 
@@ -408,9 +412,9 @@ async def _get_upstream(
     propagate so callers can answer with a controlled 503.
     """
     try:
-        return await client.get(url, headers=headers)
+        return await client.get(url, headers=headers, params=params)
     except httpx.RemoteProtocolError:
-        return await client.get(url, headers=headers)
+        return await client.get(url, headers=headers, params=params)
 
 
 async def _fetch_upstream_json(url: str) -> dict:
@@ -1001,6 +1005,44 @@ async def _proxy_transcript_json(request: Request, upstream_url: str) -> Respons
         status_code=response.status_code,
         media_type=response.headers.get("content-type", "application/json"),
         headers=forwarded,
+    )
+
+
+@app.get("/api/search")
+async def keyword_search(
+    request: Request,
+    q: Annotated[str, Query(max_length=512)],
+    limit: Annotated[int, Query(ge=1, le=50)] = 20,
+    cursor: Annotated[str | None, Query(max_length=16384)] = None,
+) -> Response:
+    """Proxy the agent's keyword search for the 传统搜索 pane.
+
+    Status codes pass through untouched — the pane distinguishes 410 (stale
+    cursor: search again) from 422 (query problem) from 503 (service down).
+    """
+    client = _client
+    if client is None:
+        return JSONResponse(
+            {"detail": "搜索服务尚未就绪"},
+            status_code=503,
+            headers={"Cache-Control": "no-cache"},
+        )
+    params: dict[str, str] = {"q": q, "limit": str(limit)}
+    if cursor is not None:
+        params["cursor"] = cursor
+    try:
+        response = await _get_upstream(client, SEARCH_ENDPOINT, params=params)
+    except httpx.TransportError:
+        return JSONResponse(
+            {"detail": "搜索服务暂时不可用，请稍后重试。"},
+            status_code=503,
+            headers={"Cache-Control": "no-cache"},
+        )
+    return Response(
+        content=response.content,
+        status_code=response.status_code,
+        media_type=response.headers.get("content-type", "application/json"),
+        headers={"Cache-Control": "no-cache"},
     )
 
 

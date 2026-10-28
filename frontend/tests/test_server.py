@@ -2,7 +2,6 @@ import json
 import re
 import time
 import xml.etree.ElementTree as ET
-
 from urllib.parse import quote
 
 import httpx
@@ -162,6 +161,62 @@ def _json_upstream(status_code=200, payload=None, headers=None):
     )
 
 
+def test_search_proxy_passes_query_params_and_body(client, monkeypatch):
+    payload = {
+        "query": "贵州 债务",
+        "terms": ["贵州", "债务"],
+        "snapshot_id": "s1",
+        "total": 0,
+        "results": [],
+        "next_cursor": None,
+    }
+    upstream = _FakeJsonClient(_json_upstream(200, payload))
+    monkeypatch.setattr(server, "_client", upstream)
+
+    response = client.get("/api/search", params={"q": "贵州 债务", "limit": "10"})
+
+    assert response.status_code == 200
+    assert response.json()["total"] == 0
+    assert upstream.calls[0][0] == server.SEARCH_ENDPOINT
+    assert upstream.calls[0][1]["params"] == {"q": "贵州 债务", "limit": "10"}
+
+
+def test_search_proxy_forwards_cursor(client, monkeypatch):
+    upstream = _FakeJsonClient(_json_upstream(200, {"next_cursor": None}))
+    monkeypatch.setattr(server, "_client", upstream)
+
+    response = client.get("/api/search", params={"q": "贵州", "cursor": "abc_123"})
+
+    assert response.status_code == 200
+    assert upstream.calls[0][1]["params"] == {
+        "q": "贵州",
+        "limit": "20",
+        "cursor": "abc_123",
+    }
+
+
+def test_search_proxy_passes_agent_error_status_through(client, monkeypatch):
+    upstream = _FakeJsonClient(
+        _json_upstream(422, {"detail": "Provide 1-64 searchable words"})
+    )
+    monkeypatch.setattr(server, "_client", upstream)
+
+    response = client.get("/api/search", params={"q": "。。。"})
+
+    assert response.status_code == 422
+    assert "searchable" in response.json()["detail"]
+
+
+def test_search_proxy_maps_transport_error_to_controlled_503(client, monkeypatch):
+    upstream = _FakeJsonClient(error=httpx.ConnectError("boom"))
+    monkeypatch.setattr(server, "_client", upstream)
+
+    response = client.get("/api/search", params={"q": "贵州"})
+
+    assert response.status_code == 503
+    assert "搜索服务暂时不可用" in response.json()["detail"]
+
+
 def test_transcript_index_proxies_etag_and_revalidation(client, monkeypatch):
     upstream = _FakeJsonClient(
         _json_upstream(200, {"items": [{"doc_id": "a.md"}]}, {"ETag": '"abc"'})
@@ -174,7 +229,10 @@ def test_transcript_index_proxies_etag_and_revalidation(client, monkeypatch):
     assert response.json()["items"][0]["doc_id"] == "a.md"
     assert response.headers["etag"] == '"abc"'
     assert upstream.calls == [
-        (server.TRANSCRIPTS_ENDPOINT, {"headers": {"If-None-Match": '"old"'}})
+        (
+            server.TRANSCRIPTS_ENDPOINT,
+            {"headers": {"If-None-Match": '"old"'}, "params": None},
+        )
     ]
 
 
@@ -273,7 +331,9 @@ def test_channel_archive_is_server_rendered_and_sorted(client, monkeypatch):
     # now also server-renders the landing desk, which draws from the same
     # faked upstream and lists other channels.
     archive_html = response.text[
-        response.text.index('id="archive-view"'):response.text.index('id="reader-view"')
+        response.text.index('id="archive-view"') : response.text.index(
+            'id="reader-view"'
+        )
     ]
     assert archive_html.index("【睡前消息2】新文稿") < archive_html.index(
         "【睡前消息1】旧文稿"
@@ -964,13 +1024,14 @@ def test_home_renders_latest_desk_from_agent_cache(client, monkeypatch):
         in response.text
     )
     assert '<span class="latest-item-meta">2026-09-23</span>' in response.text
-    anchored = (
-        "/transcripts/CanKaoXinXi/0601-0700/0654.md#"
-        + quote("富豪排队补税", safe="")
+    anchored = "/transcripts/CanKaoXinXi/0601-0700/0654.md#" + quote(
+        "富豪排队补税", safe=""
     )
     assert f'href="{anchored}"' in response.text
     # A heading without an anchor links to the document top.
-    assert 'href="/transcripts/CanKaoXinXi/0601-0700/0654.md" data-route' in response.text
+    assert (
+        'href="/transcripts/CanKaoXinXi/0601-0700/0654.md" data-route' in response.text
+    )
     assert 'class="latest-end-chip"' in response.text
     assert upstream.calls[0][0] == server.LATEST_ENDPOINT
     # Inside the micro-cache TTL a second render must not hit the agent again.

@@ -67,6 +67,11 @@ const els = {
   readerState: document.getElementById("reader-state"),
   chatPane: document.getElementById("chat-pane"),
   searchPane: document.getElementById("search-pane"),
+  searchForm: document.getElementById("search-form"),
+  searchInput: document.getElementById("search-input"),
+  searchGo: document.getElementById("search-go"),
+  searchResults: document.getElementById("search-results"),
+  searchStatus: document.getElementById("search-status"),
   modeTabs: document.getElementById("mode-tabs"),
   modeTabChat: document.getElementById("mode-tab-chat"),
   modeTabSearch: document.getElementById("mode-tab-search"),
@@ -782,6 +787,162 @@ function setMode(mode) {
     tab.setAttribute("aria-selected", selected ? "true" : "false");
     tab.tabIndex = selected ? 0 : -1;
   }
+  syncChatPanelAccessibility();
+}
+
+/* ------------------------------------------------------------------ search */
+
+// 传统搜索 state. Results stay in the pane when the user flips back to
+// AI对话; a new search replaces them. The cursor returned by the backend is
+// bound to the analyzed terms and page size, so it is only used verbatim.
+let searchState = null;
+let searchSeq = 0;
+
+function searchSnippetNode(uri, snippet) {
+  const row = document.createElement("a");
+  row.className = "search-snippet";
+  row.href =
+    transcriptPath(uri) +
+    (snippet.heading_anchor ? `#${encodeURIComponent(snippet.heading_anchor)}` : "");
+  row.dataset.route = "";
+  if (snippet.heading) {
+    const heading = document.createElement("span");
+    heading.className = "search-snippet-heading";
+    heading.textContent = snippet.heading;
+    row.appendChild(heading);
+  }
+  const text = document.createElement("p");
+  text.className = "search-snippet-text";
+  for (const part of snippet.parts) {
+    const span = document.createElement("span");
+    if (part.highlight) span.className = "search-hit";
+    span.textContent = part.text;
+    text.appendChild(span);
+  }
+  row.appendChild(text);
+  return row;
+}
+
+function searchResultNode(result) {
+  const li = document.createElement("article");
+  li.className = "search-result";
+  const head = document.createElement("a");
+  head.className = "search-result-link";
+  head.href = transcriptPath(result.doc_id);
+  head.dataset.route = "";
+  const title = document.createElement("span");
+  title.className = "search-result-title";
+  title.textContent = result.source_title || result.title || result.doc_id;
+  head.appendChild(title);
+  if (result.publication_date) {
+    const meta = document.createElement("span");
+    meta.className = "search-result-meta";
+    meta.textContent = result.publication_date;
+    head.appendChild(meta);
+  }
+  li.appendChild(head);
+  for (const snippet of result.snippets) {
+    li.appendChild(searchSnippetNode(result.doc_id, snippet));
+  }
+  return li;
+}
+
+function renderSearchPage(data, { append }) {
+  const more = els.searchResults.querySelector(".search-more");
+  more?.remove();
+  if (append) {
+    els.searchResults.append(
+      ...data.results.map((result) => searchResultNode(result)),
+    );
+  } else {
+    els.searchResults.replaceChildren(
+      ...data.results.map((result) => searchResultNode(result)),
+    );
+  }
+  if (data.next_cursor) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "search-more";
+    button.textContent = "加载更多";
+    button.addEventListener("click", () => void loadMoreSearch());
+    els.searchResults.appendChild(button);
+  }
+}
+
+function setSearchStatus(text, { busy = false } = {}) {
+  els.searchStatus.textContent = text;
+  els.searchStatus.classList.toggle("is-busy", busy);
+}
+
+async function fetchSearchPage(query, cursor) {
+  const params = new URLSearchParams({ q: query, limit: "20" });
+  if (cursor) params.set("cursor", cursor);
+  const response = await fetch(`/api/search?${params}`);
+  if (!response.ok) {
+    // 410: the paged snapshot was retired mid-flip; 422: the query itself
+    // holds no searchable words; everything else reads as "service down".
+    if (response.status === 410) throw new Error("stale");
+    if (response.status === 422) throw new Error("query");
+    throw new Error("service");
+  }
+  return response.json();
+}
+
+async function runSearch(query) {
+  const seq = ++searchSeq;
+  searchState = { query, cursor: null, total: 0, busy: true };
+  els.searchResults.replaceChildren();
+  setSearchStatus("正在搜索…", { busy: true });
+  els.searchGo.disabled = true;
+  try {
+    const data = await fetchSearchPage(query, null);
+    if (seq !== searchSeq) return;
+    searchState = {
+      query,
+      cursor: data.next_cursor,
+      total: data.total,
+      busy: false,
+    };
+    renderSearchPage(data, { append: false });
+    setSearchStatus(
+      data.total > 0 ? `找到 ${data.total} 篇相关文稿` : "没有匹配的文稿，换个说法试试。",
+    );
+  } catch (error) {
+    if (seq !== searchSeq) return;
+    searchState.busy = false;
+    els.searchResults.replaceChildren();
+    if (error.message === "stale") setSearchStatus("搜索已过期，请重新搜索。");
+    else if (error.message === "query")
+      setSearchStatus("请输入有效的搜索词，例如：贵州 债务。");
+    else setSearchStatus("搜索服务暂时不可用，请稍后重试。");
+  } finally {
+    if (seq === searchSeq) els.searchGo.disabled = false;
+  }
+}
+
+async function loadMoreSearch() {
+  if (!searchState?.cursor || searchState.busy) return;
+  const seq = searchSeq;
+  searchState.busy = true;
+  setSearchStatus("正在加载更多…", { busy: true });
+  els.searchGo.disabled = true;
+  try {
+    const data = await fetchSearchPage(searchState.query, searchState.cursor);
+    if (seq !== searchSeq) return;
+    searchState.cursor = data.next_cursor;
+    searchState.total = data.total;
+    renderSearchPage(data, { append: true });
+    setSearchStatus(`找到 ${searchState.total} 篇相关文稿`);
+  } catch (error) {
+    if (seq !== searchSeq) return;
+    if (error.message === "stale") setSearchStatus("搜索已过期，请重新搜索。");
+    else setSearchStatus("加载失败，请稍后重试。");
+  } finally {
+    if (seq === searchSeq) {
+      searchState.busy = false;
+      els.searchGo.disabled = false;
+    }
+  }
 }
 
 function preferredArchiveChannel() {
@@ -1413,16 +1574,21 @@ function navigate(href) {
 /* --------------------------------------------------------- chat pane state */
 
 function syncChatPanelAccessibility() {
-  // Mobile uses full-screen modes (tabs), not a side drawer.
+  // Mobile uses full-screen modes (tabs), not a side drawer. 传统搜索 is one
+  // of those modes: whichever of the two left panes is showing owns focus.
   if (mobileLayout.matches) {
     const browse = document.body.dataset.view === "browse";
-    els.chatPane.toggleAttribute("inert", browse);
-    els.chatPane.toggleAttribute("aria-hidden", browse);
+    const searching =
+      document.body.dataset.mode === "search" && !browse;
+    els.chatPane.toggleAttribute("inert", browse || searching);
+    els.chatPane.toggleAttribute("aria-hidden", browse || searching);
+    els.searchPane.toggleAttribute("inert", browse || !searching);
     return;
   }
-  // Desktop never hides chat.
+  // Desktop never hides chat; the search pane toggles by display.
   els.chatPane.toggleAttribute("inert", false);
   els.chatPane.removeAttribute("aria-hidden");
+  els.searchPane.toggleAttribute("inert", false);
 }
 
 els.archiveSearch.addEventListener("input", () => renderArchive());
@@ -2273,6 +2439,13 @@ if (els.modeTabs) {
     setMode(next.dataset.mode);
   });
 }
+
+// 传统搜索: explicit submit (button or Enter) — no live-as-you-type calls.
+els.searchForm?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const query = els.searchInput.value.trim();
+  if (query) void runSearch(query);
+});
 
 const initialDataPromise = Promise.all([
   loadSampleQuestions(),
