@@ -37,7 +37,7 @@ from html import escape
 from html.parser import HTMLParser
 from importlib import metadata
 from pathlib import Path, PurePosixPath
-from typing import Annotated
+from typing import Annotated, Any
 from urllib.parse import quote, urlencode, urlsplit
 from xml.sax.saxutils import escape as xml_escape
 
@@ -63,6 +63,9 @@ AGENT_BACKEND_PORT = os.environ.get("AGENT_BACKEND_PORT", "8000")
 AGENT_BASE_URL = f"http://{AGENT_BACKEND_HOST}:{AGENT_BACKEND_PORT}"  # NOSONAR
 CHAT_ENDPOINT = f"{AGENT_BASE_URL}/chat"
 TRANSCRIPTS_ENDPOINT = f"{AGENT_BASE_URL}/transcripts"
+# Internal-only: the agent's landing-desk payload. Rendered into the home page
+# server-side; never proxied, so no public API exposes the newest list.
+LATEST_ENDPOINT = f"{AGENT_BASE_URL}/latest"
 
 STATIC_DIR = Path(__file__).parent / "static"
 PAGE_TEMPLATE = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
@@ -248,6 +251,82 @@ def _channel_path(channel: str) -> str:
 def _transcript_path(doc_id: str) -> str:
     encoded = "/".join(quote(part, safe="") for part in doc_id.split("/"))
     return f"/transcripts/{encoded}"
+
+
+# ---------------------------------------------------------------- latest desk
+# The home page renders the agent's in-memory latest-desk payload (fixed size,
+# rebuilt per snapshot) straight into the HTML: no public endpoint, and the
+# landing load makes zero transcript requests. A 30 s micro-cache here only
+# absorbs request bursts; freshness is the agent's snapshot switch.
+LATEST_DESK_TTL_SECONDS = 30.0
+_latest_desk_html_cache: dict[str, Any] = {}
+
+
+def _render_latest_desk(items: list[dict[str, Any]]) -> str:
+    """The landing desk markup, mirroring the reader projection's anchors."""
+    if not items:
+        return '<p class="latest-state">暂无文稿。</p>'
+    rows = []
+    for item in items:
+        doc_id = str(item.get("doc_id") or "")
+        path = escape(_transcript_path(doc_id), quote=True)
+        title = item.get("source_title") or item.get("canonical_title") or doc_id
+        meta = item.get("publication_date") or ""
+        meta_html = (
+            f'<span class="latest-item-meta">{escape(str(meta))}</span>' if meta else ""
+        )
+        heading_links = []
+        for heading in item.get("headings") or []:
+            text = str(heading.get("text") or "")
+            if not text:
+                continue
+            anchor = str(heading.get("anchor") or "")
+            fragment = f"#{quote(anchor, safe='')}" if anchor else ""
+            heading_links.append(
+                f'<li><a href="{path}{fragment}" data-route="">{escape(text)}</a></li>'
+            )
+        rows.append(
+            f'<li class="latest-item">'
+            f'<a class="latest-item-link" href="{path}" data-route="">'
+            f'<span class="latest-item-title">{escape(str(title))}</span>{meta_html}</a>'
+            f'<ul class="latest-item-headings">{"".join(heading_links)}</ul>'
+            f"</li>"
+        )
+    end_chips = "".join(
+        f'<a class="latest-end-chip" href="/transcripts?channel={channel}"'
+        f' data-route="">{escape(CHANNEL_LABELS[channel])}</a>'
+        for channel in CHANNEL_ORDER
+    )
+    return (
+        f'<ol class="latest-list" id="latest-list">{"".join(rows)}</ol>'
+        f'<div class="latest-end" id="latest-end">'
+        f'<p class="latest-end-label">浏览全部文稿</p>'
+        f'<div class="latest-end-chips" id="latest-end-chips">{end_chips}</div>'
+        f"</div>"
+    )
+
+
+async def _latest_desk_html() -> str:
+    """Rendered desk from the agent, or the last one on upstream failure."""
+    cached = _latest_desk_html_cache.get("html")
+    if cached and (
+        time.monotonic() - _latest_desk_html_cache.get("at", 0.0)
+        < LATEST_DESK_TTL_SECONDS
+    ):
+        return cached
+    try:
+        payload = await _fetch_upstream_json(LATEST_ENDPOINT)
+        html = _render_latest_desk(payload.get("items") or [])
+        _latest_desk_html_cache.clear()
+        _latest_desk_html_cache["at"] = time.monotonic()
+        _latest_desk_html_cache["html"] = html
+        return html
+    except _UpstreamError:
+        # A stale desk beats an empty one; the note only shows when nothing
+        # has ever rendered.
+        if cached:
+            return cached
+        return '<p class="latest-state">文稿目录暂时不可用，请稍后重试。</p>'
 
 
 def _validate_transcript_uri(doc_id: str) -> str:
@@ -622,6 +701,7 @@ def _render_shell(
     article: dict | None = None,
     extra_json_ld: list[dict] | None = None,
     noindex: bool = False,
+    latest_desk: str = "",
 ) -> str:
     canonical_url = _absolute_url(canonical_path)
     replacements = {
@@ -651,6 +731,8 @@ def _render_shell(
         "__READER_TITLE__": escape(reader.title),
         "__READER_BODY__": reader.body,
         "__READER_STATE__": escape(reader.state),
+        "__LATEST_HIDDEN__": "" if latest_desk else "hidden",
+        "__LATEST_DESK__": latest_desk,
     }
     rendered = PAGE_TEMPLATE
     for placeholder, value in replacements.items():
@@ -997,6 +1079,7 @@ async def home(request: Request) -> Response:
         description=SITE_DESCRIPTION,
         canonical_path="/",
         extra_json_ld=[website_json_ld],
+        latest_desk=await _latest_desk_html(),
     )
     return _generated_response(request, html, media_type="text/html")
 

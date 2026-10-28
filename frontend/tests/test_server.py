@@ -2,6 +2,8 @@ import json
 import re
 import xml.etree.ElementTree as ET
 
+from urllib.parse import quote
+
 import httpx
 import pytest
 import server
@@ -34,11 +36,12 @@ class _FakeUpstreamClient:
 
 @pytest.fixture
 def client(monkeypatch):
-    # monkeypatch restores all three module globals after every test, so no
-    # test can leak a fake upstream or a warm short-link cache into the next.
+    # monkeypatch restores all four module globals after every test, so no
+    # test can leak a fake upstream or a warm cache into the next.
     monkeypatch.setattr(server, "_client", None)
     monkeypatch.setattr(server, "_SHORT_ID_CACHE", None)
     monkeypatch.setattr(server, "_SHORT_ID_BUILT_AT", 0.0)
+    monkeypatch.setattr(server, "_latest_desk_html_cache", {})
     test_client = TestClient(server.app)
     try:
         yield test_client
@@ -914,6 +917,81 @@ def test_pages_cannot_be_framed(client):
     headers = client.get("/healthz").headers
     assert "frame-ancestors 'none'" in headers["content-security-policy"]
     assert headers["x-frame-options"] == "DENY"
+
+
+def _latest_desk_payload():
+    return {
+        "snapshot_id": "s_test",
+        "items": [
+            {
+                "doc_id": "CanKaoXinXi/0601-0700/0654.md",
+                "canonical_title": "参考信息654",
+                "source_title": "【参考信息654】再查“不想生不敢生”",
+                "channel": "CanKaoXinXi",
+                "publication_date": "2026-09-23",
+                "headings": [
+                    {"text": "富豪排队补税", "anchor": "富豪排队补税"},
+                    {"text": "青年跨国抗议", "anchor": ""},
+                ],
+            }
+        ],
+    }
+
+
+def test_home_renders_latest_desk_from_agent_cache(client, monkeypatch):
+    upstream = _FakeJsonClient(_json_upstream(200, _latest_desk_payload()))
+    monkeypatch.setattr(server, "_client", upstream)
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert (
+        '<span class="latest-item-title">【参考信息654】再查“不想生不敢生”</span>'
+        in response.text
+    )
+    assert '<span class="latest-item-meta">2026-09-23</span>' in response.text
+    anchored = (
+        "/transcripts/CanKaoXinXi/0601-0700/0654.md#"
+        + quote("富豪排队补税", safe="")
+    )
+    assert f'href="{anchored}"' in response.text
+    # A heading without an anchor links to the document top.
+    assert 'href="/transcripts/CanKaoXinXi/0601-0700/0654.md" data-route' in response.text
+    assert 'class="latest-end-chip"' in response.text
+    assert upstream.calls[0][0] == server.LATEST_ENDPOINT
+    # Inside the micro-cache TTL a second render must not hit the agent again.
+    client.get("/")
+    assert len(upstream.calls) == 1
+
+
+def test_home_latest_desk_serves_stale_on_upstream_failure(client, monkeypatch):
+    good = _FakeJsonClient(_json_upstream(200, _latest_desk_payload()))
+    monkeypatch.setattr(server, "_client", good)
+    assert client.get("/").status_code == 200
+
+    broken = _FakeJsonClient(error=httpx.ConnectError("boom"))
+    monkeypatch.setattr(server, "_client", broken)
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert 'class="latest-item-title"' in response.text
+
+
+def test_home_latest_desk_shows_note_without_any_cache(client, monkeypatch):
+    broken = _FakeJsonClient(error=httpx.ConnectError("boom"))
+    monkeypatch.setattr(server, "_client", broken)
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "文稿目录暂时不可用" in response.text
+    assert "latest-item-title" not in response.text
+
+
+def test_latest_desk_has_no_public_api(client):
+    # The desk is rendered server-side only; the internal agent endpoint must
+    # never gain a proxied twin under /api.
+    assert client.get("/api/latest").status_code == 404
 
 
 def test_page_carries_the_public_base_url_for_the_client(client, monkeypatch):

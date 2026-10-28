@@ -71,10 +71,6 @@ const els = {
   modeTabChat: document.getElementById("mode-tab-chat"),
   modeTabSearch: document.getElementById("mode-tab-search"),
   latestView: document.getElementById("latest-view"),
-  latestList: document.getElementById("latest-list"),
-  latestEnd: document.getElementById("latest-end"),
-  latestEndChips: document.getElementById("latest-end-chips"),
-  latestState: document.getElementById("latest-state"),
   tabChat: document.getElementById("tab-chat"),
   tabArchive: document.getElementById("tab-archive"),
 };
@@ -661,16 +657,13 @@ function renderArchive(items = transcriptItems || []) {
 
 /* ------------------------------------------------------------------- latest */
 
-// The desktop landing desk: the newest transcripts, each with its topic
-// headings. Rebuilt on every landing — the index and the per-document
-// projections are fetched fresh, so newly published episodes simply become
-// the new top of the list; nothing about the selection is persisted.
-const LATEST_COUNT = 50;
+// The desk itself is server-rendered into the home page (agent's snapshot-
+// keyed cache); only the reader-side anchor helpers below are client code.
 
 // Client-side mirror of indexer/src/anchors.py: the anchor of a topic heading
 // is its slug. Newer snapshots ship the ids on the topic h2s; legacy ones do
-// not, so the reader body gets the missing ids here and hash links jump to
-// the paragraph instead of the document top.
+// not, so the reader body gets the missing ids here and hash links (citations,
+// the landing desk's heading chips) jump to the paragraph, not the doc top.
 function headingSlug(text) {
   let value = text.trim();
   const mdLink = /\[([^\[\]]*)\]\([^)]*\)/g;
@@ -716,144 +709,9 @@ function ensureHeadingAnchors(container) {
   }
 }
 
-// Topic h2s of the body: everything between 正文 and 附录, each with the
-// anchor a reader of the same body would land on.
-function latestHeadings(bodyHtml) {
-  const frame = new DOMParser().parseFromString(bodyHtml || "", "text/html");
-  const used = new Set();
-  const out = [];
-  for (const heading of frame.querySelectorAll("h2")) {
-    const text = heading.textContent.trim();
-    if (!text || text === "正文" || text === "附录") continue;
-    let anchor = heading.id;
-    if (!anchor) {
-      const base = headingSlug(text);
-      if (!base) continue;
-      let suffix = 2;
-      anchor = base;
-      while (used.has(anchor)) anchor = `${base}-${suffix++}`;
-    }
-    used.add(anchor);
-    out.push({ text, anchor });
-  }
-  return out;
-}
-
-function latestItemNode(item) {
-  const li = document.createElement("li");
-  li.className = "latest-item";
-
-  const head = document.createElement("a");
-  head.className = "latest-item-link";
-  head.href = transcriptPath(item.doc_id);
-  head.dataset.route = "";
-  const title = document.createElement("span");
-  title.className = "latest-item-title";
-  title.textContent = item.source_title || item.canonical_title || item.doc_id;
-  head.append(title);
-  // The episode title already carries the channel name (【参考信息654】…), so
-  // the meta slot shows the date alone.
-  if (item.publication_date) {
-    const meta = document.createElement("span");
-    meta.className = "latest-item-meta";
-    meta.textContent = item.publication_date;
-    head.append(meta);
-  }
-  li.appendChild(head);
-
-  const headings = document.createElement("ul");
-  headings.className = "latest-item-headings";
-  const pending = document.createElement("li");
-  pending.className = "latest-item-pending";
-  pending.setAttribute("aria-hidden", "true");
-  headings.appendChild(pending);
-  li.appendChild(headings);
-  return li;
-}
-
-async function fillLatestHeadings(node, uri, generation) {
-  try {
-    const response = await fetch(
-      `/api/transcripts/${uri.split("/").map(encodeURIComponent).join("/")}`,
-    );
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const article = await response.json();
-    if (generation !== routeGeneration || panelLevel !== "latest") return;
-    const listNode = node.querySelector(".latest-item-headings");
-    if (!listNode) return;
-    const headings = latestHeadings(article.body_html);
-    if (!headings.length) {
-      listNode.remove();
-      return;
-    }
-    listNode.replaceChildren(
-      ...headings.map((heading) => {
-        const li = document.createElement("li");
-        const link = document.createElement("a");
-        link.href = transcriptPath(uri) + (heading.anchor ? `#${encodeURIComponent(heading.anchor)}` : "");
-        link.dataset.route = "";
-        link.textContent = heading.text;
-        li.appendChild(link);
-        return li;
-      }),
-    );
-  } catch (error) {
-    if (generation !== routeGeneration || panelLevel !== "latest") return;
-    console.error("Latest transcript headings unavailable.", error);
-    node.querySelector(".latest-item-headings")?.remove();
-  }
-}
-
-async function renderLatest() {
-  const generation = routeGeneration;
-  els.latestList.replaceChildren();
-  els.latestEnd.hidden = true;
-  els.latestState.hidden = true;
-  try {
-    const items = await loadTranscriptIndex();
-    if (generation !== routeGeneration || panelLevel !== "latest") return;
-    // Newest publication_date first, same key as the archive; undated last.
-    const newest = items
-      .slice()
-      .sort((a, b) => {
-        const ka = archiveSortKey(a);
-        const kb = archiveSortKey(b);
-        if (ka < kb) return 1;
-        if (ka > kb) return -1;
-        return 0;
-      })
-      .slice(0, LATEST_COUNT);
-    if (!newest.length) {
-      els.latestState.hidden = false;
-      els.latestState.textContent = "暂无文稿。";
-      return;
-    }
-    const nodes = newest.map(latestItemNode);
-    els.latestList.replaceChildren(...nodes);
-    for (const [index, item] of newest.entries()) {
-      void fillLatestHeadings(nodes[index], item.doc_id, generation);
-    }
-    // End matter: one chip per channel into the full archives. The five
-    // columns are fixed, so the chips are rebuilt cheaply on every render.
-    els.latestEndChips.replaceChildren(
-      ...CHANNEL_ORDER.map((channel) => {
-        const chip = document.createElement("a");
-        chip.className = "latest-end-chip";
-        chip.href = `/transcripts?channel=${encodeURIComponent(channel)}`;
-        chip.dataset.route = "";
-        chip.textContent = channelLabel(channel);
-        return chip;
-      }),
-    );
-    els.latestEnd.hidden = false;
-  } catch (error) {
-    if (generation !== routeGeneration || panelLevel !== "latest") return;
-    console.error("Transcript index unavailable.", error);
-    els.latestEnd.hidden = true;
-    els.latestState.hidden = false;
-    els.latestState.textContent = "文稿目录暂时不可用，请稍后重试。";
-  }
-}
+// The landing desk itself (最新文稿) needs no client code: the home page
+// server-renders it from the agent's snapshot-keyed cache. showChat() only
+// opens the pane over that markup.
 
 /* --------------------------------------------------------------- panel view */
 
@@ -1466,8 +1324,9 @@ function showChat() {
     setPanelLevel(null);
   } else {
     setView("browse");
+    // The desk markup is already in the page (server-rendered); opening the
+    // pane over it needs no fetch.
     setPanelLevel("latest");
-    void renderLatest();
   }
   document.title = "睡前消息知识库";
 }

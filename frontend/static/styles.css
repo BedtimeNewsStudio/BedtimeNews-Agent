@@ -1171,40 +1171,26 @@ body[data-mode="search"] .chat-pane {
   letter-spacing: 0.12em;
 }
 
-/* Clipped to zero width rather than display:none, because a display switch
-   cannot be animated. app.js marks it inert while it is shut, so it stays out
-   of the tab order and the accessibility tree. */
+/* Clipped-to-zero pane states are gone: desktop is a permanent split (below),
+   mobile swaps full-screen modes. app.js still marks the pane inert while a
+   route keeps it out of the accessibility tree. */
 .reading-pane {
-  flex: 0 0 0%;
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border-left: 0 solid var(--line);
-  transition: flex-basis 0.46s var(--ease), border-left-width 0.46s var(--ease);
+  border-left: 1px solid var(--line);
   /* Shared inset so chrome, list, and article share one vertical edge. */
   --reading-inline: clamp(1rem, 2.4vw, 1.5rem);
   --reading-max: var(--content-max);
-}
-
-body[data-view="browse"] .reading-pane {
-  flex-basis: 50%;
-  border-left-width: 1px;
 }
 
 .reading-scroll {
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden auto;
-  opacity: 0;
   background: var(--bg);
-  transition: opacity 0.2s var(--ease);
-}
-
-body[data-view="browse"] .reading-scroll {
-  opacity: 1;
-  transition-delay: 0s;
 }
 
 .reading-bar {
@@ -1383,20 +1369,6 @@ body[data-view="browse"] .reading-scroll {
 .latest-item-headings a:focus-visible {
   color: var(--accent);
   border-color: var(--accent);
-}
-
-.latest-item-pending {
-  min-height: 0.9rem;
-  background: var(--surface);
-  border-radius: 0.25rem;
-  width: min(18rem, 60%);
-  animation: latest-pulse 1.2s var(--ease) infinite;
-}
-
-@keyframes latest-pulse {
-  50% {
-    opacity: 0.55;
-  }
 }
 
 /* --------------------------------------------------------- latest end matter
@@ -1905,22 +1877,19 @@ body[data-view="browse"] .reading-scroll {
     flex-wrap: nowrap;
   }
 
-  /* The tabs belong to the chat column: when the reading pane opens at exactly
-     half the viewport, the outer bar yields that half so the inner bar stays
-     centred over the chat column. The padding animates with the same timing
-     as the pane's flex-basis transition. */
-  .mode-tabs {
-    transition: padding-right 0.46s var(--ease);
+  /* The desk half is permanent: the pane sits at 50% from first paint (the
+     server-rendered home page carries the desk), so no open/close animation
+     exists and the tabs live over the chat column unconditionally. */
+  .reading-pane {
+    flex: 0 0 50%;
+    border-left-width: 1px;
   }
 
-  body[data-view="browse"] .mode-tabs {
+  .mode-tabs {
     padding-right: 50%;
   }
 
-  /* When the chat half is narrower than --content-max, the stage's inline
-     gutters squeeze the text column; shrink the bar the same amount so it
-     keeps hugging the text at any width. */
-  body[data-view="browse"] .mode-tabs-inner {
+  .mode-tabs-inner {
     width: calc(100% - 2 * clamp(1rem, 4vw, 2rem));
   }
 
@@ -2120,10 +2089,6 @@ body[data-view="browse"] .reading-scroll {
     z-index: 1;
     visibility: hidden;
     pointer-events: none;
-  }
-
-  body[data-view="browse"] .reading-scroll {
-    opacity: 1;
   }
 
   .chat-pane .stage {

@@ -6,6 +6,7 @@ import json
 import logging
 from contextlib import asynccontextmanager
 from pathlib import PurePosixPath
+from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query, Request, status
 from fastapi.encoders import jsonable_encoder
@@ -19,6 +20,7 @@ from .snapshots import SnapshotUnavailable, snapshot_manager
 from .vector_db import (
     close_connection_pool,
     get_transcript,
+    latest_desk,
     list_transcripts,
 )
 
@@ -225,3 +227,45 @@ async def transcript_detail(doc_id: str, request: Request) -> Response:
     if article is None:
         raise HTTPException(status_code=404, detail="Transcript not found")
     return _conditional_json(request, article, _etag_for(article))
+
+
+# Fixed backend-side on purpose: the landing desk's size is not a client knob,
+# and this endpoint is internal-only — web renders it server-side and must not
+# proxy it — so no public API exposes the newest-transcripts list.
+LATEST_DESK_SIZE = 50
+_latest_desk_cache: dict[str, Any] = {}
+_latest_desk_lock = asyncio.Lock()
+
+
+@app.get("/latest", include_in_schema=False)
+async def latest_desk_endpoint() -> Response:
+    """Landing-desk payload, rebuilt only when the snapshot id changes.
+
+    Snapshots are immutable, so the snapshot id is a complete cache key: a
+    rebuild happens on the first request after the poller switches snapshots,
+    under a lock so concurrent cold requests share one build.
+    """
+    async with _latest_desk_lock:
+        try:
+            snapshot = snapshot_manager.require()
+        except SnapshotUnavailable as exc:
+            logger.warning("Latest desk unavailable: %s", exc)
+            raise _transcripts_unavailable() from exc
+        if _latest_desk_cache.get("snapshot_id") != snapshot.snapshot_id:
+            try:
+                items = await asyncio.to_thread(
+                    latest_desk,
+                    snapshot.schema_name,
+                    LATEST_DESK_SIZE,
+                    snapshot.format_version >= 2,
+                )
+            except Exception as exc:
+                logger.exception("Latest desk unavailable")
+                raise _transcripts_unavailable() from exc
+            _latest_desk_cache.clear()
+            _latest_desk_cache["snapshot_id"] = snapshot.snapshot_id
+            _latest_desk_cache["payload"] = {
+                "snapshot_id": snapshot.snapshot_id,
+                "items": items,
+            }
+    return JSONResponse(jsonable_encoder(_latest_desk_cache["payload"]))

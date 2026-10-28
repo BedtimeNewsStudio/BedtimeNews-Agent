@@ -325,6 +325,59 @@ def list_transcripts(schema: str) -> list[dict[str, Any]]:
         return [dict(row) for row in cursor.fetchall()]
 
 
+def latest_desk(schema: str, size: int, with_anchors: bool) -> list[dict[str, Any]]:
+    """The newest transcripts with their ordered topic headings.
+
+    Landing-desk payload for the reader home page, cached in memory by the
+    caller and rebuilt only when the snapshot changes. Headings come from the
+    chunk table — the same citation data answers use — so the body text is
+    never read here. ``with_anchors`` is False for format 1 snapshots, whose
+    chunks carry no ``heading_anchor``; those items get empty heading lists.
+    """
+    with _Connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            sql.SQL(
+                """
+                SELECT doc_id, canonical_title, source_title, channel,
+                       publication_date
+                FROM {transcripts}
+                ORDER BY publication_date DESC NULLS LAST, doc_id DESC
+                LIMIT %s;
+                """
+            ).format(transcripts=_table(schema, "transcripts")),
+            (size,),
+        )
+        items = [dict(row) for row in cursor.fetchall()]
+        if not items or not with_anchors:
+            return items
+        cursor.execute(
+            sql.SQL(
+                """
+                SELECT c.doc_id, c.heading, c.heading_anchor,
+                       MIN(c.chunk_index) AS first_chunk
+                FROM {chunks} c
+                WHERE c.doc_id = ANY(%s)
+                GROUP BY c.doc_id, c.heading, c.heading_anchor
+                ORDER BY c.doc_id, MIN(c.chunk_index);
+                """
+            ).format(chunks=_table(schema, "document_chunks")),
+            ([item["doc_id"] for item in items],),
+        )
+        headings: dict[str, list[dict[str, Any]]] = {}
+        for row in cursor.fetchall():
+            # 正文/附录 are document structure, not topics; a missing anchor
+            # still renders, it just links to the document top.
+            if row["heading"] in (None, "", "正文", "附录"):
+                continue
+            headings.setdefault(row["doc_id"], []).append(
+                {"text": row["heading"], "anchor": row["heading_anchor"] or ""}
+            )
+        for item in items:
+            item["headings"] = headings.get(item["doc_id"], [])
+        return items
+
+
 _markdown_column: dict[str, bool] = {}
 
 
