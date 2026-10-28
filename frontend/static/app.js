@@ -890,8 +890,12 @@ async function fetchSearchPage(query, cursor) {
 
 async function runSearch(query) {
   const seq = ++searchSeq;
+  // First search docks the box to the top row so results read under it.
+  els.searchPane.classList.remove("is-idle");
   searchState = { query, cursor: null, total: 0, busy: true };
-  els.searchResults.replaceChildren();
+  // The previous results stay visible (dimmed, inert) until the new page
+  // arrives — editing the query and re-searching never blanks the pane.
+  els.searchResults.classList.add("is-busy");
   setSearchStatus("正在搜索…", { busy: true });
   els.searchGo.disabled = true;
   try {
@@ -903,6 +907,7 @@ async function runSearch(query) {
       total: data.total,
       busy: false,
     };
+    els.searchResults.classList.remove("is-busy");
     renderSearchPage(data, { append: false });
     setSearchStatus(
       data.total > 0 ? `找到 ${data.total} 篇相关文稿` : "没有匹配的文稿，换个说法试试。",
@@ -910,6 +915,7 @@ async function runSearch(query) {
   } catch (error) {
     if (seq !== searchSeq) return;
     searchState.busy = false;
+    els.searchResults.classList.remove("is-busy");
     els.searchResults.replaceChildren();
     if (error.message === "stale") setSearchStatus("搜索已过期，请重新搜索。");
     else if (error.message === "query")
@@ -2444,7 +2450,11 @@ if (els.modeTabs) {
 els.searchForm?.addEventListener("submit", (event) => {
   event.preventDefault();
   const query = els.searchInput.value.trim();
-  if (query) void runSearch(query);
+  if (query) {
+    void runSearch(query);
+    // Focus returns to the input so the query can be edited and re-run at once.
+    els.searchInput.focus();
+  }
 });
 
 const initialDataPromise = Promise.all([

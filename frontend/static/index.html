@@ -138,12 +138,15 @@
     </section>
 
     <!-- 传统搜索：按词搜索全部正文，结果点击进阅读器。 -->
-    <section class="search-pane" id="search-pane" role="tabpanel" aria-label="传统搜索" hidden>
-      <form class="search-form" id="search-form">
-        <input class="search-input" id="search-input" type="search" placeholder="搜索文稿正文" aria-label="搜索文稿正文"
-          autocomplete="off" spellcheck="false" enterkeyhint="search" maxlength="512" />
-        <button type="submit" class="search-go" id="search-go">搜索</button>
-      </form>
+    <section class="search-pane is-idle" id="search-pane" role="tabpanel" aria-label="传统搜索" hidden>
+      <div class="search-intro">
+        <img class="search-logo" src="/bedtimenews-logo.png" alt="" />
+        <form class="search-form" id="search-form">
+          <input class="search-input" id="search-input" type="search" placeholder="搜索文稿正文" aria-label="搜索文稿正文"
+            autocomplete="off" spellcheck="false" enterkeyhint="search" maxlength="512" />
+          <button type="submit" class="search-go" id="search-go">搜索</button>
+        </form>
+      </div>
       <p class="search-status" id="search-status" role="status"></p>
       <div class="search-results" id="search-results"></div>
     </section>
