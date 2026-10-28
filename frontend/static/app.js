@@ -1607,6 +1607,10 @@ function showLatest() {
   document.title = "最新文稿 · 睡前消息知识库";
 }
 
+// Set by the masthead 最新文稿 link: leave the left pane (AI对话 or 搜索) as
+// it is for the route render it triggers.
+let keepModeOnNextRoute = false;
+
 async function renderRoute() {
   const generation = ++routeGeneration;
   const { pathname, search } = window.location;
@@ -1656,7 +1660,10 @@ async function renderRoute() {
   }
 
   if (pathname === "/latest" || pathname === "/latest/") {
-    setMode("chat");
+    // The masthead link only swaps the reading pane; a load or back/forward
+    // onto /latest starts on AI对话 like the home page.
+    if (!keepModeOnNextRoute) setMode("chat");
+    keepModeOnNextRoute = false;
     showLatest();
     return;
   }
@@ -1741,7 +1748,9 @@ function syncChatPanelAccessibility() {
 document.getElementById("masthead-latest").addEventListener("click", (event) => {
   if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
   event.preventDefault();
+  keepModeOnNextRoute = true;
   navigate("/latest");
+  keepModeOnNextRoute = false;
   // Clicking again on the same route still returns the list to its start.
   els.readingScroll.scrollTo({ top: 0 });
 });

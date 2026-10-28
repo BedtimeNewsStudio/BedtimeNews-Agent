@@ -35,7 +35,7 @@
   --font-mono: ui-monospace, "SF Mono", "Menlo", "Consolas", monospace;
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
   --touch: 44px;
-  --tabbar-h: calc(2.33rem + env(safe-area-inset-bottom, 0px));
+  --tabbar-h: calc(2.9rem + env(safe-area-inset-bottom, 0px));
   --mast-h: 3.25rem;
 }
 
@@ -1249,8 +1249,18 @@ body[data-mode="search"] .chat-pane {
 }
 
 @media (max-width: 900px) {
+  /* Mobile: the idle block sits in the pane itself, centred between the mode
+     tabs and the bottom tab bar; a short screen scrolls instead of letting
+     the logo slide under the tabs. */
+  .search-pane.is-idle {
+    overflow-y: auto;
+  }
+
   .search-pane.is-idle .search-intro {
-    left: 50%;
+    position: static;
+    transform: none;
+    margin: auto;
+    padding-block: 1rem;
     width: min(
       calc(var(--content-max) * 0.75),
       calc(100vw - 2 * var(--reading-inline))
