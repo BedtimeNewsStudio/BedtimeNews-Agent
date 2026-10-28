@@ -426,35 +426,6 @@ body {
   color: var(--accent);
 }
 
-.browse-archive {
-  appearance: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  grid-column: 1 / -1;
-  width: min(100%, 26rem);
-  min-height: 4.75rem;
-  margin: 1.75rem auto 0;
-  padding: 1.25rem 1.75rem;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--surface);
-  color: var(--text);
-  font-family: var(--font-cjk);
-  font-size: 1.35rem;
-  font-weight: 650;
-  letter-spacing: 0.1em;
-  cursor: pointer;
-}
-
-.browse-archive:hover,
-.browse-archive:focus-visible {
-  border-color: var(--accent);
-  color: var(--accent);
-  outline: none;
-}
-
-
 /* ----------------------------------------------------------------------- log */
 .log {
   display: flex;
@@ -1883,10 +1854,79 @@ body[data-mode="search"] .chat-pane {
   .reading-pane {
     flex: 0 0 50%;
     border-left-width: 1px;
+    /* The reading bar is lifted into the tabs' strip (negative margin), so
+       the pane must not clip it; relative anchors the archive title. */
+    overflow: visible;
+    position: relative;
   }
 
+  /* One strip across the top: mode tabs on the chat half, the reading bar
+     lifted over the desk half — equal heights, one shared bottom line. */
   .mode-tabs {
+    height: calc(var(--touch) + 1.1rem);
     padding-right: 50%;
+  }
+
+  .mode-tab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .reading-bar {
+    margin-top: calc(-1 * (var(--touch) + 1.1rem));
+    /* The panes' centre divider runs through the lifted strip. The 1px
+       negative left margin puts the bar's border in the same pixel column
+       as the pane's own border below it — one continuous line. */
+    margin-left: -1px;
+    border-left: 1px solid var(--line);
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Archive and landing levels: the channel/section name rides centred in
+     the strip itself; the content below keeps only its own controls. */
+  body[data-panel="archive"] .archive-head h1,
+  body[data-panel="latest"] .latest-head h1 {
+    position: absolute;
+    top: calc(-1 * (var(--touch) + 1.1rem));
+    left: var(--reading-inline);
+    right: var(--reading-inline);
+    height: calc(var(--touch) + 1.1rem);
+    line-height: calc(var(--touch) + 1.1rem);
+    margin: 0;
+    font-size: 1.25rem;
+    text-align: center;
+    pointer-events: none;
+    z-index: 2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* The lifted title leaves the latest head empty; drop its leftover margin
+     so the list starts level with the archive's search field. */
+  .latest-head {
+    margin-bottom: 0;
+  }
+
+  /* Tighter air between the tabs strip and the sample questions. */
+  .chat-pane .stage {
+    padding-top: clamp(0.8rem, 1.5vw, 1.2rem);
+  }
+
+  /* Eight starters, one per row, left-aligned; the 浏览全部文稿 block takes
+     a full-width footer below them. */
+  .sample-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sample-grid .latest-end {
+    grid-column: 1 / -1;
+  }
+
+  .hero {
+    padding-top: clamp(0.2rem, 1vh, 0.6rem);
   }
 
   .mode-tabs-inner {
@@ -2104,6 +2144,12 @@ body[data-mode="search"] .chat-pane {
     padding-bottom: calc(0.55rem + var(--keyboard-inset, 0px));
   }
 
+  /* Mobile archive is a full-screen mode reached from the bottom 文稿 tab;
+     the AI对话/传统搜索 switch belongs to the chat surface only. */
+  body[data-view="browse"] .mode-tabs {
+    display: none;
+  }
+
   .mobile-tabbar {
     /* Pinned to the viewport rather than flowing in the body column: after a
        pinch-zoom the layout viewport can scroll, dragging an in-flow bar out
@@ -2230,11 +2276,6 @@ body[data-mode="search"] .chat-pane {
 
   .sample-label {
     display: none;
-  }
-
-  .browse-archive {
-    min-height: var(--touch);
-    margin-top: 1rem;
   }
 
   .stage {

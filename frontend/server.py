@@ -740,7 +740,7 @@ def _render_shell(
     return rendered
 
 
-def _render_error(status_code: int, message: str, path: str = "/") -> str:
+async def _render_error(status_code: int, message: str, path: str = "/") -> str:
     title = "文稿未找到" if status_code == 404 else "文稿服务暂时不可用"
     return _render_shell(
         title=f"{title} · {SITE_NAME}",
@@ -748,6 +748,7 @@ def _render_error(status_code: int, message: str, path: str = "/") -> str:
         canonical_path=path,
         body_view="browse",
         body_panel="reader",
+        latest_desk=await _latest_desk_html(),
         reader=_ReaderShell(title=title, state=message, visible=True),
         noindex=True,
     )
@@ -1148,7 +1149,7 @@ async def transcript_archive(
     if channel is None:
         return RedirectResponse(url="/", status_code=308)
     if len(channel) != 1 or channel[0] not in CHANNEL_LABELS:
-        html = _render_error(404, "这个栏目不存在。", "/transcripts")
+        html = await _render_error(404, "这个栏目不存在。", "/transcripts")
         return _generated_response(
             request, html, media_type="text/html", status_code=404
         )
@@ -1167,7 +1168,7 @@ async def transcript_archive(
             if status_code == 404
             else "文稿目录暂时不可用，请稍后重试。"
         )
-        html = _render_error(status_code, message, canonical_path)
+        html = await _render_error(status_code, message, canonical_path)
         return _generated_response(
             request, html, media_type="text/html", status_code=status_code
         )
@@ -1181,6 +1182,7 @@ async def transcript_archive(
         description=description,
         canonical_path=canonical_path,
         active_channel=selected,
+        latest_desk=await _latest_desk_html(),
         body_view="browse",
         body_panel="archive",
         archive=_ArchiveShell(title=channel_title, groups=groups, visible=True),
@@ -1194,7 +1196,7 @@ async def transcript_page(doc_id: str, request: Request) -> Response:
     try:
         canonical_doc_id = _validate_transcript_uri(doc_id)
     except ValueError:
-        html = _render_error(404, "这篇文稿不存在。", request.url.path)
+        html = await _render_error(404, "这篇文稿不存在。", request.url.path)
         return _generated_response(
             request, html, media_type="text/html", status_code=404
         )
@@ -1214,7 +1216,7 @@ async def transcript_page(doc_id: str, request: Request) -> Response:
             if status_code == 404
             else "文稿服务暂时不可用，请稍后重试。"
         )
-        html = _render_error(status_code, message, canonical_path)
+        html = await _render_error(status_code, message, canonical_path)
         return _generated_response(
             request, html, media_type="text/html", status_code=status_code
         )
@@ -1263,6 +1265,7 @@ async def transcript_page(doc_id: str, request: Request) -> Response:
         canonical_path=canonical_path,
         og_type="article",
         active_channel=active_channel,
+        latest_desk=await _latest_desk_html(),
         body_view="browse",
         body_panel="reader",
         ssr_doc_id=canonical_doc_id,

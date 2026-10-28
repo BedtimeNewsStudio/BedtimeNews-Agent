@@ -430,22 +430,27 @@ function renderSampleQuestions() {
     els.grid.appendChild(group);
   }
 
-  // Desktop only: same destination as the masthead「睡前消息」chip. Mobile uses
-  // the bottom「文稿」tab instead, so this control would be redundant there.
+  // Desktop only: same destination set as the landing desk's footer. Mobile
+  // uses the bottom「文稿」tab instead, so this block would be redundant there.
   if (!mobile) {
-    const browse = document.createElement("button");
-    browse.type = "button";
-    browse.className = "browse-archive";
-    browse.textContent = "浏览文稿";
-    browse.addEventListener("click", () => {
-      try {
-        sessionStorage.setItem("archive-channel", "ShuiQianXiaoXi");
-      } catch {
-        /* ignore */
-      }
-      navigate("/transcripts?channel=ShuiQianXiaoXi");
-    });
-    els.grid.appendChild(browse);
+    const end = document.createElement("div");
+    end.className = "latest-end browse-archive";
+    const label = document.createElement("p");
+    label.className = "latest-end-label";
+    label.textContent = "浏览全部文稿";
+    end.appendChild(label);
+    const chips = document.createElement("div");
+    chips.className = "latest-end-chips";
+    for (const channel of CHANNEL_ORDER) {
+      const chip = document.createElement("a");
+      chip.className = "latest-end-chip";
+      chip.href = `/transcripts?channel=${encodeURIComponent(channel)}`;
+      chip.dataset.route = "";
+      chip.textContent = channelLabel(channel);
+      chips.appendChild(chip);
+    }
+    end.appendChild(chips);
+    els.grid.appendChild(end);
   }
 }
 
@@ -1433,7 +1438,9 @@ els.channelBar.addEventListener("click", (event) => {
   }
   navigate(`/transcripts?channel=${encodeURIComponent(channel)}`);
 });
-els.readingClose.addEventListener("click", () => navigate("/"));
+// Close steps back one level: an article returns to its channel's list, a
+// channel list returns to the landing desk.
+els.readingClose.addEventListener("click", () => navigate(readingBackTarget() ?? "/"));
 els.readingShare?.addEventListener("click", () => {
   if (els.shareSheet?.open) closeShareSheet();
   else void openShareSheet();
@@ -1611,8 +1618,9 @@ document.addEventListener("keydown", (event) => {
     closeShareSheet();
     return;
   }
-  // Escape also backs out of the reading pane, the way it closes a modal.
-  if (panelLevel) navigate("/");
+  // Escape backs out one level, same as the close button: article to its
+  // channel's list, list to the landing desk.
+  if (panelLevel) navigate(readingBackTarget() ?? "/");
 });
 document.addEventListener("click", (event) => {
   if (event.defaultPrevented || event.button !== 0) return;

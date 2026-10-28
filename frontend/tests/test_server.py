@@ -1,5 +1,6 @@
 import json
 import re
+import time
 import xml.etree.ElementTree as ET
 
 from urllib.parse import quote
@@ -268,11 +269,17 @@ def test_channel_archive_is_server_rendered_and_sorted(client, monkeypatch):
         '<link rel="canonical" href="https://bedtime.blog/transcripts?channel=ShuiQianXiaoXi"'
         in response.text
     )
-    assert response.text.index("【睡前消息2】新文稿") < response.text.index(
+    # Order/filtering assertions are scoped to the archive section: the page
+    # now also server-renders the landing desk, which draws from the same
+    # faked upstream and lists other channels.
+    archive_html = response.text[
+        response.text.index('id="archive-view"'):response.text.index('id="reader-view"')
+    ]
+    assert archive_html.index("【睡前消息2】新文稿") < archive_html.index(
         "【睡前消息1】旧文稿"
     )
-    assert "【高见1】其它栏目" not in response.text
-    assert 'href="/transcripts/ShuiQianXiaoXi/0001-0100/0002.md"' in response.text
+    assert "【高见1】其它栏目" not in archive_html
+    assert 'href="/transcripts/ShuiQianXiaoXi/0001-0100/0002.md"' in archive_html
     match = re.search(
         r'<script type="application/ld\+json">(.*?)</script>', response.text, re.DOTALL
     )
@@ -414,6 +421,13 @@ def _stale_connection():
 
 
 def test_transcript_page_retries_once_on_stale_upstream_connection(client, monkeypatch):
+    # Cache the landing desk out of the way so the counted calls are the
+    # article fetch's alone.
+    monkeypatch.setattr(
+        server,
+        "_latest_desk_html_cache",
+        {"at": time.monotonic(), "html": "<!-- cached desk -->"},
+    )
     upstream = _FlakyJsonClient(
         _json_upstream(200, _article_payload()), _stale_connection(), failures=1
     )
