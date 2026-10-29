@@ -83,7 +83,6 @@ const els = {
 let busy = false;
 // Aborts the run in flight when the reader hits stop.
 let abortController = null;
-const mobileLayout = window.matchMedia("(max-width: 900px)");
 // Must match the .reading-pane flex-basis transition in styles.css.
 const PANE_SLIDE_MS = 460;
 
@@ -410,7 +409,7 @@ let searchPlaceholderTimer = null;
 
 function renderSampleQuestions() {
   els.grid.replaceChildren();
-  const mobile = mobileLayout.matches;
+  const { starterCategories } = layout();
   for (const cat of sampleCategories) {
     const topics = shuffle(cat.topics || []).slice(0, PER_CATEGORY);
     if (!topics.length) continue;
@@ -418,8 +417,7 @@ function renderSampleQuestions() {
     const group = document.createElement("section");
     group.className = "sample-group";
 
-    // Desktop keeps category names as structure; mobile drops them for density.
-    if (!mobile) {
+    if (starterCategories) {
       const label = document.createElement("h2");
       label.className = "sample-label";
       label.textContent = cat.name;
@@ -437,9 +435,8 @@ function renderSampleQuestions() {
     els.grid.appendChild(group);
   }
 
-  // Desktop only: same destination set as the landing desk's footer. Mobile
-  // uses the bottom「文稿」tab instead, so this block would be redundant there.
-  if (!mobile) {
+  // Same destination set as the landing desk's footer.
+  if (starterCategories) {
     const end = document.createElement("div");
     end.className = "latest-end browse-archive";
     const label = document.createElement("p");
@@ -728,6 +725,136 @@ function ensureHeadingAnchors(container) {
 // server-renders it from the agent's snapshot-keyed cache. showChat() only
 // opens the pane over that markup.
 
+/* ------------------------------------------------------------------ layouts */
+
+// Desktop and mobile share every component — chat, search, archive, reader —
+// and differ only in how the panes are arranged and where navigation leads:
+//
+// - Desktop (>900px): a permanent split. The conversation (or 搜索) stays
+//   live on the left; the reading pane on the right is always open, showing
+//   the latest desk, a channel list or a transcript.
+// - Mobile (≤900px): one full-screen surface at a time, 检索 (AI对话 or
+//   搜索) or the reading pane, switched by the bottom tabs.
+//
+// Every decision that depends on that difference is made by one of the two
+// objects below; nothing else in the client checks the viewport. Both
+// implement the same members.
+const mobileQuery = window.matchMedia("(max-width: 900px)");
+
+// Read on every call rather than cached: the layout follows the viewport as
+// soon as it crosses the breakpoint (rotation, split view, a resized window).
+function layout() {
+  return mobileQuery.matches ? mobileLayout : desktopLayout;
+}
+
+const desktopLayout = {
+  // Starters keep their category names as structure, and the「浏览全部文稿」
+  // channel links sit under them.
+  starterCategories: true,
+
+  // Both halves stay usable side by side, whatever the reading pane shows.
+  applyView() {
+    els.chatPane.toggleAttribute("inert", false);
+  },
+
+  // The chat pane is never hidden; the search pane toggles by display alone.
+  syncPaneAccess() {
+    els.chatPane.toggleAttribute("inert", false);
+    els.chatPane.removeAttribute("aria-hidden");
+    els.searchPane.toggleAttribute("inert", false);
+  },
+
+  // The landing surface keeps the reading desk open beside the conversation
+  // with the newest transcripts, so the pane never sits empty. The desk markup
+  // is already in the page (server-rendered); opening it needs no fetch.
+  showHome() {
+    setView("browse");
+    setPanelLevel("latest");
+  },
+
+  // /search keeps whatever the reading pane already has, or opens the desk on
+  // first load.
+  showSearch() {
+    if (!panelLevel) {
+      setView("browse");
+      setPanelLevel("latest");
+    }
+  },
+
+  // While a transcript is open beside the results, the address keeps pointing
+  // at that transcript.
+  searchOwnsUrl() {
+    return panelLevel !== "reader";
+  },
+
+  // Close steps back one level: an article returns to its channel's list, a
+  // channel list returns to the landing desk. The left half never went away,
+  // so there is nothing to return to there.
+  closeTarget() {
+    return readingBackTarget() ?? "/";
+  },
+
+  // Every route lands beside the reading desk, so the composer may take focus.
+  autofocusOnLoad() {
+    return true;
+  },
+};
+
+const mobileLayout = {
+  // A flat list for density. The bottom「文稿」tab already leads to every
+  // channel, so the browse links would be redundant.
+  starterCategories: false,
+
+  // Full-screen surfaces: while the reading pane is up, the chat pane is inert
+  // and focus moves out of it.
+  applyView(browse) {
+    els.chatPane.toggleAttribute("inert", browse);
+    if (browse && els.chatPane.contains(document.activeElement)) {
+      els.readingPane.focus?.();
+    }
+  },
+
+  // 搜索 is one of the full-screen surfaces: whichever of the two left panes
+  // is showing owns focus, and the other leaves the a11y tree.
+  syncPaneAccess() {
+    const browse = document.body.dataset.view === "browse";
+    const searching = document.body.dataset.mode === "search" && !browse;
+    els.chatPane.toggleAttribute("inert", browse || searching);
+    els.chatPane.toggleAttribute("aria-hidden", browse || searching);
+    els.searchPane.toggleAttribute("inert", browse || !searching);
+  },
+
+  // The landing surface is the full-screen chat; the bottom tabs switch modes.
+  showHome() {
+    setView("chat");
+    setPanelLevel(null);
+  },
+
+  // The search pane is the left surface, shown full-screen.
+  showSearch() {
+    setView("chat");
+    setPanelLevel(null);
+  },
+
+  searchOwnsUrl() {
+    return true;
+  },
+
+  // A transcript opened from an AI answer or the search results floats over
+  // them: closing it returns to the same conversation or results, at the same
+  // scroll position, rather than to the channel list. Otherwise close steps
+  // back one level, as on desktop.
+  closeTarget() {
+    if (readerFrom) return leftSurfacePath(readerFrom);
+    return readingBackTarget() ?? "/";
+  },
+
+  // Autofocus on a phone-sized layout only where the composer is on screen.
+  autofocusOnLoad() {
+    return document.body.dataset.view === "chat";
+  },
+};
+
 /* --------------------------------------------------------------- panel view */
 
 // Squeezing the column rewraps the conversation. A reader who was following the
@@ -750,17 +877,9 @@ function setView(view) {
   const browse = view === "browse";
   // Closed / off-mode panes stay out of the tab order and a11y tree.
   els.readingPane.toggleAttribute("inert", !browse);
-  if (mobileLayout.matches) {
-    // Mobile: full-screen modes — the inactive pane is fully inert.
-    els.chatPane.toggleAttribute("inert", browse);
-  } else {
-    els.chatPane.toggleAttribute("inert", false);
-  }
+  layout().applyView(browse);
   if (!browse && els.readingPane.contains(document.activeElement)) {
     els.appShell.focus();
-  }
-  if (browse && mobileLayout.matches && els.chatPane.contains(document.activeElement)) {
-    els.readingPane.focus?.();
   }
   syncChatPanelAccessibility();
   updateMobileTabs();
@@ -907,10 +1026,10 @@ function isSearchPath(pathname) {
 }
 
 // Records the search in the address bar without re-rendering the route:
-// whatever the reading pane shows stays put. While a transcript is open beside
-// it (desktop), the address keeps pointing at that transcript instead.
+// whatever the reading pane shows stays put. The layout may leave the address
+// on the transcript instead (desktop, while one is open beside the results).
 function pushSearchUrl(query) {
-  if (!mobileLayout.matches && panelLevel === "reader") return;
+  if (!layout().searchOwnsUrl()) return;
   const next = searchPath(query);
   const current = `${location.pathname}${location.search}`;
   if (next === current) return;
@@ -1578,22 +1697,13 @@ async function showReader(uri, generation) {
 
 /* -------------------------------------------------------------- the router */
 
-// The landing surface: the conversation centred, no channel chosen. Also the
-// destination for a route that has nothing to show. Desktop keeps the reading
-// desk open beside it with the newest transcripts, so the pane never sits
-// empty; mobile stays a full-screen chat (bottom tabs switch the modes).
+// The landing surface: the conversation, no channel chosen. Also the
+// destination for a route that has nothing to show. What sits around it is
+// the layout's call (layout().showHome).
 function showChat() {
   currentArticle = null;
   currentChannel = null;
-  if (mobileLayout.matches) {
-    setView("chat");
-    setPanelLevel(null);
-  } else {
-    setView("browse");
-    // The desk markup is already in the page (server-rendered); opening the
-    // pane over it needs no fetch.
-    setPanelLevel("latest");
-  }
+  layout().showHome();
   document.title = "睡前消息知识库";
 }
 
@@ -1685,15 +1795,7 @@ async function renderRoute() {
 // /search and /search?q=…: the 搜索 tab, running the query in the address
 // unless it is already the one on screen (back/forward between searches).
 function showSearchRoute(query) {
-  // Mobile shows the search pane full-screen (the left half); desktop keeps
-  // whatever the reading pane already has, or opens the desk on first load.
-  if (mobileLayout.matches) {
-    setView("chat");
-    setPanelLevel(null);
-  } else if (!panelLevel) {
-    setView("browse");
-    setPanelLevel("latest");
-  }
+  layout().showSearch();
   setMode("search");
   document.title = query ? `${query} - 搜索 · 睡前消息知识库` : "搜索 · 睡前消息知识库";
   if (!query) {
@@ -1734,21 +1836,7 @@ function navigate(href) {
 /* --------------------------------------------------------- chat pane state */
 
 function syncChatPanelAccessibility() {
-  // Mobile uses full-screen modes (tabs), not a side drawer. 搜索 is one
-  // of those modes: whichever of the two left panes is showing owns focus.
-  if (mobileLayout.matches) {
-    const browse = document.body.dataset.view === "browse";
-    const searching =
-      document.body.dataset.mode === "search" && !browse;
-    els.chatPane.toggleAttribute("inert", browse || searching);
-    els.chatPane.toggleAttribute("aria-hidden", browse || searching);
-    els.searchPane.toggleAttribute("inert", browse || !searching);
-    return;
-  }
-  // Desktop never hides chat; the search pane toggles by display.
-  els.chatPane.toggleAttribute("inert", false);
-  els.chatPane.removeAttribute("aria-hidden");
-  els.searchPane.toggleAttribute("inert", false);
+  layout().syncPaneAccess();
 }
 
 document.getElementById("masthead-latest").addEventListener("click", (event) => {
@@ -1774,18 +1862,8 @@ els.channelBar.addEventListener("click", (event) => {
   }
   navigate(`/transcripts?channel=${encodeURIComponent(channel)}`);
 });
-// Close steps back one level: an article returns to its channel's list, a
-// channel list returns to the landing desk.
-// Mobile shows one surface at a time, so a transcript opened from an AI
-// answer or the search results floats over them: closing it returns to the
-// same conversation or results, at the same scroll position, rather than to
-// the channel list (desktop keeps the list, since the left half never left).
 els.readingClose.addEventListener("click", () => {
-  if (mobileLayout.matches && readerFrom) {
-    navigate(leftSurfacePath(readerFrom));
-    return;
-  }
-  navigate(readingBackTarget() ?? "/");
+  navigate(layout().closeTarget());
 });
 
 // The address of a left surface as it stands: the current search (or the
@@ -1821,10 +1899,11 @@ els.tabArchive?.addEventListener("click", (event) => {
   event.preventDefault();
   void openArchiveTab();
 });
-mobileLayout.addEventListener("change", () => {
+// Crossing the breakpoint keeps the route and the panes' contents as they are;
+// only what the layout decides is redone.
+mobileQuery.addEventListener("change", () => {
   syncChatPanelAccessibility();
   updateMobileTabs();
-  // Category labels vs flat list depends on viewport.
   if (sampleCategories.length) renderSampleQuestions();
 });
 
@@ -2687,12 +2766,8 @@ ensureHeadingAnchors(els.readerBody);
 const routePromise = renderRoute();
 
 // Same reasoning as after a run: autofocus on a phone opens the keyboard over
-// the sample questions before the reader has seen them. Desktop always lands
-// beside the reading desk (view=browse), so its check is layout, not view.
-if (
-  (!mobileLayout.matches || document.body.dataset.view === "chat") &&
-  !window.matchMedia("(pointer: coarse)").matches
-) {
+// the sample questions before the reader has seen them.
+if (layout().autofocusOnLoad() && !window.matchMedia("(pointer: coarse)").matches) {
   // /search lands in the search box; a results page keeps focus off it.
   if (document.body.dataset.mode !== "search") els.input.focus();
   else if (!searchState) els.searchInput.focus();
