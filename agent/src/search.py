@@ -31,7 +31,14 @@ from .search_db import (
 )
 from .search_query import QueryUnit, is_question, query_units, split_phrases
 from .search_semantic import SemanticHit, fuse, rerank, rerank_enabled, semantic_hits
-from .search_text import MAX_TERM_LENGTH, MAX_TERMS, analyze, normalize, term_weight
+from .search_text import (
+    MAX_TERM_LENGTH,
+    MAX_TERMS,
+    SEARCH_VERSION,
+    analyze,
+    normalize,
+    term_weight,
+)
 from .snapshots import (
     Snapshot,
     SnapshotUnavailable,
@@ -614,6 +621,37 @@ def _result(entry: Entry, page: dict, result_set: ResultSet) -> SearchResult:
     )
 
 
+def _search_snapshot(db, current: Snapshot) -> Snapshot:
+    """The snapshot whose words were segmented with this agent's word list.
+
+    Query and index must share the analyzer: a word added to search_words.txt
+    is looked up whole, and a snapshot segmented without it would miss it. So
+    search reads the newest published snapshot built with this SEARCH_VERSION
+    (preferring the one chat uses), and reports not ready until the indexer
+    publishes one. An older agent keeps reading the older lineage, which
+    snapshot GC keeps for 7 days after it is superseded.
+    """
+    db.execute(
+        "SELECT snapshot_id, schema_name, format_version, embedding_space "
+        "FROM rag_meta.snapshots WHERE status = 'published' AND format_version = %s "
+        "AND embedding_space = %s AND stats->>'search_version' = %s "
+        "AND (%s = '' OR snapshot_id = %s) "
+        "ORDER BY snapshot_id = %s DESC, published_at DESC, snapshot_id DESC LIMIT 1",
+        (
+            SEARCH_FORMAT,
+            agent_embedding_space(),
+            str(SEARCH_VERSION),
+            settings.rag_snapshot,
+            settings.rag_snapshot,
+            current.snapshot_id,
+        ),
+    )
+    row = db.fetchone()
+    if row is None:
+        raise HTTPException(503, "Search index is not ready")
+    return Snapshot(**row)
+
+
 @retry_on_transient_error()
 def search(
     query: str,
@@ -629,15 +667,19 @@ def search(
     offset = decoded.offset if decoded else 0
     try:
         current = snapshot_manager.require() if not decoded else None
-        if current and current.format_version != SEARCH_FORMAT:
-            raise HTTPException(503, "Search index is not ready")
         with read_cursor() as db:
             if decoded:
                 db.execute(
                     "SELECT snapshot_id, schema_name, format_version, embedding_space "
                     "FROM rag_meta.snapshots WHERE snapshot_id = %s AND status = 'published' "
-                    "AND format_version = %s AND embedding_space = %s",
-                    (decoded.snapshot_id, SEARCH_FORMAT, agent_embedding_space()),
+                    "AND format_version = %s AND embedding_space = %s "
+                    "AND stats->>'search_version' = %s",
+                    (
+                        decoded.snapshot_id,
+                        SEARCH_FORMAT,
+                        agent_embedding_space(),
+                        str(SEARCH_VERSION),
+                    ),
                 )
                 row = db.fetchone()
                 if not row or (
@@ -649,8 +691,8 @@ def search(
                     )
                 snapshot = Snapshot(**row)
             else:
-                snapshot = current
-            assert snapshot is not None
+                assert current is not None
+                snapshot = _search_snapshot(db, current)
             if snapshot.format_version != SEARCH_FORMAT:
                 raise HTTPException(503, "Search index is not ready")
             # Hold table locks through cache lookup too: GC cannot make a cached

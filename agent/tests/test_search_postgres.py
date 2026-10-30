@@ -10,14 +10,14 @@ from psycopg2 import sql
 from psycopg2.extras import Json
 from src import main, search, search_db
 from src.cache import LRUCache
-from src.search_text import analyze, lexeme, term_weight
+from src.search_text import SEARCH_VERSION, analyze, lexeme, term_weight
 from src.snapshots import snapshot_manager
 from test_snapshots import REGISTRY, needs_db, register, selected
 from test_snapshots import db as db  # Reuse isolated PostgreSQL database fixture.
 
 
-def seed(conn, sid, bodies):
-    register(conn, sid, fmt=5)
+def seed(conn, sid, bodies, search_version=SEARCH_VERSION):
+    register(conn, sid, fmt=5, search_version=search_version)
     schema = sql.Identifier(f"rag_{sid}")
     with conn.cursor() as cur:
         cur.execute(
@@ -484,3 +484,21 @@ def test_question_fuses_semantic_recall_and_reranks(client, db, monkeypatch):
     reranked = client.get("/search", params={"q": "贵州为什么债务高"}).json()
     assert reranked["reranked"] is True
     assert [r["doc_id"] for r in reranked["results"]] == ["s.md", "k.md"]
+
+
+@needs_db
+def test_search_reads_only_snapshots_built_with_its_word_list(client, db):
+    # A newer snapshot segmented with another word list: chat may read it,
+    # search keeps reading the newest one built with its own SEARCH_VERSION.
+    seed(db, "other_words", {"x.md": "贵州债务"}, search_version=SEARCH_VERSION + 1)
+    snapshot_manager.set_for_tests(selected(db))
+    assert selected(db).snapshot_id == "other_words"
+    data = client.get("/search", params={"q": "贵州 债务"}).json()
+    assert data["snapshot_id"] == "search"
+    with db.cursor() as cur:
+        cur.execute(
+            "UPDATE rag_meta.snapshots SET status = 'retired' WHERE snapshot_id = 'search'"
+        )
+    response = client.get("/search", params={"q": "贵州 债务"})
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Search index is not ready"

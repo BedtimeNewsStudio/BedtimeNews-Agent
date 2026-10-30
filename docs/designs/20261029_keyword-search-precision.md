@@ -334,22 +334,22 @@ about a minute on the current corpus). Until then the phrase rule already finds
 those names, so the update is not urgent; it mainly lets suggestions offer the
 new names and keeps segmentation tidy.
 
-The Agent selects snapshots by format and does not yet compare the snapshot's
-`search_version` with its own word list. A new word list deployed before the
-indexer publishes a snapshot built with it would query old segmentation: a name
-that became one word is looked up whole and missed until the new snapshot
-arrives. Until the Agent checks the version (or falls back to the base
-dictionary for words that occur nowhere), bump `FORMAT_VERSION` together with
-`SEARCH_VERSION` whenever the word list changes and follow the blue-green format
-upgrade: indexer first, then the agent, with old agents reading the old format
-meanwhile.
+Query and index must use the same word list, so search does not simply read
+the snapshot chat reads: it reads the newest published format-5 snapshot whose
+registry `stats.search_version` equals the agent's `SEARCH_VERSION`
+(preferring chat's snapshot when it qualifies; a `RAG_SNAPSHOT` pin still
+applies, and a cursor only continues on a snapshot that still qualifies). An
+agent with a new word list therefore answers "Search index is not ready" until
+the indexer publishes a snapshot built with it, and never searches old
+segmentation with new words; an older agent keeps reading the older lineage,
+which snapshot GC keeps for 7 days after it is superseded. A word-list update
+needs no `FORMAT_VERSION` bump. To avoid the not-ready window, upgrade the
+indexer first, as for a format change, then the app.
 
 ## 11. Limits and next steps
 
 - The word list is reviewed by hand once; new names in later episodes are
   rejoined as phrases at query time until the next review run of the script.
-- The Agent does not compare a snapshot's `search_version` with its word list
-  (section 10); word-list updates rely on a format bump until it does.
 - Labels cover 63 queries; clicks from `/api/search/click` should add questions
   whose clicks land low.
 - A cross-encoder reranker could help with longer passages (several chunks per

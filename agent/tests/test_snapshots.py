@@ -11,6 +11,7 @@ import uuid
 import psycopg2
 import psycopg2.extras
 import pytest
+from psycopg2.extras import Json
 from src import retriever as retriever_mod
 from src import snapshots, vector_db
 from src.models import RetrieveRequest
@@ -81,15 +82,25 @@ INSERT INTO rag_meta.indexer_status (id, last_result) VALUES (true, 'published')
 """
 
 
-def register(conn, sid, *, fmt=1, space=SPACE, minutes_ago=0, status="published"):
+def register(
+    conn,
+    sid,
+    *,
+    fmt=1,
+    space=SPACE,
+    minutes_ago=0,
+    status="published",
+    search_version=None,
+):
+    stats = None if search_version is None else Json({"search_version": search_version})
     with conn.cursor() as cur:
         cur.execute(
             "INSERT INTO rag_meta.snapshots (snapshot_id, schema_name, "
             "format_version, pipeline_fingerprint, embedding_space, "
             "embedding_model, embedding_dim, builder_version, status, "
-            "published_at) VALUES (%s, %s, %s, 'fp', %s, 'm', 2560, 'test', %s, "
-            "now() - make_interval(mins => %s))",
-            (sid, f"rag_{sid}", fmt, space, status, minutes_ago),
+            "published_at, stats) VALUES (%s, %s, %s, 'fp', %s, 'm', 2560, 'test', %s, "
+            "now() - make_interval(mins => %s), %s)",
+            (sid, f"rag_{sid}", fmt, space, status, minutes_ago, stats),
         )
 
 
