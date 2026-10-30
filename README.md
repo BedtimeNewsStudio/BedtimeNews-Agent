@@ -17,7 +17,7 @@
 问答由智能 RAG（检索增强生成）系统提供——自动路由、语义搜索、检索文稿
 上下文与节目引用。
 
-[![睡前消息知识库演示视频（YouTube）](https://img.youtube.com/vi/9_SlMaqBvcU/maxresdefault.jpg)](https://www.youtube.com/watch?v=9_SlMaqBvcU)
+[![睡前消息知识库演示视频（YouTube）](https://img.youtube.com/vi/wOJ8RC7if5U/maxresdefault.jpg)](https://www.youtube.com/watch?v=wOJ8RC7if5U)
 
 > 视频无法播放？可直接访问 [bedtime.blog](https://bedtime.blog) 体验。
 
