@@ -563,6 +563,16 @@ def _write_search(cursor: Cursor, target: str, prepared: Prepared) -> None:
         ).format(t=t),
         (SEARCH_VERSION,),
     )
+    # One row per word: {doc_id: offsets} over every transcript. A query reads
+    # only its own words' rows instead of each candidate's whole token_data.
+    cursor.execute(
+        sql.SQL(
+            "INSERT INTO {t}.search_postings "
+            "SELECT e.key, count(*), jsonb_object_agg(s.doc_id, e.value) "
+            "FROM {t}.search_documents s CROSS JOIN LATERAL jsonb_each(s.token_data) e "
+            "GROUP BY e.key"
+        ).format(t=t)
+    )
 
 
 def _write_documents(cursor: Cursor, target: str, plan: BuildPlan) -> None:
@@ -760,6 +770,28 @@ def self_check(cursor: Cursor, target: str, *, check_model: bool) -> dict[str, A
         )
         if sample[0] not in {row[0] for row in cursor.fetchall()}:
             raise SelfCheckFailed(f"sampled search query missed {sample[0]}")
+        cursor.execute(
+            sql.SQL(
+                "SELECT p.postings -> %s = s.token_data -> %s "
+                "FROM {t}.search_postings p, {t}.search_documents s "
+                "WHERE p.term = %s AND s.doc_id = %s"
+            ).format(t=t),
+            (sample[0], sample[1], sample[1], sample[0]),
+        )
+        if not (row := cursor.fetchone()) or not row[0]:
+            raise SelfCheckFailed(f"search postings disagree with {sample[0]}")
+    cursor.execute(
+        sql.SQL(
+            "SELECT (SELECT COALESCE(sum(document_frequency), 0) FROM {t}.search_postings), "
+            "(SELECT count(*) FROM {t}.search_documents s, jsonb_object_keys(s.token_data))"
+        ).format(t=t)
+    )
+    posted, indexed = fetch_row(cursor)
+    if posted != indexed:
+        raise SelfCheckFailed(
+            f"search postings cover {posted} word occurrences per transcript, "
+            f"bodies {indexed}"
+        )
     chunk_docs = ids(
         sql.SQL("SELECT DISTINCT doc_id FROM {t}.document_chunks").format(t=t)
     )

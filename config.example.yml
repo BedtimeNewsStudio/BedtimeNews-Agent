@@ -55,6 +55,17 @@ retrieval_top_k: 15
 grading_parallel_threshold: 30
 grading_excerpt_chars: 350
 
+# -- Keyword search -----------------------------------------------------------
+# Questions (为什么…, 哪些…, 问题/影响…) also get semantic recall: one embedding
+# call per new question search, fused with the keyword ranking.
+search_semantic: true
+# Optional reranker for the top question results (POST <base_url>/rerank).
+# Empty model -> off; empty api_key / base_url -> the embedding group's.
+rerank:
+  model: "" # e.g. "Qwen/Qwen3-Reranker-8B" on SiliconFlow
+  # api_key: ""
+  # base_url: ""
+
 # -- Indexer ------------------------------------------------------------------
 # indexer_cron_schedule: "0 * * * *" # minute hour day month weekday; a run that
 #                                    # overruns its slot is not caught up

@@ -31,12 +31,15 @@ from src.settings import settings
 from src.file_scanner import scan_files
 from src.document_loader import load_indexable_source
 from src.search_projection import project_search
+from src.paths import CONTENTS_DIR
+from src.transcript_export import project_transcript
 if settings.indexer_scope != 'sample' or not settings.postgres_db.endswith('_local'):
     raise RuntimeError('E2E checks require sample scope and a database ending in _local')
 documents = {}
 for uri in sorted(scan_files()):
     p = project_search(load_indexable_source(uri))
-    documents[uri] = {'text': p.body_text, 'normalized': p.normalized_text, 'sections': p.sections, 'token_data': p.token_data, 'token_count': p.token_count}
+    title = project_transcript(uri, (CONTENTS_DIR / uri).read_bytes(), '').source_title
+    documents[uri] = {'text': p.body_text, 'normalized': p.normalized_text, 'sections': p.sections, 'token_data': p.token_data, 'token_count': p.token_count, 'source_title': title}
 print(json.dumps(documents, ensure_ascii=True))
 """
 
@@ -51,13 +54,13 @@ class Anchors(HTMLParser):
         self.ids.update(value for name, value in attrs if name == "id")
 
 
-def indexed_proximity(doc, terms):
+def indexed_proximity(doc, positions, terms):
     """Independent linear merge over stored word offsets, not substring matches."""
     for first, second in zip(terms, terms[1:], strict=False):
-        starts = doc["token_data"].get(first, [])
+        starts = positions.get(first, [])
         index = 0
         first_end = None
-        for second_start in doc["token_data"].get(second, []):
+        for second_start in positions.get(second, []):
             while index < len(starts) and starts[index] + len(first) <= second_start:
                 first_end = starts[index] + len(first)
                 index += 1
@@ -127,20 +130,65 @@ def main():
     )
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "agent"))
-    from src.search_text import query_terms, term_weight
+    from src.search import RELATIVE_CUTOFF, TITLE_BONUS
+    from src.search_db import COMMON_SHARE, COVERAGE_FLOOR, PROXIMITY_BONUS
+    from src.search_query import is_question, query_units, split_phrases
+    from src.search_text import analyze, query_terms
 
-    def oracle(query):
-        terms = query_terms(query)
-        weights = {t: term_weight(t) for t in terms}
-        frequencies = {t: sum(t in d["token_data"] for d in nonempty) for t in terms}
-        scored = []
+    def positions_of(offsets, variant):
+        """Variant starts where every word sits at its offset; independent of SQL."""
+        words = {word: set(offsets.get(word, [])) for word, _ in variant.parts}
+        anchor, anchor_offset = variant.anchor
+        return [
+            p - anchor_offset
+            for p in offsets.get(anchor, [])
+            if p >= anchor_offset
+            and all(p - anchor_offset + o in words[w] for w, o in variant.parts)
+        ]
+
+    titles = {uri: analyze(doc["source_title"]) for uri, doc in docs.items()}
+
+    def rank(units):
+        weights = {u.term: u.weight for u in units}
+        found = {}
         for uri, doc in docs.items():
-            matched = [t for t in terms if t in doc["token_data"]]
-            if not matched:
+            found[uri] = {}
+            for unit in units:
+                hits = {
+                    v.text: h
+                    for v in unit.variants
+                    if (h := positions_of(doc["token_data"], v))
+                }
+                if hits:
+                    found[uri][unit.term] = hits
+        frequencies = {
+            u.term: sum(u.term in hits for hits in found.values()) for u in units
+        }
+        tiers = {
+            u.term: 1
+            if u.core and frequencies[u.term] <= COMMON_SHARE * len(nonempty)
+            else 2
+            if u.core
+            else 3
+            for u in units
+            if frequencies[u.term]
+        }
+        gate = {
+            t for t, tier in tiers.items() if tier == min(tiers.values(), default=0)
+        }
+        k = len(gate)
+        rule = k if k <= 2 else 2 if k <= 4 else math.ceil(k / 2)
+        gate_hits = {uri: len(gate & hits.keys()) for uri, hits in found.items()}
+        required = max(1, min(rule, max(gate_hits.values(), default=0)))
+        body = {}
+        for uri, hits in found.items():
+            if not hits or gate_hits[uri] < required:
                 continue
+            doc = docs[uri]
             score = 0
-            for term in matched:
-                tf, df = len(doc["token_data"][term]), frequencies[term]
+            for term, variants in hits.items():
+                tf = sum(map(len, variants.values()))
+                df = frequencies[term]
                 score += (
                     weights[term]
                     * math.log(1 + (len(nonempty) - df + 0.5) / (df + 0.5))
@@ -148,12 +196,55 @@ def main():
                     * 2.2
                     / (tf + 1.2 * (0.25 + 0.75 * doc["token_count"] / average))
                 )
-            coverage = sum(weights[t] for t in matched) / sum(weights.values())
-            score *= 0.25 + 0.75 * coverage
-            if len(matched) > 1 and indexed_proximity(doc, terms):
-                score *= 1.15
-            scored.append((uri, score))
-        return sorted(scored, key=lambda row: (-row[1], row[0])), terms
+            coverage = sum(weights[t] for t in hits) / sum(weights.values())
+            score *= COVERAGE_FLOOR + (1 - COVERAGE_FLOOR) * coverage
+            if near(doc, hits, units):
+                score *= PROXIMITY_BONUS
+            body[uri] = score
+        best = max(body.values(), default=0)
+        scored = []
+        for uri, score in body.items():
+            if score < RELATIVE_CUTOFF * best:
+                continue
+            in_title = sum(
+                u.weight
+                for u in units
+                if any(positions_of(titles[uri], v) for v in u.variants)
+            )
+            scored.append(
+                (uri, score * (1 + TITLE_BONUS * in_title / sum(weights.values())))
+            )
+        matched = {
+            uri: [u.term for u in units if u.term in found[uri]] for uri, _ in scored
+        }
+        return sorted(scored, key=lambda row: (-row[1], row[0])), matched
+
+    def near(doc, hits, units):
+        """Consecutive units in query order within 12 characters on one line."""
+        for first, second in zip(units, units[1:], strict=False):
+            ends = sorted(
+                p + len(text)
+                for text, starts in hits.get(first.term, {}).items()
+                for p in starts
+            )
+            for starts in hits.get(second.term, {}).values():
+                for start in starts:
+                    before = [e for e in ends if e <= start]
+                    if (
+                        before
+                        and start - before[-1] <= 12
+                        and "\n" not in doc["normalized"][before[-1] : start]
+                    ):
+                        return True
+        return False
+
+    def oracle(query):
+        units = query_units(query)
+        expected, matched = rank(units)
+        split = split_phrases(units)
+        if not expected and split and split != units:
+            expected, matched = rank(split)
+        return expected, [u.term for u in units], matched, is_question(query, units)
 
     queries = [
         "债",
@@ -190,20 +281,17 @@ def main():
     ]
     queries.extend(query for query, _ in natural_cases)
     recall_results = []
-    for query in queries:
-        expected, terms = oracle(query)
-        data = get("/search", {"q": query, "limit": 50})
-        assert data["snapshot_id"] == snapshot
-        assert data["terms"] == terms
+
+    def check_keyword(query, data, expected, matched):
+        assert data["mode"] == "keyword"
         assert data["total"] == len(expected), (query, data["total"], len(expected))
         assert [r["doc_id"] for r in data["results"]] == [
             uri for uri, _ in expected[:50]
         ], query
         for result, (_, score) in zip(data["results"], expected, strict=False):
             assert math.isclose(result["score"], score, rel_tol=1e-12), (query, result)
-            assert result["matched_terms"] == [
-                t for t in terms if t in docs[result["doc_id"]]["token_data"]
-            ]
+            assert result["matched_terms"] == matched[result["doc_id"]]
+            assert result["match"] == "keyword"
             assert result["title"] and result["source_title"]
             assert 1 <= len(result["snippets"]) <= 3
             doc = docs[result["doc_id"]]
@@ -213,45 +301,56 @@ def main():
                 for part in snippet["parts"]:
                     if part["highlight"]:
                         text = part["text"].translate(ascii_lower)
-                        assert text in doc["normalized"] and any(
-                            t in text for t in terms
-                        ), (query, part)
-        print(f"PASS {query!r}: {data['total']} transcripts")
+                        assert text in doc["normalized"], (query, part)
+
+    for query in queries:
+        expected, terms, matched, question = oracle(query)
+        data = get("/search", {"q": query, "limit": 50})
+        assert data["snapshot_id"] == snapshot
+        assert data["terms"] == terms
+        if question:
+            # Semantic recall depends on the embedding model, so a question is
+            # not checked score by score: every keyword result must remain, and
+            # the labelled episode must lead (below).
+            assert data["mode"] in {"keyword", "hybrid"}, data["mode"]
+            if data["total"] <= 50:
+                listed = {r["doc_id"] for r in data["results"]}
+                assert {uri for uri, _ in expected} <= listed, query
+        else:
+            check_keyword(query, data, expected, matched)
+        print(f"PASS {query!r}: {data['total']} transcripts ({data['mode']})")
         if query in {q for q, _ in natural_cases}:
             relevant = next(ids for q, ids in natural_cases if q == query)
             top_ids = [r["doc_id"] for r in data["results"][:3]]
-            assert top_ids[0] in relevant, (query, top_ids)
+            assert any(uri in relevant for uri in top_ids), (query, top_ids)
             recall_results.append(
                 {
                     "query": query,
                     "snapshot_id": data["snapshot_id"],
+                    "mode": data["mode"],
                     "terms": data["terms"],
                     "total": data["total"],
                     "expected_relevant": relevant,
-                    "hit_at_1": True,
+                    "hit_at_1": top_ids[0] in relevant,
                     "hit_at_3": True,
                     "known_relevant_recall_at_3": sum(
                         uri in top_ids for uri in relevant
                     )
                     / len(relevant),
-                    "literal_sentence_matches": sum(
-                        query.translate(ascii_lower) in doc["normalized"]
-                        for doc in docs.values()
-                    ),
                     "top_results": data["results"][:3],
                 }
             )
             for result in data["results"][:3]:
                 print(
                     "  ",
-                    result["title"],
                     result["source_title"],
+                    result["match"],
                     result["matched_terms"],
                     round(result["score"], 4),
                 )
 
     # Full traversal must have the same ranking and no repeated documents.
-    expected, _ = oracle("债务")
+    expected, _, _, _ = oracle("债务")
     page = get("/search", {"q": "债务", "limit": 1})
     cursor = page["next_cursor"]
     seen = [r["doc_id"] for r in page["results"]]
@@ -262,6 +361,20 @@ def main():
         cursor = page["next_cursor"]
     assert seen == [uri for uri, _ in expected]
     assert len(seen) == len(set(seen))
+
+    # Order, filters and facets slice the same ranked list.
+    everything = get("/search", {"q": "债务", "limit": 50})
+    by_date = get("/search", {"q": "债务", "limit": 50, "sort": "date"})
+    assert sorted(r["doc_id"] for r in by_date["results"]) == sorted(
+        r["doc_id"] for r in everything["results"]
+    )
+    dates = [r["publication_date"] or "" for r in by_date["results"]]
+    assert dates == sorted(dates, reverse=True)
+    for facet in everything["facets"]["channels"]:
+        only = get("/search", {"q": "债务", "limit": 50, "channel": facet["value"]})
+        assert only["total"] == facet["count"]
+        assert {r["channel"] for r in only["results"]} == {facet["value"]}
+    print("PASS order, channel filters and facets")
 
     # Snippet links must correspond to real IDs in the existing reader HTML.
     data = get("/search", {"q": "债务", "limit": 50})

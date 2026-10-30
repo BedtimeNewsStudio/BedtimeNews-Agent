@@ -1,6 +1,9 @@
 # Keyword Search Backend: Chinese Word Indexing and API
 
-Status: complete within the backend-only scope. The local implementation uses
+Status: complete within the backend-only scope. Any-word recall, the absence of
+a threshold and the `token_data` scan (sections 1, 2 and 5) are superseded by
+[keyword search precision](20261029_keyword-search-precision.md), which also
+adds snapshot format 5, hybrid question search and search tools. The local implementation uses
 word segmentation as its sole default search behavior. Frontend exposure and
 integration are outside this design. Validation uses the localhost sample;
 production rollout and full-corpus capacity measurements are operational work.

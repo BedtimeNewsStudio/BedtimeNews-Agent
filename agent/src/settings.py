@@ -78,6 +78,9 @@ class Settings(BaseSettings):
     # Model endpoints — provider-agnostic (see EndpointConfig).
     generation: EndpointConfig = EndpointConfig()
     embedding: EndpointConfig = EndpointConfig()
+    # Keyword-search reranker (POST <base_url>/rerank). Empty model -> off;
+    # empty api_key / base_url -> those of the embedding group.
+    rerank: EndpointConfig = EndpointConfig()
 
     # Database configuration
     postgres_host: str = "postgres"
@@ -98,6 +101,8 @@ class Settings(BaseSettings):
 
     # Vector search configuration
     match_threshold: float = 0.4
+    # Keyword search: add semantic recall (one embedding call) for questions.
+    search_semantic: bool = True
 
     # Retrieval configuration
     retrieval_match_count: int = 30

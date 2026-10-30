@@ -127,8 +127,9 @@ def test_higher_supported_format_beats_newer(db, monkeypatch):
     register(db, "s_v3", fmt=3)
     register(db, "s_v4", fmt=4)
     register(db, "s_v5", fmt=5)
-    # Format 4 supports analyzed search; a future format remains unreadable.
-    assert selected(db).snapshot_id == "s_v4"
+    register(db, "s_v6", fmt=6)
+    # Format 5 serves postings search; a future format remains unreadable.
+    assert selected(db).snapshot_id == "s_v5"
     # Older processes continue selecting their own highest supported format.
     monkeypatch.setattr(snapshots, "SUPPORTED_FORMATS", frozenset({1, 2}))
     assert selected(db).snapshot_id == "s_v2"

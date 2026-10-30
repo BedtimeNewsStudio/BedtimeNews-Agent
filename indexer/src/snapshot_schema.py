@@ -1,8 +1,9 @@
 """Snapshot identity, compatibility fingerprints and per-format table DDL.
 
 A snapshot is one immutable schema ``rag_s<id>`` holding the served tables
-(``document_chunks``, ``documents``, ``transcripts``, ``search_documents`` and
-``search_statistics``) plus the build provenance ``index_state``. Two dimensions
+(``document_chunks``, ``documents``, ``transcripts``, ``search_documents``,
+``search_statistics`` and ``search_postings``) plus the build provenance
+``index_state``. Two dimensions
 decide compatibility (see
 docs/designs/20261007_rag-snapshot-architecture.md, 5.2):
 
@@ -27,7 +28,9 @@ from .settings import settings
 # Format 2 adds document_chunks.heading_anchor, which the agent reads.
 # Format 3 adds complete-body keyword search and snapshot search statistics.
 # Format 4 indexes segmented words, complete token offsets and token counts.
-FORMAT_VERSION = 4
+# Format 5 segments with the discovered word list and adds search_postings, one
+# row per word with every transcript's offsets, which the agent searches.
+FORMAT_VERSION = 5
 
 SCHEMA_PREFIX = "rag_"
 LEGACY_SNAPSHOT_ID = "legacy"
@@ -87,8 +90,9 @@ COPY_COLUMNS: dict[str, tuple[str, ...]] = {
         "source_observed_at",
     ),
 }
-# Statistics are derived from the finished bodies, never copied from the base.
-SNAPSHOT_TABLES = (*COPY_COLUMNS, "search_statistics")
+# Statistics and postings are derived from the finished bodies, never copied
+# from the base.
+SNAPSHOT_TABLES = (*COPY_COLUMNS, "search_statistics", "search_postings")
 
 
 def pipeline_fingerprint(
@@ -130,7 +134,7 @@ def schema_for(snapshot_id: str) -> str:
 
 
 def create_tables_sql(schema: str, dim: int) -> sql.Composed:
-    """Format-4 DDL for one snapshot schema, without search or HNSW indexes."""
+    """Format-5 DDL for one snapshot schema, without search or HNSW indexes."""
     s = sql.Identifier(schema)
     return sql.SQL(
         """
@@ -166,6 +170,11 @@ def create_tables_sql(schema: str, dim: int) -> sql.Composed:
             document_count INTEGER NOT NULL CHECK (document_count >= 0),
             average_token_count DOUBLE PRECISION NOT NULL CHECK (average_token_count >= 0),
             search_version INTEGER NOT NULL
+        );
+        CREATE TABLE {s}.search_postings (
+            term TEXT PRIMARY KEY,
+            document_frequency INTEGER NOT NULL CHECK (document_frequency > 0),
+            postings JSONB NOT NULL
         );
 
         CREATE TABLE {s}.documents (

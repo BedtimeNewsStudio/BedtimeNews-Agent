@@ -1,0 +1,23 @@
+# Equivalent names, one group per line. A query for any of them also matches
+# the others; ranking treats the group as one query word. Only names that occur
+# in the corpus and mean the same thing belong here (not 生育率 / 出生率).
+特朗普 川普 trump
+俄乌战争 俄乌冲突
+新冠 新型冠状病毒 covid
+人工智能 ai
+深度求索 deepseek
+spacex 太空探索技术公司
+世卫组织 世界卫生组织 who
+国际货币基金组织 imf
+国内生产总值 gdp
+居民消费价格指数 cpi
+首次公开募股 ipo
+房产税 房地产税
+脸书 facebook
+推特 twitter
+谷歌 google
+苹果公司 apple
+抖音 tiktok
+阿里巴巴 阿里
+延迟退休 延退
+内塔尼亚胡 内坦亚胡

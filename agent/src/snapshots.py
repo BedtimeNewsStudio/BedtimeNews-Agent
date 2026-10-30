@@ -27,8 +27,9 @@ from .settings import settings
 logger = logging.getLogger(__name__)
 
 # Format 1 has no heading_anchor; format 2 adds anchors; format 3 adds keyword
-# search. Format 4 adds word analysis. Older snapshots still serve chat/readers.
-SUPPORTED_FORMATS: frozenset[int] = frozenset({1, 2, 3, 4})
+# search. Format 4 adds word analysis; format 5 the discovered word list and
+# search_postings. Older snapshots still serve chat/readers.
+SUPPORTED_FORMATS: frozenset[int] = frozenset({1, 2, 3, 4, 5})
 POLL_INTERVAL_S = 15.0
 LEGACY_SNAPSHOT_ID = "legacy"
 LEGACY_SCHEMA = "rag"

@@ -22,7 +22,7 @@ configuración.
 - `retriever.py`: Búsqueda semántica (embeddings + pgvector) sobre un snapshot;
   las claves de la caché de resultados incluyen el ID del snapshot, así que un
   cambio de snapshot nunca sirve resultados obsoletos
-- `search.py` / `search_db.py`: Búsqueda del cuerpo completo, GIN, puntuación, fragmentos y cursores de snapshot
+- `search.py` / `search_db.py` / `search_query.py` / `search_semantic.py`: Búsqueda por palabras (índice invertido, frases y alias, umbral de relevancia, puntuación, sugerencias, filtros y orden), fusión semántica para preguntas, fragmentos y cursores de snapshot
 - `cache.py`: Caché LRU para resultados de consultas
 - `chat.py`: Manejadores de endpoints FastAPI
 - `main.py`: Servidor FastAPI (`/chat`, `/search`, `/transcripts`, `/health`)
@@ -173,12 +173,29 @@ detener o sustituir el agente nunca corta una respuesta; ver
 
 ### GET /search
 
-Búsqueda predeterminada de palabras en el cuerpo completo, incluidos pasajes
-cortos descartados por embeddings. Jieba segmenta preguntas sin espacios y texto
-separado por espacios, eliminando palabras vacías y tokens de solo puntuación.
-Basta que coincida una palabra analizada. La relevancia combina BM25 ponderado,
-cobertura y proximidad, sin exigir la pregunta literal completa. Las letras ASCII
-no distinguen mayúsculas. No hay llamadas a modelos ni modos exacto/relajado.
+Búsqueda de palabras en el cuerpo completo, incluidos pasajes cortos descartados
+por embeddings, sobre la tabla `search_postings` del formato de snapshot 5. La
+segmentación usa el diccionario fijado más 1.617 palabras descubiertas en el
+corpus y revisadas (中芯国际, 宁德时代…); los nombres que aún se parten en
+caracteres sueltos se vuelven a unir en una frase contigua (阿尔忒弥斯 nunca
+coincide por un 斯 aislado). Los nombres de `search_aliases.txt` son equivalentes
+(川普 = 特朗普, 国内生产总值 = GDP). Las palabras de pregunta y los caracteres
+sueltos solo suman puntos; las palabras clave más raras deben alcanzar un umbral
+de cobertura, se descartan los resultados por debajo del 20 % de la mejor
+puntuación del cuerpo y el título solo reordena. Si una palabra no aparece en el
+corpus, `suggestion` propone una corrección (阿尔特弥斯 → 阿尔忒弥斯).
+
+Las preguntas (为什么, 哪些, …吗, o palabras como 问题 y 影响) añaden una búsqueda
+semántica (una llamada de embedding; `search_semantic` la desactiva) fusionada por
+rango recíproco; `match` de cada resultado indica keyword, semantic o both. El
+reordenador opcional (`rerank.model`) está desactivado: en las preguntas
+etiquetadas bajó el MRR de 0,910 a 0,717.
+
+Parámetros: `q`, `limit` (1–50), `cursor`, `sort` (`relevance` / `date`),
+`channel`, `year`. La respuesta añade `mode`, `reranked`, `suggestion` y `facets`
+(resultados por canal y año antes de filtrar). El cursor fija consulta, tamaño
+de página, orden y filtros. Véase el
+[diseño de búsqueda](../docs/designs/20261029_keyword-search-precision.md).
 
 **Endpoint interno:** `/search` permanece en la red interna; el servicio web lo
 traslada como `/api/search` para el panel「搜索」. El puerto
@@ -452,7 +469,11 @@ agent/src/
 ├── retriever.py       # Búsqueda semántica con caché por snapshot
 ├── search.py          # Búsqueda, fragmentos y cursores
 ├── search_text.py     # Análisis chino compartido y fijado
-├── search_db.py       # Candidatos GIN y SQL de relevancia
+├── search_db.py       # Índice invertido, SQL de relevancia, cuerpos de página
+├── search_query.py    # Unidades de consulta: frases, alias, palabras clave, preguntas
+├── search_semantic.py # Búsqueda semántica de preguntas, fusión, reordenación
+├── search_aliases.txt # Nombres equivalentes
+├── search_words.txt   # Palabras descubiertas (idénticas a las del indexador)
 ├── cache.py           # Implementación de caché LRU
 ├── snapshots.py       # Selección de snapshot, sondeo, disponibilidad
 ├── vector_db.py       # Consultas de solo lectura cualificadas por snapshot
@@ -461,6 +482,7 @@ agent/src/
 ├── uri_mapping.py     # Título de cita de respaldo a partir de la URI
 ├── eval_agent.py      # Arnés de evaluación manual del pipeline
 ├── eval_retriever.py  # Arnés de evaluación manual de recuperación
+├── eval_search.py     # Regresión de búsqueda por palabras (eval_search_labels.json)
 └── eval_queries.py    # Categorías y ejemplos de consultas de evaluación
 ```
 

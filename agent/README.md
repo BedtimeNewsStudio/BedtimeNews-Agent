@@ -18,7 +18,7 @@
 - `graph.py`：带智能路由的 LangGraph 工作流
 - `retriever.py`：针对单个快照的语义搜索（embedding + pgvector）；结果缓存的键包含快照 ID，
   切换快照后不会返回旧结果
-- `search.py` / `search_db.py`：完整正文关键词搜索、GIN 候选、评分、摘要与快照游标
+- `search.py` / `search_db.py` / `search_query.py` / `search_semantic.py`：关键词搜索（倒排表召回、短语与别名、相关性门槛、评分、纠错、筛选与排序）、问句的语义融合、摘要与快照游标
 - `cache.py`：查询结果的 LRU 缓存
 - `chat.py`：FastAPI 端点处理器
 - `main.py`：FastAPI 服务器（`/chat`、`/search`、`/transcripts`、`/health`）
@@ -144,10 +144,20 @@ data: [DONE]
 
 ### GET /search
 
-完整正文的默认分词搜索，包含被 embedding 分块过滤的短段落。jieba 自动处理整句或
-空格分隔的输入，移除停用词及纯标点；命中任一有效词即可召回。按加权词级 BM25、查询词
-覆盖率和接近程度排序，不要求原句连续出现。ASCII 不区分大小写，不调用模型，也没有独立的
-精确/宽松模式。例如“贵州的债务问题现状及其成因”会分析成“贵州、债务、问题、现状、成因”。
+完整正文分词搜索，包含被 embedding 分块过滤的短段落，读取快照格式 5 的 `search_postings`
+倒排表。分词使用固定词典加从语料发现并人工审核的 1,617 个词（中芯国际、宁德时代…）；仍被切成
+单字碎片的名字在查询时拼回短语、要求连续出现（“阿尔忒弥斯”不会因单字“斯”命中）。
+`search_aliases.txt` 中的同义名互通（川普 = 特朗普，国内生产总值 = GDP）。问题类词与单字只加分；
+稀有核心词需达到覆盖门槛，正文得分低于第一名 20% 的结果被截掉，标题命中只调整顺序。查询词在
+语料中不存在时返回 `suggestion` 纠错建议（阿尔特弥斯 → 阿尔忒弥斯）。
+
+问句（为什么、哪些、……吗，或含“问题、影响”等）另外做一次语义召回（一次 embedding 调用，
+`search_semantic` 可关闭），与关键词排名按倒数名次融合；结果的 `match` 标明 keyword /
+semantic / both。可选重排（`rerank.model`）默认关闭：在标注问句上它把 MRR 从 0.910 降到 0.717。
+
+参数：`q`、`limit`（1–50）、`cursor`、`sort`（`relevance` / `date`）、`channel`、`year`。
+响应另含 `mode`、`reranked`、`suggestion`、`facets`（筛选前各频道、年份的结果数）。游标绑定
+查询、页大小、排序与筛选。规则与评测见[搜索设计](../docs/designs/20261029_keyword-search-precision.md)。
 
 **内部端点：** `/search` 本身仅在内部网络可达；web 将其以 `/api/search` 代理给
 「搜索」界面。默认 Agent
@@ -393,8 +403,12 @@ agent/src/
 ├── graph.py           # LangGraph 工作流
 ├── retriever.py       # 按快照缓存的语义搜索
 ├── search.py          # 关键词搜索、摘要与游标
+├── search_query.py    # 查询单元：短语、别名、核心词、问句判断
+├── search_semantic.py # 问句的语义召回、倒数名次融合、可选重排
+├── search_aliases.txt # 同义名表
+├── search_words.txt   # 发现的词表（与 indexer 逐字节一致）
 ├── search_text.py     # 共用的固定版本中文分词
-├── search_db.py       # GIN 候选与相关度 SQL
+├── search_db.py       # 倒排表召回与相关度 SQL、分页正文
 ├── cache.py           # LRU 缓存实现
 ├── snapshots.py       # 快照选择、轮询、就绪状态
 ├── vector_db.py       # 只读、带快照 schema 的数据库查询
@@ -403,6 +417,7 @@ agent/src/
 ├── uri_mapping.py     # 由 URI 推导的后备引用标题
 ├── eval_agent.py      # 手动流水线评估工具
 ├── eval_retriever.py  # 手动检索评估工具
+├── eval_search.py     # 关键词搜索回归评测（eval_search_labels.json）
 └── eval_queries.py    # 评估查询类别与示例
 ```
 

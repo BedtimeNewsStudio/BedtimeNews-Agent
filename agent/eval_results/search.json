@@ -1,0 +1,566 @@
+[
+  {
+    "run_at": "2026-10-30T04:02:20+00:00",
+    "run_label": "format5-full-corpus-copy",
+    "snapshot_id": "s_fmt5",
+    "overrides": {},
+    "rerank": false,
+    "summary": {
+      "precision": 1.0,
+      "precision_at_10": 1.0,
+      "recall": 0.9987,
+      "question_mrr": 0.9096,
+      "question_hit_at_10": 1.0,
+      "question_hit_at_20": 1.0,
+      "suggestion_accuracy": 1.0
+    },
+    "cases": [
+      {
+        "kind": "contains",
+        "query": "阿尔忒弥斯",
+        "results": 8,
+        "truth": 8,
+        "precision": 1.0,
+        "precision_at_10": 1.0,
+        "recall": 1.0
+      },
+      {
+        "kind": "contains",
+        "query": "武汉弘芯",
+        "results": 8,
+        "truth": 8,
+        "precision": 1.0,
+        "precision_at_10": 1.0,
+        "recall": 1.0
+      },
+      {
+        "kind": "contains",
+        "query": "斯凯迪奥",
+        "results": 1,
+        "truth": 1,
+        "precision": 1.0,
+        "precision_at_10": 1.0,
+        "recall": 1.0
+      },
+      {
+        "kind": "contains",
+        "query": "钟薛高",
+        "results": 3,
+        "truth": 3,
+        "precision": 1.0,
+        "precision_at_10": 1.0,
+        "recall": 1.0
+      },
+      {
+        "kind": "contains",
+        "query": "中芯国际",
+        "results": 15,
+        "truth": 15,
+        "precision": 1.0,
+        "precision_at_10": 1.0,
+        "recall": 1.0
+      },
+      {
+        "kind": "contains",
+        "query": "海威华芯",
+        "results": 4,
+        "truth": 4,
+        "precision": 1.0,
+        "precision_at_10": 1.0,
+        "recall": 1.0
+      },
+      {
+        "kind": "contains",
+        "query": "泽连斯基",
+        "results": 43,
+        "truth": 43,
+        "precision": 1.0,
+        "precision_at_10": 1.0,
+        "recall": 1.0
+      },
+      {
+        "kind": "contains",
+        "query": "星舰",
+        "results": 56,
+        "truth": 56,
+        "precision": 1.0,
+        "precision_at_10": 1.0,
+        "recall": 1.0
+      },
+      {
+        "kind": "contains",
+        "query": "汉芯",
+        "results": 9,
+        "truth": 9,
+        "precision": 1.0,
+        "precision_at_10": 1.0,
+        "recall": 1.0
+      },
+      {
+        "kind": "contains",
+        "query": "许家印",
+        "results": 37,
+        "truth": 37,
+        "precision": 1.0,
+        "precision_at_10": 1.0,
+        "recall": 1.0
+      },
+      {
+        "kind": "contains",
+        "query": "王文银",
+        "results": 30,
+        "truth": 30,
+        "precision": 1.0,
+        "precision_at_10": 1.0,
+        "recall": 1.0
+      },
+      {
+        "kind": "contains",
+        "query": "宁德时代",
+        "results": 39,
+        "truth": 39,
+        "precision": 1.0,
+        "precision_at_10": 1.0,
+        "recall": 1.0
+      },
+      {
+        "kind": "contains",
+        "query": "摩尔线程",
+        "results": 1,
+        "truth": 1,
+        "precision": 1.0,
+        "precision_at_10": 1.0,
+        "recall": 1.0
+      },
+      {
+        "kind": "contains",
+        "query": "霸王茶姬",
+        "results": 4,
+        "truth": 4,
+        "precision": 1.0,
+        "precision_at_10": 1.0,
+        "recall": 1.0
+      },
+      {
+        "kind": "contains",
+        "query": "柯文哲",
+        "results": 12,
+        "truth": 12,
+        "precision": 1.0,
+        "precision_at_10": 1.0,
+        "recall": 1.0
+      },
+      {
+        "kind": "contains",
+        "query": "寒武纪",
+        "results": 7,
+        "truth": 7,
+        "precision": 1.0,
+        "precision_at_10": 1.0,
+        "recall": 1.0
+      },
+      {
+        "kind": "contains",
+        "query": "蜜雪冰城",
+        "results": 12,
+        "truth": 12,
+        "precision": 1.0,
+        "precision_at_10": 1.0,
+        "recall": 1.0
+      },
+      {
+        "kind": "contains",
+        "query": "连花清瘟",
+        "results": 43,
+        "truth": 43,
+        "precision": 1.0,
+        "precision_at_10": 1.0,
+        "recall": 1.0
+      },
+      {
+        "kind": "contains",
+        "query": "城投债",
+        "results": 37,
+        "truth": 37,
+        "precision": 1.0,
+        "precision_at_10": 1.0,
+        "recall": 1.0
+      },
+      {
+        "kind": "contains",
+        "query": "烂尾楼",
+        "results": 48,
+        "truth": 48,
+        "precision": 1.0,
+        "precision_at_10": 1.0,
+        "recall": 1.0
+      },
+      {
+        "kind": "contains",
+        "query": "光刻机",
+        "results": 25,
+        "truth": 25,
+        "precision": 1.0,
+        "precision_at_10": 1.0,
+        "recall": 1.0
+      },
+      {
+        "kind": "contains",
+        "query": "川普",
+        "results": 286,
+        "truth": 286,
+        "precision": 1.0,
+        "precision_at_10": 1.0,
+        "recall": 1.0
+      },
+      {
+        "kind": "contains",
+        "query": "俄乌冲突",
+        "results": 122,
+        "truth": 122,
+        "precision": 1.0,
+        "precision_at_10": 1.0,
+        "recall": 1.0
+      },
+      {
+        "kind": "contains",
+        "query": "推特",
+        "results": 58,
+        "truth": 58,
+        "precision": 1.0,
+        "precision_at_10": 1.0,
+        "recall": 1.0
+      },
+      {
+        "kind": "contains",
+        "query": "国内生产总值",
+        "results": 520,
+        "truth": 543,
+        "precision": 1.0,
+        "precision_at_10": 1.0,
+        "recall": 0.9576427255985267
+      },
+      {
+        "kind": "contains_all",
+        "query": "钱德拉·鲍斯",
+        "results": 4,
+        "truth": 4,
+        "precision": 1.0,
+        "precision_at_10": 1.0,
+        "recall": 1.0
+      },
+      {
+        "kind": "contains_all",
+        "query": "正威 王文银",
+        "results": 29,
+        "truth": 29,
+        "precision": 1.0,
+        "precision_at_10": 1.0,
+        "recall": 1.0
+      },
+      {
+        "kind": "contains_all",
+        "query": "星舰 阿尔忒弥斯",
+        "results": 4,
+        "truth": 4,
+        "precision": 1.0,
+        "precision_at_10": 1.0,
+        "recall": 1.0
+      },
+      {
+        "kind": "contains_all",
+        "query": "恒大 许家印",
+        "results": 32,
+        "truth": 32,
+        "precision": 1.0,
+        "precision_at_10": 1.0,
+        "recall": 1.0
+      },
+      {
+        "kind": "contains_all",
+        "query": "马斯克 特斯拉",
+        "results": 47,
+        "truth": 47,
+        "precision": 1.0,
+        "precision_at_10": 1.0,
+        "recall": 1.0
+      },
+      {
+        "kind": "contains_all",
+        "query": "美联储 加息",
+        "results": 9,
+        "truth": 9,
+        "precision": 1.0,
+        "precision_at_10": 1.0,
+        "recall": 1.0
+      },
+      {
+        "kind": "contains_all",
+        "query": "柳州 螺蛳粉",
+        "results": 10,
+        "truth": 10,
+        "precision": 1.0,
+        "precision_at_10": 1.0,
+        "recall": 1.0
+      },
+      {
+        "kind": "question",
+        "query": "贵州的债务问题现状及其成因",
+        "mode": "hybrid",
+        "reranked": false,
+        "results": 133,
+        "rank": 1,
+        "reciprocal_rank": 1.0
+      },
+      {
+        "kind": "question",
+        "query": "地方政府城投债为什么偿还困难",
+        "mode": "hybrid",
+        "reranked": false,
+        "results": 47,
+        "rank": 5,
+        "reciprocal_rank": 0.2
+      },
+      {
+        "kind": "question",
+        "query": "恒大房地产危机对经济有什么影响",
+        "mode": "hybrid",
+        "reranked": false,
+        "results": 132,
+        "rank": 1,
+        "reciprocal_rank": 1.0
+      },
+      {
+        "kind": "question",
+        "query": "中国人口出生率下降有哪些原因",
+        "mode": "hybrid",
+        "reranked": false,
+        "results": 70,
+        "rank": 5,
+        "reciprocal_rank": 0.2
+      },
+      {
+        "kind": "question",
+        "query": "人工智能发展对就业会有什么影响",
+        "mode": "hybrid",
+        "reranked": false,
+        "results": 163,
+        "rank": 1,
+        "reciprocal_rank": 1.0
+      },
+      {
+        "kind": "question",
+        "query": "高铁建设是否会带来地方财政压力",
+        "mode": "hybrid",
+        "reranked": false,
+        "results": 98,
+        "rank": 1,
+        "reciprocal_rank": 1.0
+      },
+      {
+        "kind": "question",
+        "query": "独山县那400亿债务后来怎么样了？那些烂尾的博物馆和奇葩建筑有人管吗？",
+        "mode": "hybrid",
+        "reranked": false,
+        "results": 7,
+        "rank": 1,
+        "reciprocal_rank": 1.0
+      },
+      {
+        "kind": "question",
+        "query": "集采药到底能不能吃？阿司匹林的检测实验说明了什么问题？",
+        "mode": "hybrid",
+        "reranked": false,
+        "results": 14,
+        "rank": 1,
+        "reciprocal_rank": 1.0
+      },
+      {
+        "kind": "question",
+        "query": "学校里的开塞露都能畅销，标准化管理把学生和老师变成了什么样？",
+        "mode": "hybrid",
+        "reranked": false,
+        "results": 39,
+        "rank": 1,
+        "reciprocal_rank": 1.0
+      },
+      {
+        "kind": "question",
+        "query": "南非的排外骚乱和祖马、MK党的排外政治有什么关系？",
+        "mode": "hybrid",
+        "reranked": false,
+        "results": 3,
+        "rank": 1,
+        "reciprocal_rank": 1.0
+      },
+      {
+        "kind": "question",
+        "query": "银行为什么拼命拉着老百姓开个人养老金账户？",
+        "mode": "hybrid",
+        "reranked": false,
+        "results": 107,
+        "rank": 1,
+        "reciprocal_rank": 1.0
+      },
+      {
+        "kind": "question",
+        "query": "居民医保的参保人数为什么连续七年下降？",
+        "mode": "hybrid",
+        "reranked": false,
+        "results": 67,
+        "rank": 1,
+        "reciprocal_rank": 1.0
+      },
+      {
+        "kind": "question",
+        "query": "住建部的好房子标准从哪些方面提高了住房品质？",
+        "mode": "hybrid",
+        "reranked": false,
+        "results": 23,
+        "rank": 1,
+        "reciprocal_rank": 1.0
+      },
+      {
+        "kind": "question",
+        "query": "江苏灌云的情趣内衣产业是怎么从雷丛瑞的淘宝店做起来的？",
+        "mode": "hybrid",
+        "reranked": false,
+        "results": 1,
+        "rank": 1,
+        "reciprocal_rank": 1.0
+      },
+      {
+        "kind": "question",
+        "query": "东海县的水晶是怎么从矿石生意变成年轻人的情绪生意的？",
+        "mode": "hybrid",
+        "reranked": false,
+        "results": 2,
+        "rank": 1,
+        "reciprocal_rank": 1.0
+      },
+      {
+        "kind": "question",
+        "query": "造LNG运输船用的殷瓦钢为什么难造？中国是怎么突破的？",
+        "mode": "hybrid",
+        "reranked": false,
+        "results": 2,
+        "rank": 1,
+        "reciprocal_rank": 1.0
+      },
+      {
+        "kind": "question",
+        "query": "AI背后的token为什么跑到西北小城去生产？",
+        "mode": "hybrid",
+        "reranked": false,
+        "results": 29,
+        "rank": 1,
+        "reciprocal_rank": 1.0
+      },
+      {
+        "kind": "question",
+        "query": "DeepSeek为什么被称为大模型行业的安卓时刻？",
+        "mode": "hybrid",
+        "reranked": false,
+        "results": 15,
+        "rank": 1,
+        "reciprocal_rank": 1.0
+      },
+      {
+        "kind": "question",
+        "query": "中国放开1.0容积率和美式别墅有什么关系？",
+        "mode": "hybrid",
+        "reranked": false,
+        "results": 1,
+        "rank": 1,
+        "reciprocal_rank": 1.0
+      },
+      {
+        "kind": "question",
+        "query": "北京亦庄是怎么从普通开发区变成产业资本平台的？",
+        "mode": "hybrid",
+        "reranked": false,
+        "results": 5,
+        "rank": 1,
+        "reciprocal_rank": 1.0
+      },
+      {
+        "kind": "question",
+        "query": "天龙三号火箭的试车为什么会发生事故？",
+        "mode": "hybrid",
+        "reranked": false,
+        "results": 5,
+        "rank": 1,
+        "reciprocal_rank": 1.0
+      },
+      {
+        "kind": "question",
+        "query": "波音这家百年企业是怎么毁在会计手里的？",
+        "mode": "hybrid",
+        "reranked": false,
+        "results": 18,
+        "rank": 1,
+        "reciprocal_rank": 1.0
+      },
+      {
+        "kind": "question",
+        "query": "世卫组织的报告是怎么被媒体标题歪曲的？",
+        "mode": "hybrid",
+        "reranked": false,
+        "results": 34,
+        "rank": 1,
+        "reciprocal_rank": 1.0
+      },
+      {
+        "kind": "question",
+        "query": "重庆的经济总量追上广州了吗？经济普查为什么会调增数据？",
+        "mode": "hybrid",
+        "reranked": false,
+        "results": 11,
+        "rank": 1,
+        "reciprocal_rank": 1.0
+      },
+      {
+        "kind": "question",
+        "query": "天津凭什么说机器人的大脑自己全能造？",
+        "mode": "hybrid",
+        "reranked": false,
+        "results": 16,
+        "rank": 1,
+        "reciprocal_rank": 1.0
+      },
+      {
+        "kind": "question",
+        "query": "中国制药四十年是怎么从仿制药走过来的？向美军学招标对药品集采有什么启发？",
+        "mode": "hybrid",
+        "reranked": false,
+        "results": 10,
+        "rank": 4,
+        "reciprocal_rank": 0.25
+      },
+      {
+        "kind": "suggestion",
+        "query": "阿尔特弥斯",
+        "suggestion": "阿尔忒弥斯",
+        "correct": true
+      },
+      {
+        "kind": "suggestion",
+        "query": "钟雪高",
+        "suggestion": "钟薛高",
+        "correct": true
+      },
+      {
+        "kind": "suggestion",
+        "query": "许家银",
+        "suggestion": "许家印",
+        "correct": true
+      },
+      {
+        "kind": "suggestion",
+        "query": "泽连斯其",
+        "suggestion": "泽连斯基",
+        "correct": true
+      }
+    ]
+  }
+]

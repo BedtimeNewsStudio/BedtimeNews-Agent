@@ -72,6 +72,11 @@ const els = {
   searchGo: document.getElementById("search-go"),
   searchResults: document.getElementById("search-results"),
   searchStatus: document.getElementById("search-status"),
+  searchSuggestion: document.getElementById("search-suggestion"),
+  searchTools: document.getElementById("search-tools"),
+  searchSort: document.getElementById("search-sort"),
+  searchChannel: document.getElementById("search-channel"),
+  searchYear: document.getElementById("search-year"),
   modeTabs: document.getElementById("mode-tabs"),
   modeTabChat: document.getElementById("mode-tab-chat"),
   modeTabSearch: document.getElementById("mode-tab-search"),
@@ -918,9 +923,42 @@ function setMode(mode) {
 
 // 搜索 state. Results stay in the pane when the user flips back to
 // AI对话; a new search replaces them. The cursor returned by the backend is
-// bound to the analyzed terms and page size, so it is only used verbatim.
+// bound to the analyzed terms, filters, order and page size, so it is only
+// used verbatim. A new query clears the filters; the facets that fill the
+// filter menus count every result before filtering, so they stay put.
 let searchState = null;
 let searchSeq = 0;
+const DEFAULT_SEARCH_OPTIONS = { sort: "relevance", channel: "", year: "" };
+
+function searchOptionsFrom(params) {
+  const sort = params.get("sort") === "date" ? "date" : "relevance";
+  const channel = /^[A-Za-z0-9_-]{1,100}$/.test(params.get("channel") || "")
+    ? params.get("channel")
+    : "";
+  const year = /^\d{4}$/.test(params.get("year") || "") ? params.get("year") : "";
+  return { sort, channel, year };
+}
+
+function applySearchOptions(params, options) {
+  if (options.sort !== "relevance") params.set("sort", options.sort);
+  if (options.channel) params.set("channel", options.channel);
+  if (options.year) params.set("year", options.year);
+}
+
+// One anonymous beacon per opened result: the query, the result and its rank.
+// No identity or address is sent; the server only writes it to its log.
+function logSearchClick(result, rank) {
+  if (!searchState || !navigator.sendBeacon) return;
+  const body = JSON.stringify({
+    q: searchState.query,
+    doc_id: result.doc_id,
+    rank,
+    match: result.match || "keyword",
+    mode: searchState.mode || "keyword",
+    snapshot_id: searchState.snapshotId || "",
+  });
+  navigator.sendBeacon("/api/search/click", new Blob([body], { type: "application/json" }));
+}
 
 function searchSnippetNode(uri, snippet) {
   const row = document.createElement("a");
@@ -947,9 +985,12 @@ function searchSnippetNode(uri, snippet) {
   return row;
 }
 
-function searchResultNode(result) {
+function searchResultNode(result, rank, terms) {
   const li = document.createElement("article");
   li.className = "search-result";
+  li.addEventListener("click", (event) => {
+    if (event.target.closest("a")) logSearchClick(result, rank);
+  });
   const head = document.createElement("a");
   head.className = "search-result-link";
   head.href = transcriptPath(result.doc_id);
@@ -965,23 +1006,86 @@ function searchResultNode(result) {
     head.appendChild(meta);
   }
   li.appendChild(head);
+  // Why it is here: found only by meaning, or which query words it lacks.
+  const missing =
+    result.match === "semantic"
+      ? []
+      : terms.filter((term) => !(result.matched_terms || []).includes(term));
+  if (result.match === "semantic" || missing.length) {
+    const note = document.createElement("p");
+    note.className = "search-result-note";
+    note.textContent =
+      result.match === "semantic" ? "语义相关：未直接包含搜索词" : `缺少：${missing.join("、")}`;
+    li.appendChild(note);
+  }
   for (const snippet of result.snippets) {
     li.appendChild(searchSnippetNode(result.doc_id, snippet));
   }
   return li;
 }
 
+function fillSearchSelect(select, label, facets, current, format) {
+  const options = [new Option(label, "")];
+  for (const facet of facets) {
+    options.push(new Option(`${format(facet.value)}（${facet.count}）`, facet.value));
+  }
+  // A filter from the address that no result has still shows as chosen.
+  if (current && !facets.some((facet) => facet.value === current)) {
+    options.push(new Option(format(current), current));
+  }
+  select.replaceChildren(...options);
+  select.value = current;
+}
+
+function renderSearchTools(data) {
+  const options = searchState.options;
+  const facets = data.facets || { channels: [], years: [] };
+  els.searchTools.hidden = !(data.total > 0 || options.channel || options.year);
+  els.searchSort.value = options.sort;
+  fillSearchSelect(els.searchChannel, "全部频道", facets.channels, options.channel, channelLabel);
+  fillSearchSelect(els.searchYear, "全部年份", facets.years, options.year, (y) => `${y} 年`);
+}
+
+function renderSearchSuggestion(suggestion) {
+  els.searchSuggestion.hidden = !suggestion;
+  if (!suggestion) {
+    els.searchSuggestion.replaceChildren();
+    return;
+  }
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "search-suggestion-link";
+  button.textContent = suggestion;
+  button.addEventListener("click", () => submitSearch(suggestion));
+  els.searchSuggestion.replaceChildren("你是不是要找：", button);
+}
+
+function changeSearchOptions() {
+  if (!searchState?.query) return;
+  const options = {
+    sort: els.searchSort.value === "date" ? "date" : "relevance",
+    channel: els.searchChannel.value,
+    year: els.searchYear.value,
+  };
+  pushSearchUrl(searchState.query, options);
+  void runSearch(searchState.query, options);
+}
+
+for (const select of [els.searchSort, els.searchChannel, els.searchYear]) {
+  select?.addEventListener("change", changeSearchOptions);
+}
+
 function renderSearchPage(data, { append }) {
   const more = els.searchResults.querySelector(".search-more");
   more?.remove();
+  const first = append ? els.searchResults.querySelectorAll(".search-result").length : 0;
+  const nodes = data.results.map((result, i) =>
+    searchResultNode(result, first + i + 1, data.terms || []),
+  );
   if (append) {
-    els.searchResults.append(
-      ...data.results.map((result) => searchResultNode(result)),
-    );
+    els.searchResults.append(...nodes);
   } else {
-    els.searchResults.replaceChildren(
-      ...data.results.map((result) => searchResultNode(result)),
-    );
+    els.searchResults.replaceChildren(...nodes);
   }
   if (data.next_cursor) {
     const button = document.createElement("button");
@@ -998,8 +1102,9 @@ function setSearchStatus(text, { busy = false } = {}) {
   els.searchStatus.classList.toggle("is-busy", busy);
 }
 
-async function fetchSearchPage(query, cursor) {
+async function fetchSearchPage(query, cursor, options) {
   const params = new URLSearchParams({ q: query, limit: "20" });
+  applySearchOptions(params, options);
   if (cursor) params.set("cursor", cursor);
   const response = await fetch(`/api/search?${params}`);
   if (!response.ok) {
@@ -1017,8 +1122,11 @@ async function fetchSearchPage(query, cursor) {
 // this is the path to restore when the reader returns to AI对话.
 let readingRoutePath = "/";
 
-function searchPath(query) {
-  return query ? `/search?q=${encodeURIComponent(query)}` : "/search";
+function searchPath(query, options = DEFAULT_SEARCH_OPTIONS) {
+  if (!query) return "/search";
+  const params = new URLSearchParams({ q: query });
+  applySearchOptions(params, options);
+  return `/search?${params}`;
 }
 
 function isSearchPath(pathname) {
@@ -1028,9 +1136,9 @@ function isSearchPath(pathname) {
 // Records the search in the address bar without re-rendering the route:
 // whatever the reading pane shows stays put. The layout may leave the address
 // on the transcript instead (desktop, while one is open beside the results).
-function pushSearchUrl(query) {
+function pushSearchUrl(query, options = DEFAULT_SEARCH_OPTIONS) {
   if (!layout().searchOwnsUrl()) return;
-  const next = searchPath(query);
+  const next = searchPath(query, options);
   const current = `${location.pathname}${location.search}`;
   if (next === current) return;
   history.pushState({}, "", next);
@@ -1049,6 +1157,8 @@ function submitSearch(query) {
 function resetSearch() {
   searchSeq++;
   searchState = null;
+  els.searchTools.hidden = true;
+  renderSearchSuggestion(null);
   els.searchPane.classList.add("is-idle");
   els.searchResults.classList.remove("is-busy");
   els.searchResults.replaceChildren();
@@ -1057,31 +1167,34 @@ function resetSearch() {
   els.searchGo.disabled = false;
 }
 
-async function runSearch(query) {
+async function runSearch(query, options = DEFAULT_SEARCH_OPTIONS) {
   const seq = ++searchSeq;
   // First search docks the box to the top row so results read under it.
   els.searchPane.classList.remove("is-idle");
-  searchState = { query, cursor: null, total: 0, busy: true };
+  searchState = { query, options, cursor: null, total: 0, busy: true };
   // The previous results stay visible (dimmed, inert) until the new page
   // arrives — editing the query and re-searching never blanks the pane.
   els.searchResults.classList.add("is-busy");
   setSearchStatus("正在搜索…", { busy: true });
   els.searchGo.disabled = true;
   try {
-    const data = await fetchSearchPage(query, null);
+    const data = await fetchSearchPage(query, null, options);
     if (seq !== searchSeq) return;
     searchState = {
       query,
+      options,
       cursor: data.next_cursor,
       total: data.total,
+      mode: data.mode,
+      snapshotId: data.snapshot_id,
       busy: false,
     };
     els.searchResults.classList.remove("is-busy");
     renderSearchPage(data, { append: false });
+    renderSearchTools(data);
+    renderSearchSuggestion(data.suggestion);
     els.searchResults.scrollTop = 0;
-    setSearchStatus(
-      data.total > 0 ? `找到 ${data.total} 篇相关文稿` : "没有匹配的文稿，换个说法试试。",
-    );
+    setSearchStatus(searchSummary(data));
   } catch (error) {
     if (seq !== searchSeq) return;
     searchState.busy = false;
@@ -1096,6 +1209,16 @@ async function runSearch(query) {
   }
 }
 
+function searchSummary(data) {
+  if (data.total === 0) {
+    return searchState.options.channel || searchState.options.year
+      ? "筛选条件下没有文稿，换个频道或年份试试。"
+      : "没有匹配的文稿，换个说法试试。";
+  }
+  const semantic = data.mode === "hybrid" ? "，包括意思相近的文稿" : "";
+  return `找到 ${data.total} 篇相关文稿${semantic}`;
+}
+
 async function loadMoreSearch() {
   if (!searchState?.cursor || searchState.busy) return;
   const seq = searchSeq;
@@ -1103,12 +1226,16 @@ async function loadMoreSearch() {
   setSearchStatus("正在加载更多…", { busy: true });
   els.searchGo.disabled = true;
   try {
-    const data = await fetchSearchPage(searchState.query, searchState.cursor);
+    const data = await fetchSearchPage(
+      searchState.query,
+      searchState.cursor,
+      searchState.options,
+    );
     if (seq !== searchSeq) return;
     searchState.cursor = data.next_cursor;
     searchState.total = data.total;
     renderSearchPage(data, { append: true });
-    setSearchStatus(`找到 ${searchState.total} 篇相关文稿`);
+    setSearchStatus(searchSummary(data));
   } catch (error) {
     if (seq !== searchSeq) return;
     if (error.message === "stale") setSearchStatus("搜索已过期，请重新搜索。");
@@ -1732,7 +1859,8 @@ async function renderRoute() {
 
   if (isSearchPath(pathname)) {
     readerFrom = null;
-    showSearchRoute(new URLSearchParams(search).get("q")?.trim() ?? "");
+    const params = new URLSearchParams(search);
+    showSearchRoute(params.get("q")?.trim() ?? "", searchOptionsFrom(params));
     return;
   }
   readingRoutePath = `${pathname}${search}`;
@@ -1794,7 +1922,7 @@ async function renderRoute() {
 
 // /search and /search?q=…: the 搜索 tab, running the query in the address
 // unless it is already the one on screen (back/forward between searches).
-function showSearchRoute(query) {
+function showSearchRoute(query, options = DEFAULT_SEARCH_OPTIONS) {
   layout().showSearch();
   setMode("search");
   document.title = query ? `${query} - 搜索 · 睡前消息知识库` : "搜索 · 睡前消息知识库";
@@ -1802,9 +1930,12 @@ function showSearchRoute(query) {
     if (searchState) resetSearch();
     return;
   }
-  if (searchState?.query === query) return;
+  const same =
+    searchState?.query === query &&
+    JSON.stringify(searchState.options) === JSON.stringify(options);
+  if (same) return;
   els.searchInput.value = query;
-  void runSearch(query);
+  void runSearch(query, options);
 }
 
 // Every transcript link in the page — channel chips, archive rows, citations in
@@ -1869,7 +2000,7 @@ els.readingClose.addEventListener("click", () => {
 // The address of a left surface as it stands: the current search (or the
 // empty search page), or the home route for the conversation.
 function leftSurfacePath(mode) {
-  if (mode === "search") return searchPath(searchState?.query ?? "");
+  if (mode === "search") return searchPath(searchState?.query ?? "", searchState?.options);
   return "/";
 }
 els.readingShare?.addEventListener("click", () => {

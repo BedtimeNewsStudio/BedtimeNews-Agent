@@ -19,7 +19,7 @@ See the [main README](../README.en.md) for setup instructions.
 - `graph.py`: LangGraph workflow with intelligent routing
 - `retriever.py`: Semantic search (embeddings + pgvector) against one snapshot;
   result cache keys include the snapshot ID, so a switch never serves stale results
-- `search.py` / `search_db.py`: Complete-body keyword search, GIN candidates, word BM25 scoring, snippets, and snapshot-bound cursors
+- `search.py` / `search_db.py` / `search_query.py` / `search_semantic.py`: Keyword search (postings recall, phrases and aliases, relevance gate, scoring, suggestions, filters and order), semantic fusion for questions, snippets, and snapshot-bound cursors
 - `cache.py`: LRU cache for query results
 - `chat.py`: FastAPI endpoint handlers
 - `main.py`: FastAPI server (`/chat`, `/search`, `/transcripts`, `/health`)
@@ -163,12 +163,28 @@ agent never cuts an answer short; see
 
 ### GET /search
 
-Default word search over complete transcript bodies, including short passages
-filtered out of embedding chunks. Jieba segments both unspaced questions and
-space-separated input; stopwords and punctuation-only tokens are ignored. A
-transcript can match any analyzed word. Ranking combines weighted word BM25,
-query-word coverage, and proximity; the whole question need not appear verbatim.
-ASCII case is ignored. No model call or separate exact/relaxed mode is used.
+Word search over complete transcript bodies, including short passages filtered
+out of embedding chunks, reading the `search_postings` table of snapshot format
+5. Segmentation uses the pinned dictionary plus 1,617 reviewed words discovered
+in the corpus (中芯国际, 宁德时代, …); names still split into single-character
+fragments are rejoined into a phrase that must appear contiguously (阿尔忒弥斯
+never matches on a lone 斯). Names in `search_aliases.txt` match each other
+(川普 = 特朗普, 国内生产总值 = GDP). Question words and single characters only add
+score; rarer core words must meet a coverage threshold, results below 20% of
+the best body score are cut, and title matches only reorder. When a query word
+occurs nowhere, `suggestion` offers a correction (阿尔特弥斯 → 阿尔忒弥斯).
+
+Questions (为什么, 哪些, …吗, or words such as 问题 and 影响) also get semantic
+recall (one embedding call; `search_semantic` turns it off), fused with the
+keyword ranking by reciprocal rank; each result's `match` is keyword, semantic
+or both. An optional reranker (`rerank.model`) is off by default: on the
+labelled questions it lowered MRR from 0.910 to 0.717.
+
+Parameters: `q`, `limit` (1–50), `cursor`, `sort` (`relevance` / `date`),
+`channel`, `year`. Responses add `mode`, `reranked`, `suggestion` and `facets`
+(result counts per channel and year before filtering). A cursor binds the query,
+page size, order and filters. See the
+[search design](../docs/designs/20261029_keyword-search-precision.md).
 
 **Internal endpoint:** `/search` itself stays on the internal network; the web
 service proxies it as `/api/search` for the keyword search pane. The normal
@@ -432,7 +448,11 @@ agent/src/
 ├── retriever.py       # Semantic search with per-snapshot caching
 ├── search.py          # Keyword search, snippets, cursors
 ├── search_text.py     # Shared pinned Chinese word analysis
-├── search_db.py       # GIN candidates and relevance SQL
+├── search_db.py       # Postings recall, relevance SQL, page bodies
+├── search_query.py    # Query units: phrases, aliases, core words, questions
+├── search_semantic.py # Question semantic recall, rank fusion, optional rerank
+├── search_aliases.txt # Equivalent names
+├── search_words.txt   # Discovered words (byte-identical to the indexer's)
 ├── cache.py           # LRU cache implementation
 ├── snapshots.py       # Snapshot selection, polling, readiness
 ├── vector_db.py       # Read-only, snapshot-qualified database queries
@@ -441,6 +461,7 @@ agent/src/
 ├── uri_mapping.py     # Fallback citation title from a URI
 ├── eval_agent.py      # Manual pipeline evaluation harness
 ├── eval_retriever.py  # Manual retrieval evaluation harness
+├── eval_search.py     # Keyword search regression (eval_search_labels.json)
 └── eval_queries.py    # Evaluation query categories and examples
 ```
 

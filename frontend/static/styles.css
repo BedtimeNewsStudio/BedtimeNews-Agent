@@ -1376,6 +1376,70 @@ body[data-mode="search"] .chat-pane {
   color: var(--text-dim);
 }
 
+/* "你是不是要找" and the order/channel/year menus sit in the status column. */
+.search-suggestion,
+.search-tools {
+  flex: 0 0 auto;
+  margin: 0.2rem max(var(--reading-inline), calc((100% - var(--content-max)) / 2)) 0.2rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.search-suggestion-link {
+  appearance: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.search-suggestion-link:hover,
+.search-suggestion-link:focus-visible {
+  text-decoration: underline;
+}
+
+.search-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.search-tools[hidden],
+.search-suggestion[hidden] {
+  display: none;
+}
+
+.search-tool select {
+  appearance: none;
+  max-width: 100%;
+  padding: 0.3rem 1.6rem 0.3rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background:
+    linear-gradient(45deg, transparent 50%, var(--muted) 50%) right 0.8rem center / 5px 5px no-repeat,
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%) right 0.5rem center / 5px 5px no-repeat,
+    var(--surface);
+  color: var(--text-dim);
+  font-family: var(--font-cjk);
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.search-tool select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Why a result is listed: found by meaning only, or the query words it lacks. */
+.search-result-note {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
 .search-results {
   flex: 1 1 auto;
   min-height: 0;

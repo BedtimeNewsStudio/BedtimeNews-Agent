@@ -89,7 +89,8 @@ Frontend：
 | GET  | `/transcripts?channel={channel}` | 服务端渲染的栏目列表（不带 channel 的 `/transcripts`：`308` 到 `/`）       |
 | GET  | `/transcripts/{doc_id}`          | 服务端渲染的文稿页                                                         |
 | GET  | `/api/starters`                  | 示例问题与搜索 starter JSON（`categories`、`search`）                      |
-| GET  | `/api/search`                    | 关键词搜索（代理 agent；状态码透传）                                       |
+| GET  | `/api/search`                    | 关键词搜索（代理 agent，含 `sort`、`channel`、`year`；状态码透传）        |
+| POST | `/api/search/click`              | 匿名记录一次搜索结果点击（写入日志，返回 204）                             |
 | GET  | `/api/transcripts`               | 文稿索引（代理 agent）                                                     |
 | GET  | `/api/transcripts/{doc_id}`      | 单篇文稿（代理 agent；格式不合法的 `doc_id` 直接返回 `404`，不调用 agent） |
 | POST | `/chat`                          | 将 agent 的 SSE 流代理给浏览器（请求体超过 128 KiB：`413`）                |
@@ -102,7 +103,11 @@ Frontend：
 | GET  | `/s/{short_id}`                  | 短链接，`302` 跳转到文稿                                                   |
 
 本服务把 `/api/search` 代理给 agent 的 `GET /search`，「搜索」面板即基于它。
-参数和返回值见 [Agent 搜索 API](../agent/README.md#get-search)。
+参数和返回值见 [Agent 搜索 API](../agent/README.md#get-search)。面板提供排序（相关度/时间）、
+频道和年份筛选（选项来自 `facets`，写入地址 `/search?q=…&sort=…&channel=…&year=…`）、
+“你是不是要找”纠错、每条结果的“缺少：…”或“语义相关”说明。打开结果时，面板向
+`/api/search/click` 发送匿名信标（查询、文稿、名次、匹配方式、模式与快照，不含身份或地址），
+服务端校验后以 `search_click {json}` 写入日志，可用 `scripts/search_clicks.py` 汇总。
 所有 `/api/` 响应都带 `X-Robots-Tag: noindex`，不进入搜索引擎索引，但不在
 robots.txt 中屏蔽，以免影响爬虫渲染页面。
 localhost 的 18001 端口由 sample overlay 直接发布，不是前端路由。

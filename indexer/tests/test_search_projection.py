@@ -71,9 +71,19 @@ def test_word_offsets_are_not_truncated_by_tsvector_limits():
 
 def test_separately_built_components_share_the_same_analyzer():
     root = Path(__file__).resolve().parents[2]
-    assert (root / "indexer/src/search_text.py").read_bytes() == (
-        root / "agent/src/search_text.py"
-    ).read_bytes()
+    for name in ("search_text.py", "search_words.txt"):
+        assert (root / "indexer/src" / name).read_bytes() == (
+            root / "agent/src" / name
+        ).read_bytes()
+
+
+def test_discovered_words_stay_whole():
+    for word in ("阿尔忒弥斯", "中芯国际", "宁德时代", "钟薛高"):
+        assert query_terms(word) == [word]
+        # Search segmentation still indexes the dictionary words inside.
+    assert {"宁德", "时代", "宁德时代"} <= set(analyze("宁德时代的电池"))
+    # A discovered word never splits an existing longer reading.
+    assert query_terms("火星舰队") == ["火星", "舰队"]
 
 
 def test_plain_text_preserves_comparison_operators_and_character_entities():

@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "note": "Keyword search regression set. 'contains' truth is every transcript whose visible body contains one of the strings (ASCII case-insensitive), computed from the snapshot at run time, so it never depends on the analyzer under test. 'contains_all' needs each string. Question labels reuse eval_retriever_labels.json plus the six questions of the keyword-search design.",
+  "contains": [
+    {"query": "阿尔忒弥斯", "any": ["阿尔忒弥斯"]},
+    {"query": "武汉弘芯", "any": ["武汉弘芯"]},
+    {"query": "斯凯迪奥", "any": ["斯凯迪奥"]},
+    {"query": "钟薛高", "any": ["钟薛高"]},
+    {"query": "中芯国际", "any": ["中芯国际"]},
+    {"query": "海威华芯", "any": ["海威华芯"]},
+    {"query": "泽连斯基", "any": ["泽连斯基"]},
+    {"query": "星舰", "any": ["星舰"]},
+    {"query": "汉芯", "any": ["汉芯"]},
+    {"query": "许家印", "any": ["许家印"]},
+    {"query": "王文银", "any": ["王文银"]},
+    {"query": "宁德时代", "any": ["宁德时代"]},
+    {"query": "摩尔线程", "any": ["摩尔线程"]},
+    {"query": "霸王茶姬", "any": ["霸王茶姬"]},
+    {"query": "柯文哲", "any": ["柯文哲"]},
+    {"query": "寒武纪", "any": ["寒武纪"]},
+    {"query": "蜜雪冰城", "any": ["蜜雪冰城"]},
+    {"query": "连花清瘟", "any": ["连花清瘟"]},
+    {"query": "城投债", "any": ["城投债"]},
+    {"query": "烂尾楼", "any": ["烂尾楼"]},
+    {"query": "光刻机", "any": ["光刻机"]},
+    {"query": "川普", "any": ["川普", "特朗普", "trump"]},
+    {"query": "俄乌冲突", "any": ["俄乌冲突", "俄乌战争"]},
+    {"query": "推特", "any": ["推特", "twitter"]},
+    {"query": "国内生产总值", "any": ["国内生产总值", "gdp"]}
+  ],
+  "contains_all": [
+    {"query": "钱德拉·鲍斯", "all": ["钱德拉", "鲍斯"]},
+    {"query": "正威 王文银", "all": ["正威", "王文银"]},
+    {"query": "星舰 阿尔忒弥斯", "all": ["星舰", "阿尔忒弥斯"]},
+    {"query": "恒大 许家印", "all": ["恒大", "许家印"]},
+    {"query": "马斯克 特斯拉", "all": ["马斯克", "特斯拉"]},
+    {"query": "美联储 加息", "all": ["美联储", "加息"]},
+    {"query": "柳州 螺蛳粉", "all": ["柳州", "螺蛳粉"]}
+  ],
+  "suggestions": [
+    {"query": "阿尔特弥斯", "expected": "阿尔忒弥斯"},
+    {"query": "钟雪高", "expected": "钟薛高"},
+    {"query": "许家银", "expected": "许家印"},
+    {"query": "泽连斯其", "expected": "泽连斯基"}
+  ],
+  "questions": [
+    {"query": "贵州的债务问题现状及其成因", "relevant": ["ShuiQianXiaoXi/0501-0600/0581.md", "ShuiQianXiaoXi/0501-0600/0588.md"]},
+    {"query": "地方政府城投债为什么偿还困难", "relevant": ["ShuiQianXiaoXi/0501-0600/0581.md", "ShuiQianXiaoXi/0501-0600/0588.md"]},
+    {"query": "恒大房地产危机对经济有什么影响", "relevant": ["ShuiQianXiaoXi/0301-0400/0329.md"]},
+    {"query": "中国人口出生率下降有哪些原因", "relevant": ["ShuiQianXiaoXi/0401-0500/0461.md"]},
+    {"query": "人工智能发展对就业会有什么影响", "relevant": ["ShuiQianXiaoXi/0001-0100/0012.md", "CanKaoXinXi/0201-0300/0266.md"]},
+    {"query": "高铁建设是否会带来地方财政压力", "relevant": ["ShuiQianXiaoXi/0201-0300/0280.md", "CanKaoXinXi/0501-0600/0515.md"]}
+  ]
+}

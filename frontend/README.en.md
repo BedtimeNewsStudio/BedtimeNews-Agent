@@ -111,7 +111,8 @@ The frontend:
 | GET    | `/transcripts?channel={channel}` | Server-rendered channel list (`/transcripts` without a channel: `308` to `/`)              |
 | GET    | `/transcripts/{doc_id}`          | Server-rendered transcript page                                                            |
 | GET    | `/api/starters`                  | Sample questions and search starters JSON (`categories`, `search`)                         |
-| GET    | `/api/search`                    | Keyword search (proxied to the agent; status codes pass through)                           |
+| GET    | `/api/search`                    | Keyword search (proxied to the agent with `sort`, `channel`, `year`; status codes pass through) |
+| POST   | `/api/search/click`              | Log one search-result click anonymously (to the log; returns 204)                          |
 | GET    | `/api/transcripts`               | Transcript index (proxied)                                                                 |
 | GET    | `/api/transcripts/{doc_id}`      | One transcript (proxied; a malformed `doc_id` is a `404` without calling the agent)        |
 | POST   | `/chat`                          | Proxies the agent SSE stream (body over 128 KiB: `413`)                                    |
@@ -125,7 +126,14 @@ The frontend:
 
 This service proxies `/api/search` to the agent's `GET /search`; the keyword
 search pane is built on it. See the
-[Agent search API](../agent/README.en.md#get-search). Direct localhost access on
+[Agent search API](../agent/README.en.md#get-search). The pane offers order
+(relevance or date), channel and year filters (options from `facets`, kept in
+the address `/search?q=…&sort=…&channel=…&year=…`), a "did you mean" link, and
+per result "缺少：…" (missing words) or "语义相关" (found by meaning). Opening a
+result sends an anonymous beacon to `/api/search/click` (query, transcript,
+rank, match, mode and snapshot; no identity or address), which the server
+validates and logs as `search_click {json}`; `scripts/search_clicks.py`
+summarizes it. Direct localhost access on
 port 18001 is provided only by the sample overlay, not by a frontend route.
 Every `/api/` response carries `X-Robots-Tag: noindex` so data endpoints stay
 out of search indexes; they are not blocked in robots.txt, so crawlers can

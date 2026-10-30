@@ -219,7 +219,7 @@ rag_s<id>   只读快照：document_chunks / documents / transcripts / index_sta
 - `body_html`：Agent 的 `/transcripts` API 返回的渲染页面。正文话题 `h2` 的 `id` 等于该话题的锚点。投影版本变化会重新渲染，不会重新 embedding
 - `source_hash`、`projection_version`：重新渲染的触发条件（源文件修改或渲染器变化）
 
-**`search_documents` / `search_statistics`**（format 4）：保存完整正文纯文本、NFC/ASCII 规范化文本、jieba 搜索分词、`token_data` 中的完整出现位置及 `token_count`。词级 lexeme 使用原生 GIN `tsvector` 索引，统计表保存有有效词的文稿数和平均词数。查询使用相同固定词典、停用词及规范化规则。短段落独立于 embedding 过滤；附录变化复用，正文变化重建。`SEARCH_VERSION = 2` 纳入指纹，搜索错误或覆盖缺失会回滚发布，未变化的向量继续复用。详见[后端设计](../docs/designs/20261018_keyword-search-backend.md)。
+**`search_documents` / `search_statistics` / `search_postings`**（format 5）：保存完整正文纯文本、NFC/ASCII 规范化文本、jieba 搜索分词、`token_data` 中的完整出现位置及 `token_count`。分词词典为 jieba 固定词典、领域词，以及 `src/search_words.txt` 中从语料发现并人工审核的词（由 `scripts/discover_search_words.py` 生成，与 Agent 的副本逐字节一致）。`search_postings` 每个词一行，记录 `{doc_id: 位置}` 与文档频率，每次发布从 `token_data` 重建（约 5 秒），Agent 只读取查询词所在的行。统计表保存有有效词的文稿数和平均词数；自检核对抽样词的倒排与文稿一致、文档频率总数与（文稿, 词）对数相同。短段落独立于 embedding 过滤；附录变化复用，正文变化重建。`SEARCH_VERSION = 3` 纳入指纹，搜索错误或覆盖缺失会回滚发布，未变化的向量继续复用。详见[搜索设计](../docs/designs/20261029_keyword-search-precision.md)。
 
 **`index_state`**：构建来源记录，作为下一次增量构建的基线（Agent 不读取）
 

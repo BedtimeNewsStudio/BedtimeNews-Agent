@@ -37,7 +37,7 @@ from html import escape
 from html.parser import HTMLParser
 from importlib import metadata
 from pathlib import Path, PurePosixPath
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from urllib.parse import quote, urlencode, urlsplit
 from xml.sax.saxutils import escape as xml_escape
 
@@ -51,6 +51,7 @@ from fastapi.responses import (
     StreamingResponse,
 )
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 from starlette.responses import Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from starters import CATEGORIES, SEARCH_STARTERS
@@ -1063,6 +1064,11 @@ async def keyword_search(
     q: Annotated[str, Query(max_length=512)],
     limit: Annotated[int, Query(ge=1, le=50)] = 20,
     cursor: Annotated[str | None, Query(max_length=16384)] = None,
+    sort: Annotated[Literal["relevance", "date"], Query()] = "relevance",
+    channel: Annotated[
+        str | None, Query(max_length=100, pattern=r"^[A-Za-z0-9_-]+$")
+    ] = None,
+    year: Annotated[int | None, Query(ge=1900, le=2100)] = None,
 ) -> Response:
     """Proxy the agent's keyword search for the 搜索 pane.
 
@@ -1076,7 +1082,11 @@ async def keyword_search(
             status_code=503,
             headers={"Cache-Control": "no-cache"},
         )
-    params: dict[str, str] = {"q": q, "limit": str(limit)}
+    params: dict[str, str] = {"q": q, "limit": str(limit), "sort": sort}
+    if channel is not None:
+        params["channel"] = channel
+    if year is not None:
+        params["year"] = str(year)
     if cursor is not None:
         params["cursor"] = cursor
     try:
@@ -1093,6 +1103,47 @@ async def keyword_search(
         media_type=response.headers.get("content-type", "application/json"),
         headers={"Cache-Control": "no-cache"},
     )
+
+
+# Clicks go to stdout on their own handler: the service configures no root
+# logging, which would otherwise drop INFO records.
+_click_logger = logging.getLogger("search.clicks")
+_click_logger.setLevel(logging.INFO)
+_click_logger.propagate = False
+if not _click_logger.handlers:
+    _click_handler = logging.StreamHandler()
+    _click_handler.setFormatter(logging.Formatter("%(message)s"))
+    _click_logger.addHandler(_click_handler)
+SEARCH_CLICK_MAX_BYTES = 2048
+
+
+class SearchClick(BaseModel):
+    """One opened search result, as the 搜索 pane reports it. Anonymous: no
+    identity, address or session is accepted or logged."""
+
+    model_config = {"extra": "forbid"}
+    q: str = Field(min_length=1, max_length=512)
+    doc_id: str = Field(min_length=1, max_length=500, pattern=r"^[A-Za-z0-9_./-]+\.md$")
+    rank: int = Field(ge=1, le=10000)
+    match: Literal["keyword", "semantic", "both"]
+    mode: Literal["keyword", "hybrid"]
+    snapshot_id: str = Field(max_length=128, pattern=r"^[A-Za-z0-9_]*$")
+
+
+@app.post("/api/search/click", status_code=204)
+async def search_click(request: Request) -> Response:
+    """Log one result click as a JSON line for tuning (scripts/search_clicks.py)."""
+    body = await request.body()
+    if len(body) > SEARCH_CLICK_MAX_BYTES:
+        return Response(status_code=413)
+    try:
+        click = SearchClick.model_validate_json(body)
+    except ValueError:
+        return Response(status_code=422)
+    _click_logger.info(
+        "search_click %s", json.dumps(click.model_dump(), ensure_ascii=False)
+    )
+    return Response(status_code=204)
 
 
 @app.get("/api/transcripts")

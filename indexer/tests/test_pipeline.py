@@ -437,8 +437,9 @@ def test_search_version_change_rebuilds_projection_and_reuses_vectors(
 
     assert build().result == "published"
     fake_embed.calls.clear()
-    monkeypatch.setattr(search_projection, "SEARCH_VERSION", 3)
-    monkeypatch.setattr(builder, "SEARCH_VERSION", 3)
+    bumped = search_projection.SEARCH_VERSION + 1
+    monkeypatch.setattr(search_projection, "SEARCH_VERSION", bumped)
+    monkeypatch.setattr(builder, "SEARCH_VERSION", bumped)
     result = build()
     assert result.result == "published", result.error
     rows = snapshot_rows(query)
@@ -446,7 +447,22 @@ def test_search_version_change_rebuilds_projection_and_reuses_vectors(
     assert rows[-1][-1]["embedded_new"] == 0
     assert query(
         f'SELECT DISTINCT search_version FROM "{rows[-1][1]}".search_documents'
-    ) == [(3,)]
+    ) == [(bumped,)]
+
+
+def test_postings_hold_every_word_offset_of_every_transcript(corpus, fake_embed, query):
+    assert build().result == "published"
+    schema = snapshot_rows(query)[-1][1]
+    bodies = dict(query(f'SELECT doc_id, token_data FROM "{schema}".search_documents'))
+    expected: dict[str, dict] = {}
+    for doc_id, token_data in bodies.items():
+        for word, offsets in token_data.items():
+            expected.setdefault(word, {})[doc_id] = offsets
+    rows = query(
+        f'SELECT term, document_frequency, postings FROM "{schema}".search_postings'
+    )
+    assert {term: postings for term, _, postings in rows} == expected
+    assert all(df == len(postings) for _, df, postings in rows)
 
 
 def test_search_only_snapshot_can_contain_valid_short_bodies(corpus, fake_embed, query):

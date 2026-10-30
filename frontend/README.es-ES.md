@@ -129,7 +129,8 @@ El frontend:
 | GET    | `/transcripts?channel={channel}` | Lista de un programa renderizada en el servidor (`/transcripts` sin programa: `308` a `/`)                |
 | GET    | `/transcripts/{doc_id}`          | Página de transcripción renderizada en el servidor                                                        |
 | GET    | `/api/starters`                  | JSON de preguntas de muestra e inicios de búsqueda (`categories`, `search`)                               |
-| GET    | `/api/search`                    | Búsqueda por palabras clave (proxy al agente; los códigos de estado se mantienen)                         |
+| GET    | `/api/search`                    | Búsqueda por palabras clave (proxy al agente con `sort`, `channel`, `year`; los códigos de estado se mantienen) |
+| POST   | `/api/search/click`              | Registra de forma anónima un clic en un resultado (en el log; responde 204)                               |
 | GET    | `/api/transcripts`               | Índice de transcripciones (proxy)                                                                         |
 | GET    | `/api/transcripts/{doc_id}`      | Una transcripción (proxy; un `doc_id` mal formado da `404` sin llamar al agente)                          |
 | POST   | `/chat`                          | Hace proxy del flujo SSE del agente al navegador (cuerpo de más de 128 KiB: `413`)                        |
@@ -143,7 +144,14 @@ El frontend:
 
 Este servicio traslada `/api/search` al `GET /search` del agente; el panel
 「搜索」se basa en él. Consulta la
-[API de búsqueda](../agent/README.es-ES.md#get-search). El acceso localhost en
+[API de búsqueda](../agent/README.es-ES.md#get-search). El panel ofrece orden
+(relevancia o fecha), filtros de canal y año (opciones de `facets`, guardadas en
+la dirección `/search?q=…&sort=…&channel=…&year=…`), un enlace «quizá quisiste
+decir» y, en cada resultado, «缺少：…» (palabras ausentes) o «语义相关» (hallado
+por significado). Al abrir un resultado se envía una baliza anónima a
+`/api/search/click` (consulta, transcripción, posición, tipo de coincidencia,
+modo y snapshot; sin identidad ni dirección), que el servidor valida y registra
+como `search_click {json}`; `scripts/search_clicks.py` la resume. El acceso localhost en
 18001 pertenece al overlay de muestras, no a una ruta del frontend.
 Todas las respuestas de `/api/` llevan `X-Robots-Tag: noindex` para que los
 endpoints de datos no se indexen; no se bloquean en robots.txt, así los

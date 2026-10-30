@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 import time
 import xml.etree.ElementTree as ET
@@ -178,7 +179,11 @@ def test_search_proxy_passes_query_params_and_body(client, monkeypatch):
     assert response.status_code == 200
     assert response.json()["total"] == 0
     assert upstream.calls[0][0] == server.SEARCH_ENDPOINT
-    assert upstream.calls[0][1]["params"] == {"q": "贵州 债务", "limit": "10"}
+    assert upstream.calls[0][1]["params"] == {
+        "q": "贵州 债务",
+        "limit": "10",
+        "sort": "relevance",
+    }
 
 
 def test_search_proxy_forwards_cursor(client, monkeypatch):
@@ -191,8 +196,54 @@ def test_search_proxy_forwards_cursor(client, monkeypatch):
     assert upstream.calls[0][1]["params"] == {
         "q": "贵州",
         "limit": "20",
+        "sort": "relevance",
         "cursor": "abc_123",
     }
+
+
+def test_search_proxy_forwards_order_and_filters(client, monkeypatch):
+    upstream = _FakeJsonClient(_json_upstream(200, {"results": [], "total": 0}))
+    monkeypatch.setattr(server, "_client", upstream)
+    params = {"q": "星舰", "sort": "date", "channel": "GaoJian", "year": "2025"}
+    assert client.get("/api/search", params=params).status_code == 200
+    assert upstream.calls[0][1]["params"] == {**params, "limit": "20"}
+    for bad in ({"sort": "random"}, {"channel": "../x"}, {"year": "25"}):
+        assert client.get("/api/search", params={"q": "星舰", **bad}).status_code == 422
+
+
+class _Records(logging.Handler):
+    def __init__(self):
+        super().__init__()
+        self.messages = []
+
+    def emit(self, record):
+        self.messages.append(record.getMessage())
+
+
+def test_search_click_is_logged_anonymously(client):
+    click = {
+        "q": "阿尔忒弥斯",
+        "doc_id": "GaoJian/0063.md",
+        "rank": 1,
+        "match": "keyword",
+        "mode": "keyword",
+        "snapshot_id": "s1",
+    }
+    records = _Records()
+    logging.getLogger("search.clicks").addHandler(records)
+    try:
+        assert client.post("/api/search/click", json=click).status_code == 204
+    finally:
+        logging.getLogger("search.clicks").removeHandler(records)
+    logged = records.messages[-1]
+    assert logged.startswith("search_click ")
+    assert json.loads(logged.removeprefix("search_click ")) == click
+    # Unknown fields (an IP, a user id) are refused, not logged.
+    assert (
+        client.post("/api/search/click", json={**click, "ip": "1.2.3.4"}).status_code
+        == 422
+    )
+    assert client.post("/api/search/click", content="x" * 4096).status_code == 413
 
 
 def test_search_proxy_passes_agent_error_status_through(client, monkeypatch):
