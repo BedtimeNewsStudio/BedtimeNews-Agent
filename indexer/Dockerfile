@@ -1,4 +1,4 @@
-FROM python:3.14.8-slim
+FROM python:3.14.9-slim
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y git \
