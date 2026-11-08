@@ -16,6 +16,10 @@ SNAPSHOT_MD = (
     "# 示例报道\n"
     "\n"
     "正文段落，含相对链接 [内部](/section/x.html) 与外链 [外部](https://else.example.org/y)。\n"
+    "\n"
+    "| 参数 | 数值 |\n"
+    "| --- | --- |\n"
+    "| 起源地 | 四川 |\n"
 )
 
 
@@ -32,6 +36,9 @@ def test_snapshot_page_renders(tmp_path, monkeypatch):
     assert "<title>示例报道 · 网页快照 · " in response.text
     assert "网页快照" in response.text
     assert "正文段落" in response.text
+    # GFM tables render as tables, not flattened text.
+    assert "<table>" in response.text
+    assert "<th>数值</th>" in response.text
     # Relative capture links must point at the original site, not bedtime.blog.
     assert 'href="https://example.com/section/x.html"' in response.text
     # External links open in a new tab like the reader does.

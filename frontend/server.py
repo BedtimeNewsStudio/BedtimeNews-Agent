@@ -1331,7 +1331,7 @@ _SNAPSHOT_FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---\n", re.S)
 _SNAPSHOT_ABSOLUTE_RE = re.compile(r"((?:<a\b[^>]*?\bhref|<img\b[^>]*?\bsrc)=\")([^\"]*)(\")")
 _SNAPSHOT_EXTERNAL_A_RE = re.compile(r'<a href="(https?://[^"]*)"')
 _SNAPSHOT_MD = MarkdownIt("commonmark", {"html": False, "linkify": True, "breaks": True}).enable(
-    "linkify"
+    ["linkify", "table", "strikethrough"]
 )
 _SNAPSHOT_STYLE = (
     ":root{color-scheme:light dark}"
