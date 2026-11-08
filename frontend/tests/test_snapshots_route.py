@@ -17,6 +17,10 @@ SNAPSHOT_MD = (
     "\n"
     "正文段落，含相对链接 [内部](/section/x.html) 与外链 [外部](https://else.example.org/y)。\n"
     "\n"
+    "引用出处[\\[1\\]](#ref-2)。\n"
+    "\n"
+    "2. [&#8202;](#ref-2)**[^](#cite_ref-2 \"跳转\")**引文条目。\n"
+    "\n"
     "| 参数 | 数值 |\n"
     "| --- | --- |\n"
     "| 起源地 | 四川 |\n"
@@ -39,6 +43,9 @@ def test_snapshot_page_renders(tmp_path, monkeypatch):
     # GFM tables render as tables, not flattened text.
     assert "<table>" in response.text
     assert "<th>数值</th>" in response.text
+    # Footnote marker links become jump targets; citations link to them.
+    assert '<span id="ref-2"></span>' in response.text
+    assert '<a href="#ref-2">' in response.text
     # Relative capture links must point at the original site, not bedtime.blog.
     assert 'href="https://example.com/section/x.html"' in response.text
     # External links open in a new tab like the reader does.

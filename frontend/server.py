@@ -1330,6 +1330,11 @@ _SNAPSHOT_PATH_RE = re.compile(r"[0-9a-f]{2}/[0-9a-f]{12}\.md")
 _SNAPSHOT_FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---\n", re.S)
 _SNAPSHOT_ABSOLUTE_RE = re.compile(r"((?:<a\b[^>]*?\bhref|<img\b[^>]*?\bsrc)=\")([^\"]*)(\")")
 _SNAPSHOT_EXTERNAL_A_RE = re.compile(r'<a href="(https?://[^"]*)"')
+# The snapshot pipeline emits empty marker links ([&#8202;](#ref-…)) beside
+# reference list entries so inline citations can jump inside the snapshot.
+# markdown-it renders them as href-only anchors, which are not navigation
+# targets; swap exactly those for id-only spans.
+_SNAPSHOT_ANCHOR_RE = re.compile(r'<a href="(#[^"]*)">(?:&#8202;| |\s)*</a>')
 _SNAPSHOT_MD = MarkdownIt("commonmark", {"html": False, "linkify": True, "breaks": True}).enable(
     ["linkify", "table", "strikethrough"]
 )
@@ -1389,6 +1394,9 @@ def _render_snapshot_page(raw: str) -> str:
     rendered = _absolutize_snapshot_refs(rendered, source_url)
     rendered = _SNAPSHOT_EXTERNAL_A_RE.sub(
         r'<a target="_blank" rel="noopener noreferrer" href="\1"', rendered
+    )
+    rendered = _SNAPSHOT_ANCHOR_RE.sub(
+        lambda m: f'<span id="{m.group(1)[1:]}"></span>', rendered
     )
     title = meta.get("title") or "网页快照"
     return (
