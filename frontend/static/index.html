@@ -165,21 +165,11 @@
       <p class="search-status" id="search-status" role="status"></p>
       <p class="search-suggestion" id="search-suggestion" hidden></p>
       <div class="search-tools" id="search-tools" hidden>
-        <label class="search-tool">
-          <span class="sr-only">排序</span>
-          <select id="search-sort" aria-label="排序">
-            <option value="relevance">按相关度</option>
-            <option value="date">按时间（新→旧）</option>
-          </select>
-        </label>
-        <label class="search-tool">
-          <span class="sr-only">频道</span>
-          <select id="search-channel" aria-label="频道"></select>
-        </label>
-        <label class="search-tool">
-          <span class="sr-only">年份</span>
-          <select id="search-year" aria-label="年份"></select>
-        </label>
+        <!-- Menus are built by createDropdown() in app.js: a theme-matched
+           trigger plus listbox in place of the browser <select>. -->
+      <div class="search-tool" id="search-sort"></div>
+      <div class="search-tool" id="search-channel"></div>
+      <div class="search-tool" id="search-year"></div>
       </div>
       <div class="search-results" id="search-results"></div>
     </section>

@@ -19,7 +19,7 @@ SNAPSHOT_MD = (
     "\n"
     "引用出处[\\[1\\]](#ref-2)。\n"
     "\n"
-    "2. [&#8202;](#ref-2)**[^](#cite_ref-2 \"跳转\")**引文条目。\n"
+    '2. [&#8202;](#ref-2)**[^](#cite_ref-2 "跳转")**引文条目。\n'
     "\n"
     "| 参数 | 数值 |\n"
     "| --- | --- |\n"
@@ -49,7 +49,10 @@ def test_snapshot_page_renders(tmp_path, monkeypatch):
     # Relative capture links must point at the original site, not bedtime.blog.
     assert 'href="https://example.com/section/x.html"' in response.text
     # External links open in a new tab like the reader does.
-    assert 'target="_blank" rel="noopener noreferrer" href="https://else.example.org/y"' in response.text
+    assert (
+        'target="_blank" rel="noopener noreferrer" href="https://else.example.org/y"'
+        in response.text
+    )
 
 
 def test_snapshot_etag_roundtrip(tmp_path, monkeypatch):
@@ -60,7 +63,9 @@ def test_snapshot_etag_roundtrip(tmp_path, monkeypatch):
 
     first = client.get("/snapshots/ab/cd0123456789.md")
     etag = first.headers["etag"]
-    cached = client.get("/snapshots/ab/cd0123456789.md", headers={"if-none-match": etag})
+    cached = client.get(
+        "/snapshots/ab/cd0123456789.md", headers={"if-none-match": etag}
+    )
     assert cached.status_code == 304
     assert cached.headers["x-robots-tag"] == "noindex, nofollow"
 

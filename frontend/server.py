@@ -42,7 +42,6 @@ from urllib.parse import quote, urlencode, urljoin, urlsplit
 from xml.sax.saxutils import escape as xml_escape
 
 import httpx
-from markdown_it import MarkdownIt
 from fastapi import FastAPI, Query, Request
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import (
@@ -52,6 +51,7 @@ from fastapi.responses import (
     StreamingResponse,
 )
 from fastapi.staticfiles import StaticFiles
+from markdown_it import MarkdownIt
 from pydantic import BaseModel, Field
 from starlette.responses import Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
@@ -1328,16 +1328,18 @@ async def robots_txt(request: Request) -> Response:
 
 _SNAPSHOT_PATH_RE = re.compile(r"[0-9a-f]{2}/[0-9a-f]{12}\.md")
 _SNAPSHOT_FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---\n", re.S)
-_SNAPSHOT_ABSOLUTE_RE = re.compile(r"((?:<a\b[^>]*?\bhref|<img\b[^>]*?\bsrc)=\")([^\"]*)(\")")
+_SNAPSHOT_ABSOLUTE_RE = re.compile(
+    r"((?:<a\b[^>]*?\bhref|<img\b[^>]*?\bsrc)=\")([^\"]*)(\")"
+)
 _SNAPSHOT_EXTERNAL_A_RE = re.compile(r'<a href="(https?://[^"]*)"')
 # The snapshot pipeline emits empty marker links ([&#8202;](#ref-…)) beside
 # reference list entries so inline citations can jump inside the snapshot.
 # markdown-it renders them as href-only anchors, which are not navigation
 # targets; swap exactly those for id-only spans.
 _SNAPSHOT_ANCHOR_RE = re.compile(r'<a href="(#[^"]*)">(?:&#8202;| |\s)*</a>')
-_SNAPSHOT_MD = MarkdownIt("commonmark", {"html": False, "linkify": True, "breaks": True}).enable(
-    ["linkify", "table", "strikethrough"]
-)
+_SNAPSHOT_MD = MarkdownIt(
+    "commonmark", {"html": False, "linkify": True, "breaks": True}
+).enable(["linkify", "table", "strikethrough"])
 _SNAPSHOT_STYLE = (
     ":root{color-scheme:light dark}"
     "body{margin:0;background:#fff;color:#1c1c1c}"
@@ -1370,7 +1372,7 @@ def _snapshot_frontmatter(text: str) -> tuple[dict[str, str], str]:
             except ValueError:
                 value = value[1:-1]
         meta[key.strip()] = str(value)
-    return meta, text[match.end():]
+    return meta, text[match.end() :]
 
 
 def _absolutize_snapshot_refs(html: str, base_url: str) -> str:
@@ -1382,7 +1384,9 @@ def _absolutize_snapshot_refs(html: str, base_url: str) -> str:
         url = match.group(2)
         if not url or url.startswith(("http://", "https://", "#", "mailto:", "data:")):
             return match.group(0)
-        return match.group(1) + escape(urljoin(base_url, url), quote=True) + match.group(3)
+        return (
+            match.group(1) + escape(urljoin(base_url, url), quote=True) + match.group(3)
+        )
 
     return _SNAPSHOT_ABSOLUTE_RE.sub(_fix, html)
 

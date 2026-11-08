@@ -950,7 +950,9 @@ function applySearchOptions(params, options) {
 function logSearchClick(result, rank) {
   if (!searchState || !navigator.sendBeacon) return;
   const body = JSON.stringify({
-    q: searchState.query,
+    // The query whose result page the click happened on — the suggestion's
+    // when one was applied, the typed query otherwise.
+    q: searchState.shownQuery || searchState.query,
     doc_id: result.doc_id,
     rank,
     match: result.match || "keyword",
@@ -1024,55 +1026,309 @@ function searchResultNode(result, rank, terms) {
   return li;
 }
 
-function fillSearchSelect(select, label, facets, current, format) {
-  const options = [new Option(label, "")];
-  for (const facet of facets) {
-    options.push(new Option(`${format(facet.value)}（${facet.count}）`, facet.value));
-  }
-  // A filter from the address that no result has still shows as chosen.
-  if (current && !facets.some((facet) => facet.value === current)) {
-    options.push(new Option(format(current), current));
-  }
-  select.replaceChildren(...options);
-  select.value = current;
+// The filter menus (排序/频道/年份) are custom dropdowns, not the browser
+// <select>: a pill trigger plus an absolutely positioned listbox that follows
+// the app's surfaces and motion. Keyboard support matches a native select:
+// Enter/Space or an arrow key opens from the trigger, arrows/Home/End move,
+// Enter/Space picks, Esc closes back to the trigger, Tab just folds the menu.
+// One menu is open at a time; a pointer press outside any open menu closes it.
+const openDropdowns = new Set();
+
+function closeDropdowns() {
+  for (const dropdown of openDropdowns) dropdown.close();
 }
+
+document.addEventListener("pointerdown", (event) => {
+  for (const dropdown of openDropdowns) {
+    if (!dropdown.root.contains(event.target)) dropdown.close();
+  }
+});
+
+function createDropdown({ mount, label, options, value, onChange, activeValue }) {
+  const root = mount;
+  root.classList.add("dropdown");
+
+  const trigger = document.createElement("button");
+  trigger.type = "button";
+  trigger.className = "dropdown-trigger";
+  trigger.setAttribute("aria-haspopup", "listbox");
+  trigger.setAttribute("aria-expanded", "false");
+  trigger.setAttribute("aria-label", label);
+  const valueLabel = document.createElement("span");
+  valueLabel.className = "dropdown-value";
+  trigger.appendChild(valueLabel);
+  trigger.insertAdjacentHTML(
+    "beforeend",
+    '<svg class="dropdown-chevron" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false"><path d="M6 9.5l6 5.5 6-5.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  );
+
+  const menu = document.createElement("ul");
+  menu.className = "dropdown-menu";
+  menu.setAttribute("role", "listbox");
+  menu.setAttribute("aria-label", label);
+  root.append(trigger, menu);
+
+  let entries = options;
+  let current = value;
+
+  const isOpen = () => openDropdowns.has(api);
+  const currentIndex = () => {
+    const at = entries.findIndex((option) => option.value === current);
+    return at === -1 ? 0 : at;
+  };
+
+  // The pill shows the bare label; counts only live in the menu.
+  const selectedOption = () =>
+    entries.find((option) => option.value === current) || { label: String(current) };
+
+  function renderTrigger() {
+    valueLabel.textContent = selectedOption().label;
+    // A chosen filter reads as engaged; the sort menu has no unset value.
+    root.classList.toggle("is-active", activeValue ? activeValue(current) : false);
+  }
+
+  function renderMenu() {
+    menu.replaceChildren(
+      ...entries.map((option) => {
+        const li = document.createElement("li");
+        li.className = "dropdown-option";
+        li.setAttribute("role", "option");
+        li.tabIndex = -1;
+        const name = document.createElement("span");
+        name.className = "dropdown-option-label";
+        name.textContent = option.label;
+        li.appendChild(name);
+        if (option.count != null) {
+          const count = document.createElement("span");
+          count.className = "dropdown-option-count";
+          count.textContent = String(option.count);
+          li.appendChild(count);
+        }
+        const selected = option.value === current;
+        li.setAttribute("aria-selected", String(selected));
+        li.classList.toggle("is-selected", selected);
+        if (selected) {
+          li.insertAdjacentHTML(
+            "beforeend",
+            '<svg class="dropdown-check" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+          );
+        }
+        return li;
+      }),
+    );
+  }
+
+  function focusOption(at) {
+    const option = menu.children[at];
+    option?.focus();
+    option?.scrollIntoView({ block: "nearest" });
+  }
+
+  function open() {
+    if (isOpen()) return;
+    closeDropdowns();
+    renderMenu();
+    openDropdowns.add(api);
+    root.classList.add("is-open");
+    trigger.setAttribute("aria-expanded", "true");
+    // Flush styles before moving focus: focus() into an element whose
+    // visibility transition has not started yet is silently dropped.
+    menu.offsetHeight;
+    focusOption(currentIndex());
+  }
+
+  function close({ restoreFocus = false } = {}) {
+    if (!isOpen()) return;
+    openDropdowns.delete(api);
+    root.classList.remove("is-open");
+    trigger.setAttribute("aria-expanded", "false");
+    if (restoreFocus) trigger.focus();
+  }
+
+  function choose(option) {
+    if (option.value !== current) {
+      current = option.value;
+      renderTrigger();
+      onChange?.(current);
+    }
+    close({ restoreFocus: true });
+  }
+
+  trigger.addEventListener("click", () => (isOpen() ? close() : open()));
+  // The arrows open too, like a native select's key handling.
+  trigger.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      open();
+    }
+  });
+
+  menu.addEventListener("keydown", (event) => {
+    const activeAt = Array.prototype.indexOf.call(menu.children, document.activeElement);
+    switch (event.key) {
+      case "ArrowDown":
+        event.preventDefault();
+        focusOption(Math.min(activeAt + 1, menu.children.length - 1));
+        break;
+      case "ArrowUp":
+        event.preventDefault();
+        focusOption(Math.max(activeAt - 1, 0));
+        break;
+      case "Home":
+        event.preventDefault();
+        focusOption(0);
+        break;
+      case "End":
+        event.preventDefault();
+        focusOption(menu.children.length - 1);
+        break;
+      case "Enter":
+      case " ":
+        event.preventDefault();
+        if (activeAt !== -1) choose(entries[activeAt]);
+        break;
+      case "Escape":
+        // Keep other Escape handlers (reading pane, dialogs) out of it.
+        event.preventDefault();
+        event.stopPropagation();
+        close({ restoreFocus: true });
+        break;
+      case "Tab":
+        close();
+        break;
+    }
+  });
+
+  menu.addEventListener("click", (event) => {
+    const option = event.target.closest(".dropdown-option");
+    if (option) choose(entries[Array.prototype.indexOf.call(menu.children, option)]);
+  });
+
+  const api = {
+    root,
+    close,
+    get value() {
+      return current;
+    },
+    set value(next) {
+      current = next;
+      renderTrigger();
+      if (isOpen()) renderMenu();
+    },
+    setOptions(nextEntries, nextValue) {
+      entries = nextEntries;
+      current = nextValue;
+      renderTrigger();
+      if (isOpen()) renderMenu();
+    },
+  };
+  renderTrigger();
+  return api;
+}
+
+const SORT_SEARCH_OPTIONS = [
+  { value: "relevance", label: "按相关度" },
+  { value: "date", label: "按时间（新→旧）" },
+];
+
+// The three menus are built once and refilled per result page. 频道/年份
+// light up while a filter is engaged so the pill itself shows the state.
+const searchDropdowns = {
+  sort: createDropdown({
+    mount: els.searchSort,
+    label: "排序",
+    options: SORT_SEARCH_OPTIONS,
+    value: "relevance",
+    onChange: changeSearchOptions,
+  }),
+  channel: createDropdown({
+    mount: els.searchChannel,
+    label: "频道",
+    options: [{ value: "", label: "全部频道" }],
+    value: "",
+    onChange: changeSearchOptions,
+    activeValue: Boolean,
+  }),
+  year: createDropdown({
+    mount: els.searchYear,
+    label: "年份",
+    options: [{ value: "", label: "全部年份" }],
+    value: "",
+    onChange: changeSearchOptions,
+    activeValue: Boolean,
+  }),
+};
 
 function renderSearchTools(data) {
   const options = searchState.options;
   const facets = data.facets || { channels: [], years: [] };
   els.searchTools.hidden = !(data.total > 0 || options.channel || options.year);
-  els.searchSort.value = options.sort;
-  fillSearchSelect(els.searchChannel, "全部频道", facets.channels, options.channel, channelLabel);
-  fillSearchSelect(els.searchYear, "全部年份", facets.years, options.year, (y) => `${y} 年`);
+  searchDropdowns.sort.setOptions(SORT_SEARCH_OPTIONS, options.sort);
+  // The facets count every result before filtering, so the menus stay put
+  // while a filter narrows the page. A filter from the address that no
+  // result has still shows as chosen, without a count.
+  searchDropdowns.channel.setOptions(
+    [
+      { value: "", label: "全部频道" },
+      ...facets.channels.map((facet) => ({
+        value: facet.value,
+        label: channelLabel(facet.value),
+        count: facet.count,
+      })),
+      ...(options.channel && !facets.channels.some((facet) => facet.value === options.channel)
+        ? [{ value: options.channel, label: channelLabel(options.channel) }]
+        : []),
+    ],
+    options.channel,
+  );
+  searchDropdowns.year.setOptions(
+    [
+      { value: "", label: "全部年份" },
+      ...facets.years.map((facet) => ({
+        value: facet.value,
+        label: `${facet.value} 年`,
+        count: facet.count,
+      })),
+      ...(options.year && !facets.years.some((facet) => facet.value === options.year)
+        ? [{ value: options.year, label: `${options.year} 年` }]
+        : []),
+    ],
+    options.year,
+  );
 }
 
-function renderSearchSuggestion(suggestion) {
-  els.searchSuggestion.hidden = !suggestion;
-  if (!suggestion) {
+// Google-style: the corrected query's results are already on screen; the
+// notice names the swap and offers the typed query back as a one-click
+// forced search that will not be re-corrected.
+function renderSearchSuggestion(original, shown) {
+  els.searchSuggestion.hidden = !shown;
+  if (!shown) {
     els.searchSuggestion.replaceChildren();
     return;
   }
   const button = document.createElement("button");
   button.type = "button";
   button.className = "search-suggestion-link";
-  button.textContent = suggestion;
-  button.addEventListener("click", () => submitSearch(suggestion));
-  els.searchSuggestion.replaceChildren("你是不是要找：", button);
+  button.textContent = `仍然搜索 ${original}？`;
+  button.addEventListener("click", () => {
+    void runSearch(original, searchState.options, { dismissSuggestion: true });
+    els.searchInput.focus();
+  });
+  els.searchSuggestion.replaceChildren(`显示 ${shown} 的搜索结果，`, button);
 }
 
 function changeSearchOptions() {
   if (!searchState?.query) return;
   const options = {
-    sort: els.searchSort.value === "date" ? "date" : "relevance",
-    channel: els.searchChannel.value,
-    year: els.searchYear.value,
+    sort: searchDropdowns.sort.value === "date" ? "date" : "relevance",
+    channel: searchDropdowns.channel.value,
+    year: searchDropdowns.year.value,
   };
   pushSearchUrl(searchState.query, options);
-  void runSearch(searchState.query, options);
-}
-
-for (const select of [els.searchSort, els.searchChannel, els.searchYear]) {
-  select?.addEventListener("change", changeSearchOptions);
+  // Filters re-run the typed query; a dismissed suggestion stays dismissed.
+  void runSearch(searchState.query, options, {
+    dismissSuggestion: searchState.dismissSuggestion,
+  });
 }
 
 function renderSearchPage(data, { append }) {
@@ -1157,6 +1413,7 @@ function submitSearch(query) {
 function resetSearch() {
   searchSeq++;
   searchState = null;
+  closeDropdowns();
   els.searchTools.hidden = true;
   renderSearchSuggestion(null);
   els.searchPane.classList.add("is-idle");
@@ -1167,32 +1424,56 @@ function resetSearch() {
   els.searchGo.disabled = false;
 }
 
-async function runSearch(query, options = DEFAULT_SEARCH_OPTIONS) {
+async function runSearch(
+  query,
+  options = DEFAULT_SEARCH_OPTIONS,
+  { dismissSuggestion = false } = {},
+) {
   const seq = ++searchSeq;
   // First search docks the box to the top row so results read under it.
   els.searchPane.classList.remove("is-idle");
-  searchState = { query, options, cursor: null, total: 0, busy: true };
+  searchState = {
+    query,
+    shownQuery: query,
+    options,
+    cursor: null,
+    total: 0,
+    busy: true,
+    dismissSuggestion,
+  };
   // The previous results stay visible (dimmed, inert) until the new page
   // arrives — editing the query and re-searching never blanks the pane.
   els.searchResults.classList.add("is-busy");
   setSearchStatus("正在搜索…", { busy: true });
   els.searchGo.disabled = true;
   try {
-    const data = await fetchSearchPage(query, null, options);
+    let data = await fetchSearchPage(query, null, options);
     if (seq !== searchSeq) return;
+    // Like Google: when the backend proposes a corrected query, its results
+    // simply replace the page, with a one-click way back to the typed words.
+    // A forced original search (dismissed) keeps its own results so the
+    // notice cannot bounce the user straight back to the correction.
+    let shown = query;
+    if (data.suggestion && data.suggestion !== query && !dismissSuggestion) {
+      shown = data.suggestion;
+      data = await fetchSearchPage(shown, null, options);
+      if (seq !== searchSeq) return;
+    }
     searchState = {
       query,
+      shownQuery: shown,
       options,
       cursor: data.next_cursor,
       total: data.total,
       mode: data.mode,
       snapshotId: data.snapshot_id,
       busy: false,
+      dismissSuggestion,
     };
     els.searchResults.classList.remove("is-busy");
     renderSearchPage(data, { append: false });
     renderSearchTools(data);
-    renderSearchSuggestion(data.suggestion);
+    renderSearchSuggestion(query, shown === query ? null : shown);
     els.searchResults.scrollTop = 0;
     setSearchStatus(searchSummary(data));
   } catch (error) {
@@ -1227,7 +1508,9 @@ async function loadMoreSearch() {
   els.searchGo.disabled = true;
   try {
     const data = await fetchSearchPage(
-      searchState.query,
+      // Pagination follows the page on screen: the suggestion's results when
+      // one was applied, the typed query otherwise.
+      searchState.shownQuery || searchState.query,
       searchState.cursor,
       searchState.options,
     );
