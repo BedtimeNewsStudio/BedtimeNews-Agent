@@ -38,10 +38,11 @@ from html.parser import HTMLParser
 from importlib import metadata
 from pathlib import Path, PurePosixPath
 from typing import Annotated, Any, Literal
-from urllib.parse import quote, urlencode, urlsplit
+from urllib.parse import quote, urlencode, urljoin, urlsplit
 from xml.sax.saxutils import escape as xml_escape
 
 import httpx
+from markdown_it import MarkdownIt
 from fastapi import FastAPI, Query, Request
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import (
@@ -71,6 +72,12 @@ LATEST_ENDPOINT = f"{AGENT_BASE_URL}/latest"
 
 STATIC_DIR = Path(__file__).parent / "static"
 PAGE_TEMPLATE = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+# Appendix source snapshots: immutable markdown copies from the transcripts
+# repo's snapshots/ tree, bind-mounted into the container and served read-only
+# under /snapshots/. Unset (or empty) disables the routes entirely.
+SNAPSHOTS_DIR = (
+    Path(os.environ["SNAPSHOTS_DIR"]) if os.environ.get("SNAPSHOTS_DIR") else None
+)
 SITE_NAME = "睡前消息知识库"
 SITE_DESCRIPTION = "在同一处阅读、全文搜索睡前消息文稿，并随时向知识库 Agent 提问。"
 CHANNEL_ORDER = (
@@ -1299,13 +1306,138 @@ async def index_redirect() -> RedirectResponse:
 
 @app.get("/robots.txt", include_in_schema=False)
 async def robots_txt(request: Request) -> Response:
-    content = f"User-agent: *\nAllow: /\nSitemap: {_absolute_url('/sitemap.xml')}\n"
+    content = (
+        f"User-agent: *\nAllow: /\nDisallow: /snapshots/\n"
+        f"Sitemap: {_absolute_url('/sitemap.xml')}\n"
+    )
     return _generated_response(
         request,
         content,
         media_type="text/plain",
         cache_control="public, max-age=3600, must-revalidate",
     )
+
+
+# --- Appendix source snapshots -------------------------------------------
+# Snapshot markdown is produced by the transcripts repo's snapshot pipeline:
+# YAML frontmatter (source_url / captured_at / title / tool), a visible
+# banner blockquote, then the page body. This route renders it read-only,
+# keeps third-party article text out of search engines (noindex), and
+# resolves any relative links left in the capture against the original URL
+# so they never navigate into bedtime.blog paths.
+
+_SNAPSHOT_PATH_RE = re.compile(r"[0-9a-f]{2}/[0-9a-f]{12}\.md")
+_SNAPSHOT_FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---\n", re.S)
+_SNAPSHOT_ABSOLUTE_RE = re.compile(r"((?:<a\b[^>]*?\bhref|<img\b[^>]*?\bsrc)=\")([^\"]*)(\")")
+_SNAPSHOT_EXTERNAL_A_RE = re.compile(r'<a href="(https?://[^"]*)"')
+_SNAPSHOT_MD = MarkdownIt("commonmark", {"html": False, "linkify": True, "breaks": True}).enable(
+    "linkify"
+)
+_SNAPSHOT_STYLE = (
+    ":root{color-scheme:light dark}"
+    "body{margin:0;background:#fff;color:#1c1c1c}"
+    "article{max-width:46em;margin:0 auto;padding:2rem 1.25rem 4rem;"
+    'line-height:1.75;font-family:system-ui,-apple-system,"Segoe UI",'
+    '"Noto Sans CJK SC","PingFang SC","Microsoft YaHei",sans-serif;font-size:16px}'
+    "img{max-width:100%;height:auto}"
+    "table{border-collapse:collapse}td,th{border:1px solid rgba(127,127,127,.45);padding:.3em .6em}"
+    "blockquote{border-left:3px solid rgba(127,127,127,.45);margin:1em 0;padding:.1em 1em;color:#666}"
+    "code,pre{background:rgba(127,127,127,.14);border-radius:4px}pre{padding:.8em;overflow:auto}"
+    "a{color:#0969da}"
+    "@media (prefers-color-scheme:dark){body{background:#151515;color:#ddd}"
+    "blockquote{color:#9a9a9a}a{color:#4493f8}}"
+)
+
+
+def _snapshot_frontmatter(text: str) -> tuple[dict[str, str], str]:
+    match = _SNAPSHOT_FRONTMATTER_RE.match(text)
+    if not match:
+        return {}, text
+    meta: dict[str, str] = {}
+    for line in match.group(1).splitlines():
+        key, sep, value = line.partition(":")
+        if not sep:
+            continue
+        value = value.strip()
+        if len(value) >= 2 and value.startswith('"') and value.endswith('"'):
+            try:
+                value = json.loads(value)
+            except ValueError:
+                value = value[1:-1]
+        meta[key.strip()] = str(value)
+    return meta, text[match.end():]
+
+
+def _absolutize_snapshot_refs(html: str, base_url: str) -> str:
+    """Point relative hrefs/srcs at the original page, never at bedtime.blog."""
+    if not base_url:
+        return html
+
+    def _fix(match: re.Match[str]) -> str:
+        url = match.group(2)
+        if not url or url.startswith(("http://", "https://", "#", "mailto:", "data:")):
+            return match.group(0)
+        return match.group(1) + escape(urljoin(base_url, url), quote=True) + match.group(3)
+
+    return _SNAPSHOT_ABSOLUTE_RE.sub(_fix, html)
+
+
+def _render_snapshot_page(raw: str) -> str:
+    meta, body = _snapshot_frontmatter(raw)
+    rendered = _SNAPSHOT_MD.render(body)
+    source_url = meta.get("source_url", "")
+    rendered = _absolutize_snapshot_refs(rendered, source_url)
+    rendered = _SNAPSHOT_EXTERNAL_A_RE.sub(
+        r'<a target="_blank" rel="noopener noreferrer" href="\1"', rendered
+    )
+    title = meta.get("title") or "网页快照"
+    return (
+        "<!doctype html>\n"
+        '<html lang="zh-CN">\n'
+        "<head>\n"
+        '<meta charset="utf-8" />\n'
+        '<meta name="viewport" content="width=device-width, initial-scale=1" />\n'
+        '<meta name="robots" content="noindex, nofollow" />\n'
+        f"<title>{escape(title)} · 网页快照 · {SITE_NAME}</title>\n"
+        f"<style>{_SNAPSHOT_STYLE}</style>\n"
+        "</head>\n"
+        "<body>\n"
+        f"<article>\n{rendered}</article>\n"
+        "</body>\n"
+        "</html>\n"
+    )
+
+
+@app.get("/snapshots/{shard}/{name}", include_in_schema=False)
+async def snapshot_page(shard: str, name: str, request: Request) -> Response:
+    if SNAPSHOTS_DIR is None:
+        return PlainTextResponse("快照服务未配置", status_code=404)
+    rel = f"{shard}/{name}"
+    if not _SNAPSHOT_PATH_RE.fullmatch(rel):
+        return PlainTextResponse("快照不存在", status_code=404)
+    try:
+        content = (SNAPSHOTS_DIR / shard / name).read_bytes()
+    except OSError:
+        return PlainTextResponse("快照不存在", status_code=404)
+    etag = _etag_for_bytes(content)
+    robots_headers = {"X-Robots-Tag": "noindex, nofollow"}
+    if _etag_matches(request, etag):
+        return Response(
+            status_code=304,
+            headers={
+                **robots_headers,
+                "ETag": etag,
+                "Cache-Control": "public, max-age=600, must-revalidate",
+            },
+        )
+    response = _generated_response(
+        request,
+        _render_snapshot_page(content.decode("utf-8", errors="replace")),
+        media_type="text/html",
+        cache_control="public, max-age=600, must-revalidate",
+    )
+    response.headers.update(robots_headers)
+    return response
 
 
 @app.get("/sitemap.xml", include_in_schema=False)

@@ -102,6 +102,12 @@ services:
       AGENT_BACKEND_HOST: agent
       AGENT_BACKEND_PORT: "8000"
       PUBLIC_BASE_URL: https://bedtime.blog
+      # Appendix source snapshots (transcripts repo snapshots/ tree). The route
+      # 404s when this is unset, so a checkout without the sibling transcripts
+      # repo still boots.
+      SNAPSHOTS_DIR: ${SNAPSHOTS_DIR:-/snapshots}
+    volumes:
+      - ${SNAPSHOTS_HOST_DIR:-../BedtimeNews-Transcripts/snapshots}:/snapshots:ro
     ports:
       - "${APP_PORT:-${FRONTEND_PORT:-8080}}:8080"
     # Liveness of web alone (/healthz never calls the agent). The image has no

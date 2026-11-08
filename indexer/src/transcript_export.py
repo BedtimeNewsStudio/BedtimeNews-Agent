@@ -77,7 +77,7 @@ _ALLOWED_TAGS = frozenset(
 # Footnote plugin emits id/href pairs on refs and backrefs; keep those so the
 # reader can jump body <-> appendix without trusting anything else.
 _ALLOWED_ATTRIBUTES = {
-    "a": ["href", "title", "rel", "class", "aria-label", "id"],
+    "a": ["href", "title", "rel", "target", "class", "aria-label", "id"],
     "li": ["id", "class"],
     "ol": ["id", "class"],
     "p": ["id", "class"],
@@ -135,18 +135,23 @@ def _normalize_relative_uri(base_uri: str, href: str) -> str | None:
     if decoded.startswith(("/", "\\")) or "\\" in decoded:
         return None
     base_parts = list(PurePosixPath(base_uri).parent.parts)
-    for part in PurePosixPath(decoded).parts:
-        if part in {"", "."}:
-            continue
-        if part == "..":
-            if not base_parts:
-                return None
-            base_parts.pop()
-        else:
-            base_parts.append(part)
-    if not base_parts:
+    parts = [p for p in PurePosixPath(decoded).parts if p not in {"", "."}]
+    ups = 0
+    while ups < len(parts) and parts[ups] == "..":
+        ups += 1
+    rest = parts[ups:]
+    if not rest or ".." in rest:
         return None
-    resolved = PurePosixPath(*base_parts)
+    if ups > len(base_parts):
+        # The only legal step above contents/ is the repo-root snapshots/
+        # tree of appendix snapshot copies; any other traversal is dropped.
+        if ups == len(base_parts) + 1 and rest[0] == "snapshots":
+            base_parts = []
+        else:
+            return None
+    else:
+        base_parts = base_parts[: len(base_parts) - ups]
+    resolved = PurePosixPath(*base_parts, *rest)
     if resolved.suffix.lower() != ".md":
         return None
     return resolved.as_posix()
@@ -185,6 +190,12 @@ def _rewrite_href(base_uri: str, href: str) -> str | None:
     uri = _normalize_relative_uri(base_uri, path)
     if not uri:
         return None
+    if uri.startswith("snapshots/"):
+        # Appendix snapshot copies live outside contents/, served read-only by
+        # the web frontend; they are never reader documents.
+        return _append_fragment(
+            f"/snapshots/{quote(uri.removeprefix('snapshots/'), safe='/')}", fragment
+        )
     return _append_fragment(f"/transcripts/{quote(uri, safe='/')}", fragment)
 
 
@@ -201,6 +212,10 @@ class _TranscriptRenderer(RendererHTML):
             token.attrSet("href", rewritten)
             if rewritten.startswith("/transcripts/"):
                 token.attrSet("class", "transcript-inline-link")
+            elif rewritten.startswith("/snapshots/"):
+                # Snapshot copies open beside the reader, never in-page.
+                token.attrSet("target", "_blank")
+                token.attrSet("rel", "noopener noreferrer")
             elif rewritten.startswith(("http://", "https://", "mailto:")):
                 token.attrSet("rel", "noopener noreferrer")
         return self.renderToken(tokens, idx, options, env)

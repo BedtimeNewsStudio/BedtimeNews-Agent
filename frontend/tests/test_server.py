@@ -599,7 +599,8 @@ def test_robots_txt_advertises_sitemap_and_revalidates(client):
     assert first.status_code == 200
     assert first.headers["content-type"].startswith("text/plain")
     assert first.text == (
-        "User-agent: *\nAllow: /\nSitemap: https://bedtime.blog/sitemap.xml\n"
+        "User-agent: *\nAllow: /\nDisallow: /snapshots/\n"
+        "Sitemap: https://bedtime.blog/sitemap.xml\n"
     )
     second = client.get("/robots.txt", headers={"If-None-Match": first.headers["etag"]})
     assert second.status_code == 304

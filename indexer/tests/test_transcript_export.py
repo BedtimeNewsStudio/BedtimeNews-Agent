@@ -171,3 +171,39 @@ def test_publication_date_is_read_only_from_the_plain_header_line():
         date_of("# 标题\n\n发布日期 2026-01-01\n\n发布日期 2026-02-02\n")
         == "2026-01-01"
     )
+
+
+def test_projection_maps_snapshot_links_to_site_route_with_new_tab():
+    markdown = """# T
+
+## 正文
+
+[快照](../../../snapshots/ab/cd0123456789.md)
+
+## 附录
+
+（来源：[机构](https://example.com/x)）
+"""
+    html = project_transcript(
+        "ShuiQianXiaoXi/0101-0200/0150.md", markdown.encode(), "标题"
+    ).body_html
+
+    assert 'href="/snapshots/ab/cd0123456789.md"' in html
+    assert 'target="_blank"' in html
+    assert 'rel="noopener noreferrer"' in html
+    assert "/transcripts/snapshots/" not in html
+
+
+def test_rewrite_href_resolves_snapshot_paths_outside_contents():
+    assert (
+        _rewrite_href(
+            "JiangDianHeiHua/0001-0100/0052.md", "../../../snapshots/9f/e3b0c44298.md"
+        )
+        == "/snapshots/9f/e3b0c44298.md"
+    )
+    assert (
+        _rewrite_href(
+            "ChanJingPoBiJi/2025-03-01.md", "../../snapshots/9f/e3b0c44298.md"
+        )
+        == "/snapshots/9f/e3b0c44298.md"
+    )
