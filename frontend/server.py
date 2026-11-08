@@ -1341,18 +1341,22 @@ _SNAPSHOT_MD = MarkdownIt(
     "commonmark", {"html": False, "linkify": True, "breaks": True}
 ).enable(["linkify", "table", "strikethrough"])
 _SNAPSHOT_STYLE = (
-    ":root{color-scheme:light dark}"
-    "body{margin:0;background:#fff;color:#1c1c1c}"
+    ":root{color-scheme:dark light}"
+    "body{margin:0;background:#151515;color:#ddd}"
     "article{max-width:46em;margin:0 auto;padding:2rem 1.25rem 4rem;"
     'line-height:1.75;font-family:system-ui,-apple-system,"Segoe UI",'
     '"Noto Sans CJK SC","PingFang SC","Microsoft YaHei",sans-serif;font-size:16px}'
     "img{max-width:100%;height:auto}"
     "table{border-collapse:collapse}td,th{border:1px solid rgba(127,127,127,.45);padding:.3em .6em}"
-    "blockquote{border-left:3px solid rgba(127,127,127,.45);margin:1em 0;padding:.1em 1em;color:#666}"
+    "blockquote{border-left:3px solid rgba(127,127,127,.45);margin:1em 0;padding:.1em 1em;color:#9a9a9a}"
     "code,pre{background:rgba(127,127,127,.14);border-radius:4px}pre{padding:.8em;overflow:auto}"
-    "a{color:#0969da}"
-    "@media (prefers-color-scheme:dark){body{background:#151515;color:#ddd}"
-    "blockquote{color:#9a9a9a}a{color:#4493f8}}"
+    "a{color:#4493f8}"
+    # The reader defaults to dark and keeps a per-visit light choice in
+    # sessionStorage ("theme"); snapshots mirror that model via data-theme.
+    'html[data-theme="light"]{color-scheme:light}'
+    'html[data-theme="light"] body{background:#fff;color:#1c1c1c}'
+    'html[data-theme="light"] blockquote{color:#666}'
+    'html[data-theme="light"] a{color:#0969da}'
 )
 
 
@@ -1405,13 +1409,15 @@ def _render_snapshot_page(raw: str) -> str:
     title = meta.get("title") or "网页快照"
     return (
         "<!doctype html>\n"
-        '<html lang="zh-CN">\n'
+        '<html lang="zh-CN" data-theme="dark">\n'
         "<head>\n"
         '<meta charset="utf-8" />\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1" />\n'
         '<meta name="robots" content="noindex, nofollow" />\n'
         f"<title>{escape(title)} · 网页快照 · {SITE_NAME}</title>\n"
         f"<style>{_SNAPSHOT_STYLE}</style>\n"
+        "<script>try{var t=sessionStorage.getItem(\"theme\");"
+        "if(t===\"light\"||t===\"dark\"){document.documentElement.dataset.theme=t;}}catch(e){}</script>\n"
         "</head>\n"
         "<body>\n"
         f"<article>\n{rendered}</article>\n"
