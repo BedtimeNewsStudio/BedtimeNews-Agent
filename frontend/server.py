@@ -1416,8 +1416,8 @@ def _render_snapshot_page(raw: str) -> str:
         '<meta name="robots" content="noindex, nofollow" />\n'
         f"<title>{escape(title)} · 网页快照 · {SITE_NAME}</title>\n"
         f"<style>{_SNAPSHOT_STYLE}</style>\n"
-        "<script>try{var t=sessionStorage.getItem(\"theme\");"
-        "if(t===\"light\"||t===\"dark\"){document.documentElement.dataset.theme=t;}}catch(e){}</script>\n"
+        '<script>try{var t=localStorage.getItem("theme")||sessionStorage.getItem("theme");'
+        'if(t==="light"||t==="dark"){document.documentElement.dataset.theme=t;}}catch(e){}</script>\n'
         "</head>\n"
         "<body>\n"
         f"<article>\n{rendered}</article>\n"

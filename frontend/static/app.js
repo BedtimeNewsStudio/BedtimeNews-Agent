@@ -3067,6 +3067,9 @@ themeToggle.addEventListener("click", () => {
   const next = currentTheme() === "light" ? "dark" : "light";
   applyTheme(next, "user");
   try {
+    // localStorage so the choice reaches new tabs and snapshot pages (they
+    // read it first); sessionStorage kept for the boot script's fallback.
+    localStorage.setItem("theme", next);
     sessionStorage.setItem("theme", next);
   } catch (e) {
     console.warn("Theme storage is unavailable; the page theme still changed.", e);

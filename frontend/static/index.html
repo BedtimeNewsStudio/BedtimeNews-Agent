@@ -28,9 +28,15 @@
       var preference = null;
       try {
         var q = new URLSearchParams(location.search).get("theme");
-        preference = q === "light" || q === "dark" ? q : sessionStorage.getItem("theme");
+        preference =
+          q === "light" || q === "dark"
+            ? q
+            : localStorage.getItem("theme") || sessionStorage.getItem("theme");
         if (preference !== "light" && preference !== "dark") preference = null;
-        if (q === "light" || q === "dark") sessionStorage.setItem("theme", q);
+        if (q === "light" || q === "dark") {
+          localStorage.setItem("theme", q);
+          sessionStorage.setItem("theme", q);
+        }
       } catch (e) {
         console.warn("Theme storage is unavailable; using the system preference.", e);
       }
