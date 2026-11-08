@@ -236,7 +236,9 @@ embedding model again, which could reorder later pages slightly.
 - Order, channel and year menus under the status line, filled from `facets`;
   the choice is in the address (`/search?q=…&sort=date&channel=…&year=…`), and a
   new query clears it.
-- 「你是不是要找：…」 runs the suggestion with one click.
+- A suggested correction replaces the result page automatically, Google-style:
+  the notice reads 「显示 X 的搜索结果，仍然搜索 Y？」, and the link forces the
+  typed query without being re-corrected.
 - A result found by meaning only says 「语义相关：未直接包含搜索词」; a keyword
   result missing some query words says 「缺少：…」.
 - The status line says when a question also listed transcripts close in meaning.
