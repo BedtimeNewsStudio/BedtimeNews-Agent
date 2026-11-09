@@ -2235,13 +2235,17 @@ function navigate(href) {
   // Same link again, after the reader has scrolled away: the hash did not
   // change, so jump back to the section without a new history entry.
   if (next === current) {
-    if (url.hash && nextPath === currentPath) scrollToLocationHash();
+    if (nextPath === currentPath) {
+      if (url.hash) scrollToLocationHash();
+      else scrollToBodyStart();
+    }
     return;
   }
   history.pushState({}, "", next);
   // A hash-only change must not refetch. The reading pane scrolls to the id.
   if (nextPath === currentPath) {
-    scrollToLocationHash();
+    if (url.hash) scrollToLocationHash();
+    else scrollToBodyStart();
     return;
   }
   void renderRoute();
@@ -2378,6 +2382,21 @@ function whenReadingPaneSettled(callback) {
   };
   pane.addEventListener("transitionend", onEnd);
   setTimeout(finish, PANE_SLIDE_MS + 40);
+}
+
+function scrollToBodyStart() {
+  // Single-topic transcripts (e.g. 睡前消息1128) chunk without subtopic
+  // anchors, so their citation chips carry no fragment. For those, "jump to
+  // the section" means the start of the body: the first h2 (## 正文) when
+  // present, otherwise the top of the article.
+  const scroller = els.readingScroll;
+  if (!scroller) return;
+  const firstHeading = els.readerBody?.querySelector("h2");
+  if (firstHeading) {
+    scrollReadingPaneTo(firstHeading);
+  } else {
+    scroller.scrollTo({ top: 0 });
+  }
 }
 
 function scrollToLocationHash() {
