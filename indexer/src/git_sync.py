@@ -37,6 +37,8 @@ def head_commit() -> str | None:
 def sync_repository() -> None:
     """Get a local copy of the latest git repo content of BedtimeNews-Transcripts.
 
+    Only contents/ and root metadata are checked out; source snapshots and
+    original attachments are served from the separate archive checkout.
     Uses fetch + hard reset rather than pull so a rewritten remote history
     (force-push / squashed initial commit) still converges without failing
     on non-fast-forward.
@@ -47,6 +49,8 @@ def sync_repository() -> None:
             [
                 "git",
                 "clone",
+                "--filter=blob:none",
+                "--sparse",
                 BEDTIMENEWS_TRANSCRIPTS_REPO_URL,
                 str(BEDTIMENEWS_TRANSCRIPTS_DIR),
             ],
@@ -55,15 +59,24 @@ def sync_repository() -> None:
         if not success:
             logger.error(f"Failed to clone: {output}")
             raise RuntimeError(f"Failed to clone repository: {output}")
-        return
 
     git = [
         "git",
         "-c",
         f"safe.directory={BEDTIMENEWS_TRANSCRIPTS_DIR}",
     ]
+    for args in (
+        ["config", "remote.origin.promisor", "true"],
+        ["config", "remote.origin.partialclonefilter", "blob:none"],
+        ["sparse-checkout", "set", "--cone", "contents"],
+    ):
+        success, output = _run_command([*git, *args], BEDTIMENEWS_TRANSCRIPTS_DIR)
+        if not success:
+            raise RuntimeError(
+                f"Failed to configure transcript-only checkout: {output}"
+            )
     success, output = _run_command(
-        [*git, "fetch", "--prune", "origin", "main"],
+        [*git, "fetch", "--filter=blob:none", "--prune", "origin", "main"],
         BEDTIMENEWS_TRANSCRIPTS_DIR,
     )
     if not success:
