@@ -44,6 +44,7 @@ See the [main README](../README.en.md) for full-stack setup.
 
 ## Features
 
+- Appendix source snapshots: archived web text, original PDF/image previews, and downloads of other original files
 - Anonymous chat (no authentication)
 - System-aware light/dark theme with SVG toggle
 - Sample questions (categorised on desktop, flat on mobile) and desktop

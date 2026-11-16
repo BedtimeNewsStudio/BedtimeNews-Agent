@@ -45,6 +45,7 @@ import httpx
 from fastapi import FastAPI, Query, Request
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import (
+    FileResponse,
     JSONResponse,
     PlainTextResponse,
     RedirectResponse,
@@ -72,7 +73,7 @@ LATEST_ENDPOINT = f"{AGENT_BASE_URL}/latest"
 
 STATIC_DIR = Path(__file__).parent / "static"
 PAGE_TEMPLATE = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
-# Appendix source snapshots: immutable markdown copies from the transcripts
+# Appendix source snapshots: Markdown captures and original source files from the transcripts
 # repo's snapshots/ tree, bind-mounted into the container and served read-only
 # under /snapshots/. Unset (or empty) disables the routes entirely.
 SNAPSHOTS_DIR = (
@@ -1326,7 +1327,15 @@ async def robots_txt(request: Request) -> Response:
 # resolves any relative links left in the capture against the original URL
 # so they never navigate into bedtime.blog paths.
 
-_SNAPSHOT_PATH_RE = re.compile(r"[0-9a-f]{2}/[0-9a-f]{12}\.md")
+_SNAPSHOT_PATH_RE = re.compile(r"[0-9a-f]{2}/[0-9a-f]{12}\.[a-z0-9]{1,10}")
+_SNAPSHOT_INLINE_TYPES = {
+    ".pdf": "application/pdf",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+}
 _SNAPSHOT_FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---\n", re.S)
 _SNAPSHOT_ABSOLUTE_RE = re.compile(
     r"((?:<a\b[^>]*?\bhref|<img\b[^>]*?\bsrc)=\")([^\"]*)(\")"
@@ -1433,8 +1442,35 @@ async def snapshot_page(shard: str, name: str, request: Request) -> Response:
     rel = f"{shard}/{name}"
     if not _SNAPSHOT_PATH_RE.fullmatch(rel):
         return PlainTextResponse("快照不存在", status_code=404)
+    path = SNAPSHOTS_DIR / shard / name
+    if path.suffix != ".md":
+        try:
+            if not path.is_file():
+                return PlainTextResponse("快照不存在", status_code=404)
+            file_stat = path.stat()
+        except OSError:
+            return PlainTextResponse("快照不存在", status_code=404)
+        headers = {
+            "X-Robots-Tag": "noindex, nofollow",
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "public, max-age=600, must-revalidate",
+        }
+        media_type = _SNAPSHOT_INLINE_TYPES.get(path.suffix)
+        response = FileResponse(
+            path,
+            stat_result=file_stat,
+            filename=name,
+            media_type=media_type or "application/octet-stream",
+            content_disposition_type="inline" if media_type else "attachment",
+            headers=headers,
+        )
+        if _etag_matches(request, response.headers["etag"]):
+            return Response(
+                status_code=304, headers={**headers, "ETag": response.headers["etag"]}
+            )
+        return response
     try:
-        content = (SNAPSHOTS_DIR / shard / name).read_bytes()
+        content = path.read_bytes()
     except OSError:
         return PlainTextResponse("快照不存在", status_code=404)
     etag = _etag_for_bytes(content)

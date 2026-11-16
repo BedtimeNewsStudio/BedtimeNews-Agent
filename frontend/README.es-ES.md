@@ -55,6 +55,7 @@ completa de la pila.
 
 ## Características
 
+- Fuentes del apéndice: texto web archivado, vista previa de PDF e imágenes originales y descarga de otros archivos originales
 - Chat anónimo (sin autenticación)
 - Tema claro/oscuro consciente del sistema con interruptor SVG
 - Preguntas de muestra (por categoría en escritorio, planas en móvil) y

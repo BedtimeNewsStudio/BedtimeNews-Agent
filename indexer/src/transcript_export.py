@@ -19,7 +19,8 @@ from .models import TranscriptProjection
 # touching RAG embeddings (which still key only on normalized ## 正文).
 #   5: topic h2 elements carry the shared heading anchor as id.
 #   6: the date is read only from a plain `发布日期 YYYY-MM-DD | ...` header line.
-TRANSCRIPT_PROJECTION_VERSION = 6
+#   7: original source attachments retain their snapshot download links.
+TRANSCRIPT_PROJECTION_VERSION = 7
 
 _OLD_TRANSCRIPT_HOST = "bedtimenewsstudio.github.io"
 _OLD_TRANSCRIPT_PREFIX = "/BedtimeNews-Transcripts/contents/"
@@ -152,7 +153,11 @@ def _normalize_relative_uri(base_uri: str, href: str) -> str | None:
     else:
         base_parts = base_parts[: len(base_parts) - ups]
     resolved = PurePosixPath(*base_parts, *rest)
-    if resolved.suffix.lower() != ".md":
+    original_snapshot = re.fullmatch(
+        r"snapshots/[0-9a-f]{2}/[0-9a-f]{12}\.[a-z0-9]{1,10}",
+        resolved.as_posix(),
+    )
+    if resolved.suffix.lower() != ".md" and not original_snapshot:
         return None
     return resolved.as_posix()
 

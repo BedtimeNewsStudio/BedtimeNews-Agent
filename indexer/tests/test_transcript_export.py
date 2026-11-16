@@ -201,9 +201,26 @@ def test_rewrite_href_resolves_snapshot_paths_outside_contents():
         )
         == "/snapshots/9f/e3b0c44298.md"
     )
+
     assert (
         _rewrite_href(
             "ChanJingPoBiJi/2025-03-01.md", "../../snapshots/9f/e3b0c44298.md"
         )
         == "/snapshots/9f/e3b0c44298.md"
+    )
+
+
+def test_original_attachment_links_are_snapshot_downloads():
+    for extension in ("pdf", "docx", "xlsx", "csv", "jpg"):
+        link = f"../../../snapshots/ab/cd0123456789.{extension}"
+        projected = project_transcript(
+            "ShuiQianXiaoXi/0101-0200/0150.md",
+            f"# T\n\n## 正文\n\n内容\n\n## 附录\n\n[快照]({link})\n".encode(),
+            "标题",
+        )
+        assert f'href="/snapshots/ab/cd0123456789.{extension}"' in projected.body_html
+        assert 'target="_blank"' in projected.body_html
+    assert _rewrite_href("ShuiQianXiaoXi/0101-0200/0150.md", "ordinary.pdf") is None
+    assert (
+        _rewrite_href("ShuiQianXiaoXi/0101-0200/0150.md", "../../../secret.pdf") is None
     )
