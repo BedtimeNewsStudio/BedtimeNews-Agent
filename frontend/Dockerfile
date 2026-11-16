@@ -1,4 +1,4 @@
-FROM python:3.14.9-slim
+FROM python:3.14.10-slim
 
 # Run the web server as a dedicated unprivileged account.
 RUN groupadd --gid 1000 app \
